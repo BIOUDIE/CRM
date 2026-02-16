@@ -1,43 +1,8 @@
 {
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
-```
-
-4. Commit: `Add vercel config`
-
----
-
-## ⚡ **Pro Tip: Edit Multiple Files at Once**
-
-Press **`.`** (period key) on your GitHub repo page!
-
-This opens **VS Code in your browser** where you can:
-- Edit multiple files
-- See the whole project
-- Commit all changes at once
-
-Or visit: `https://github.dev/YOUR_USERNAME/YOUR_REPO`
-
----
-
-## ✅ **After Making Changes:**
-
-1. **Wait 2-3 minutes** - Vercel auto-detects your commits
-2. **Check Vercel Dashboard** - Watch the build progress
-3. **If it succeeds** - Your site is live! 🎉
-4. **If it fails** - Share the error and I'll help
-
----
-
-## 🔍 **Verify Your Files Are in the Right Place:**
-
-In your GitHub repo, you should see these **in the root** (not in a subfolder):
-```
-✅ package.json
-✅ App.jsx
-✅ main.jsx
-✅ index.html
-✅ vite.config.js
-✅ vercel.json
