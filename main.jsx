@@ -1,8 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import MicroCRM from './micro-crm.jsx'
+import App from './App.jsx' // Updated to point to our new file
 
-// This "Polyfill" ensures your existing code can save data to the browser
+// Essential Storage Polyfill
 window.storage = {
   get: async (key) => ({ value: localStorage.getItem(key) }),
   set: async (key, val) => { localStorage.setItem(key, val); },
@@ -14,6 +14,6 @@ window.storage = {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <MicroCRM />
+    <App />
   </React.StrictMode>
 )
