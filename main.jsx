@@ -1,8 +1,8 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import App from './App.jsx' // Updated to point to our new file
+import App from './App.jsx' // This line tells the app to load the new Auth + CRM logic
 
-// Essential Storage Polyfill
+// The Storage Polyfill (Crucial for saving data in the browser)
 window.storage = {
   get: async (key) => ({ value: localStorage.getItem(key) }),
   set: async (key, val) => { localStorage.setItem(key, val); },
