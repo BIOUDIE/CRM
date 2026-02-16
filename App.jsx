@@ -16,6 +16,43 @@ function AuthPage({ onLogin }) {
     setError('');
     setIsLoading(true);
 
+    // 1. Check if passwords match
+    if (mode === 'signup' && formData.password !== formData.confirmPassword) {
+      const msg = 'Passwords do not match';
+      setError(msg);
+      alert(msg); // Added alert for immediate feedback
+      setIsLoading(false);
+      return;
+    }
+
+    // 2. Check password length (The likely culprit!)
+    if (mode === 'signup' && formData.password.length < 8) {
+      const msg = 'Password must be at least 8 characters long';
+      setError(msg);
+      alert(msg); // Added alert for immediate feedback
+      setIsLoading(false);
+      return;
+    }
+
+    // Simulate API delay
+    setTimeout(async () => {
+      const user = {
+        email: formData.email,
+        name: formData.name || formData.email.split('@')[0],
+        isPremium: true 
+      };
+      await window.storage.set('auth_user', JSON.stringify(user));
+      await window.storage.set('auth_token', 'token_' + Date.now());
+      setIsLoading(false);
+      onLogin(user);
+    }, 1500);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+
     if (mode === 'signup' && formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       setIsLoading(false);
