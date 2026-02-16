@@ -1206,4 +1206,311 @@ export default function App() {
       </div>
     </div>
   );
+} text-sm font-medium text-gray-700 mb-2">Name *</label>
+                  <input 
+                    type="text" 
+                    placeholder="John Smith" 
+                    required 
+                    value={newContact.name}
+                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" 
+                    onChange={(e) => setNewContact({...newContact, name: e.target.value})} 
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                  <input 
+                    type="email" 
+                    placeholder="john@example.com" 
+                    value={newContact.email}
+                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" 
+                    onChange={(e) => setNewContact({...newContact, email: e.target.value})} 
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Last Contact Date</label>
+                  <input 
+                    type="date" 
+                    value={newContact.lastContactDate}
+                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" 
+                    onChange={(e) => setNewContact({...newContact, lastContactDate: e.target.value})} 
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Vibe Score: {newContact.vibeScore}/10
+                  </label>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="10" 
+                    value={newContact.vibeScore}
+                    className="w-full" 
+                    onChange={(e) => setNewContact({...newContact, vibeScore: parseInt(e.target.value)})} 
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tags (comma-separated)</label>
+                <input 
+                  type="text" 
+                  placeholder="client, prospect, partner"
+                  className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={(e) => setNewContact({...newContact, tags: e.target.value.split(',').map(t => t.trim()).filter(t => t)})}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
+                <textarea 
+                  placeholder="Any additional context..."
+                  value={newContact.notes}
+                  rows="3"
+                  className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" 
+                  onChange={(e) => setNewContact({...newContact, notes: e.target.value})} 
+                />
+              </div>
+              
+              {isPremium && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-yellow-600" />
+                      Reminder (days)
+                    </label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      value={newContact.reminderDays}
+                      className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" 
+                      onChange={(e) => setNewContact({...newContact, reminderDays: parseInt(e.target.value)})} 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <Crown className="w-4 h-4 text-yellow-600" />
+                      Contact Frequency
+                    </label>
+                    <input 
+                      type="number" 
+                      min="1" 
+                      value={newContact.contactFrequency}
+                      className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" 
+                      onChange={(e) => setNewContact({...newContact, contactFrequency: parseInt(e.target.value)})} 
+                    />
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex gap-3 pt-4">
+                <button type="submit" className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition">
+                  Save Contact
+                </button>
+                <button type="button" onClick={() => setShowAddModal(false)} className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
+        {/* Bulk Import Modal */}
+        {showBulkImport && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">Bulk Import Contacts</h2>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-3">Upload File (Excel/CSV)</label>
+                <input 
+                  type="file" 
+                  accept=".xlsx,.xls,.csv,.tsv,.txt"
+                  onChange={handleFileUpload}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold hover:file:bg-blue-100" 
+                />
+                <p className="text-xs text-gray-500 mt-2">Format: Name, Email, Date, Vibe (1-10), Notes, Tags (semicolon-separated)</p>
+              </div>
+              
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200"></div>
+                </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="px-2 bg-white text-gray-500">OR</span>
+                </div>
+              </div>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-3">Paste Contact List</label>
+                <textarea 
+                  value={bulkContactsText}
+                  onChange={(e) => setBulkContactsText(e.target.value)}
+                  rows="8"
+                  placeholder="Name, Email, Date, Vibe, Notes, Tags&#10;John Smith, john@example.com, 2024-01-15, 8, Great client, client;vip"
+                  className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                />
+              </div>
+              
+              {importStatus && (
+                <div className={`mb-4 p-4 rounded-xl ${importStatus.includes('Success') ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'}`}>
+                  {importStatus}
+                </div>
+              )}
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={handleBulkTextImport}
+                  disabled={!bulkContactsText.trim()}
+                  className="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-green-700 transition"
+                >
+                  Import from Text
+                </button>
+                <button 
+                  onClick={() => { setShowBulkImport(false); setBulkContactsText(''); setImportStatus(''); }}
+                  className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Email Modal */}
+        {showBulkEmail && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6">Bulk Personalized Emails</h2>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-3">Select Recipients</label>
+                <div className="border border-gray-200 rounded-xl p-4 max-h-48 overflow-y-auto space-y-2">
+                  {contacts.filter(c => c.email).map(contact => (
+                    <label key={contact.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={bulkEmailData.selectedContacts.includes(contact.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setBulkEmailData({
+                              ...bulkEmailData,
+                              selectedContacts: [...bulkEmailData.selectedContacts, contact.id]
+                            });
+                          } else {
+                            setBulkEmailData({
+                              ...bulkEmailData,
+                              selectedContacts: bulkEmailData.selectedContacts.filter(id => id !== contact.id)
+                            });
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600" 
+                      />
+                      <span className="text-sm">{contact.name} ({contact.email})</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
+                <input 
+                  type="text"
+                  value={bulkEmailData.subject}
+                  onChange={(e) => setBulkEmailData({...bulkEmailData, subject: e.target.value})}
+                  placeholder="Quick check-in"
+                  className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Body <span className="text-xs text-gray-500">(Use {'{name}'} or {'{firstName}'})</span>
+                </label>
+                <textarea 
+                  value={bulkEmailData.body}
+                  onChange={(e) => setBulkEmailData({...bulkEmailData, body: e.target.value})}
+                  rows="6"
+                  placeholder="Hi {firstName},&#10;&#10;Hope you're doing well!&#10;&#10;Best,&#10;Your Name"
+                  className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={generateBulkEmails}
+                  disabled={bulkEmailData.selectedContacts.length === 0 || !bulkEmailData.subject || !bulkEmailData.body}
+                  className="flex-1 bg-purple-600 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-purple-700 transition"
+                >
+                  Prepare {bulkEmailData.selectedContacts.length} Emails
+                </button>
+                <button 
+                  onClick={() => { setShowBulkEmail(false); setBulkEmailData({ subject: '', body: '', selectedContacts: [] }); }}
+                  className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Premium Modal */}
+        {showPremiumModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Crown className="w-8 h-8 text-white" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">Upgrade to Premium</h2>
+                <p className="text-4xl font-bold text-yellow-600 mb-1">$5</p>
+                <p className="text-sm text-gray-500">one-time payment</p>
+              </div>
+              
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center gap-3">
+                  <Bell className="w-5 h-5 text-yellow-600" />
+                  <span className="text-sm text-gray-700">Custom Reminders</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Mail className="w-5 h-5 text-yellow-600" />
+                  <span className="text-sm text-gray-700">Bulk Personalized Emails</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Upload className="w-5 h-5 text-yellow-600" />
+                  <span className="text-sm text-gray-700">Bulk Import (Excel/CSV)</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Activity className="w-5 h-5 text-yellow-600" />
+                  <span className="text-sm text-gray-700">Activity Timeline</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <BarChart3 className="w-5 h-5 text-yellow-600" />
+                  <span className="text-sm text-gray-700">Advanced Analytics</span>
+                </div>
+              </div>
+              
+              <div className="flex gap-3">
+                <button 
+                  onClick={activatePremium}
+                  className="flex-1 bg-gradient-to-r from-yellow-400 to-yellow-600 text-white py-3 rounded-xl font-bold hover:brightness-110 transition"
+                >
+                  Upgrade Now
+                </button>
+                <button 
+                  onClick={() => setShowPremiumModal(false)}
+                  className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition"
+                >
+                  Later
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
