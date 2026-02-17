@@ -1855,7 +1855,6 @@ export default function App() {
                   <Tag className="w-3.5 h-3.5" /> Create categories to organise contacts
                 </button>
               )}
-              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
                 <textarea placeholder="Any additional context..." value={newContact.notes} rows="3"
