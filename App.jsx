@@ -457,6 +457,8 @@ export default function App() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showBulkEmail, setShowBulkEmail] = useState(false);
+  const [showBulkUpdate, setShowBulkUpdate] = useState(false);
+  const [bulkUpdate, setBulkUpdate] = useState({ selectedIds: [], date: new Date().toISOString().split('T')[0], note: '', addActivity: true });
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
@@ -778,11 +780,17 @@ export default function App() {
   // and maps whatever columns are present to the CRM contact shape.
   // Column matching is case-insensitive and tolerates common variants.
   const mapRowToContact = (row, index, isHeaderMode = true) => {
-    // Helper: find a value from a header-keyed object by trying multiple key variants
+    // Helper: find a value from a header-keyed object by trying multiple key variants.
+    // Strips surrounding quotes that some CSV exporters leave on values.
     const pick = (obj, ...keys) => {
       for (const k of keys) {
         const found = Object.keys(obj).find(ok => ok.trim().toLowerCase() === k.toLowerCase());
-        if (found && obj[found] !== undefined && obj[found] !== '') return String(obj[found]).trim();
+        if (found) {
+          const raw = obj[found];
+          if (raw === undefined || raw === null) continue;
+          const val = String(raw).trim().replace(/^["']|["']$/g, ''); // strip surrounding quotes
+          if (val !== '') return val;
+        }
       }
       return '';
     };
@@ -835,27 +843,39 @@ export default function App() {
     };
   };
 
-  // parseCSVText: uses PapaParse (loaded from CDN) to correctly handle:
-  //   - quoted fields with commas inside:  "Smith, John"
-  //   - escaped quotes inside fields:      "She said ""call me"""
-  //   - newlines inside quoted fields
-  //   - Windows (CRLF) and Unix (LF) line endings
-  //   - BOM characters from Excel exports
-  //   - columns in any order (via header: true)
+  // parseCSVText: uses PapaParse to correctly handle quoted fields, commas in notes,
+  // escaped quotes, CRLF line endings, and BOM characters from Excel exports.
   const parseCSVText = (text, delimiter = ',') => {
     return new Promise((resolve, reject) => {
       if (typeof Papa === 'undefined') {
-        reject(new Error('PapaParse not loaded'));
+        // PapaParse not loaded yet — retry once after a short delay
+        setTimeout(() => {
+          if (typeof Papa === 'undefined') {
+            reject(new Error('PapaParse library not loaded. Please try again in a moment.'));
+          } else {
+            Papa.parse(text.trimStart(), {  // trimStart strips BOM characters
+              header: true,
+              delimiter,
+              quoteChar: '"',
+              escapeChar: '"',
+              skipEmptyLines: 'greedy',
+              transformHeader: h => h.trim().replace(/^"|"$/g, ''),
+              complete: resolve,
+              error: reject,
+            });
+          }
+        }, 600);
         return;
       }
-      Papa.parse(text, {
-        header: true,           // use first row as column keys
-        delimiter,              // ',' for CSV, '\t' for TSV
-        skipEmptyLines: 'greedy', // skip rows that are all whitespace
-        transformHeader: h => h.trim(), // strip whitespace from header names
-        transform: v => v,      // keep raw values — we trim in mapRowToContact
-        complete: results => resolve(results),
-        error: err => reject(err),
+      Papa.parse(text.trimStart(), {
+        header: true,
+        delimiter,
+        quoteChar: '"',
+        escapeChar: '"',
+        skipEmptyLines: 'greedy',
+        transformHeader: h => h.trim().replace(/^"|"$/g, ''),
+        complete: resolve,
+        error: reject,
       });
     });
   };
@@ -869,6 +889,19 @@ export default function App() {
     setImportStatus('Reading file…');
 
     try {
+      // --- VCF / vCard: phone contacts exported from iOS, Android, or WhatsApp ---
+      if (file.name.endsWith('.vcf')) {
+        const text = await file.text();
+        const newContacts = parseVCard(text);
+        if (newContacts.length === 0) { setImportStatus('No contacts found in vCard file.'); return; }
+        const updated = [...contacts, ...newContacts];
+        setContacts(updated);
+        await saveContacts(updated);
+        setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from phone/WhatsApp!`);
+        setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
+        return;
+      }
+
       // --- XLSX / XLS: use SheetJS, convert sheet → CSV, then PapaParse ---
       if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
         const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
@@ -945,14 +978,21 @@ export default function App() {
           .map((row, i) => mapRowToContact(row, i, true))
           .filter(Boolean);
       } else {
-        // No header row — treat columns positionally: name, email, notes, date, vibe, tags
-        newContacts = results.data
-          .map((row, i) => {
-            // PapaParse in header mode with no real headers assigns keys like Field1, Field2…
-            // Re-read as array mode for positional access
-            const vals = Object.values(row);
-            return mapRowToContact(vals, i, false);
-          })
+        // No header row — re-parse in array mode for reliable positional access
+        // Column order: name, email, notes, date, vibe, tags
+        const arrayResults = await new Promise((resolve, reject) => {
+          Papa.parse(text.trimStart(), {
+            header: false,
+            delimiter: ',',
+            quoteChar: '"',
+            escapeChar: '"',
+            skipEmptyLines: 'greedy',
+            complete: resolve,
+            error: reject,
+          });
+        });
+        newContacts = arrayResults.data
+          .map((row, i) => mapRowToContact(row, i, false))
           .filter(Boolean);
       }
 
@@ -970,6 +1010,77 @@ export default function App() {
     } catch (error) {
       setImportStatus(`❌ Error: ${error.message}`);
     }
+  };
+
+  // --- BULK UPDATE LAST CONTACT DATE ---
+  const handleBulkUpdate = async () => {
+    if (!bulkUpdate.selectedIds.length || !bulkUpdate.date) return;
+    const updated = contacts.map(c => {
+      if (!bulkUpdate.selectedIds.includes(c.id)) return c;
+      return { ...c, lastContactDate: bulkUpdate.date };
+    });
+    setContacts(updated);
+    await saveContacts(updated);
+    // optionally log an activity for each selected contact
+    if (bulkUpdate.addActivity) {
+      const newActivities = bulkUpdate.selectedIds.map(id => ({
+        id: `${Date.now()}_${id}`,
+        contactId: id,
+        type: 'note',
+        content: bulkUpdate.note || 'Offline contact — date updated in bulk.',
+        date: bulkUpdate.date,
+        timestamp: new Date().toISOString(),
+      }));
+      const allActivities = [...newActivities, ...activities];
+      setActivities(allActivities);
+      await saveActivities(allActivities);
+    }
+    setShowBulkUpdate(false);
+    setBulkUpdate({ selectedIds: [], date: new Date().toISOString().split('T')[0], note: '', addActivity: true });
+  };
+
+  // --- vCARD / PHONE & WHATSAPP CONTACT PARSER ---
+  // Parses .vcf files exported from iOS Contacts, Android Contacts, or WhatsApp.
+  // Each vCard block starts with BEGIN:VCARD and ends with END:VCARD.
+  const parseVCard = (vcfText) => {
+    const cards = vcfText.split(/BEGIN:VCARD/i).filter(b => b.trim());
+    return cards.map((card, i) => {
+      const get = (key) => {
+        // Match lines like: TEL;TYPE=CELL:+1555... or EMAIL;TYPE=WORK:a@b.com or FN:John
+        const regex = new RegExp(`^${key}[;:][^\r\n]*:?([^\r\n]+)`, 'im');
+        const m = card.match(regex);
+        if (!m) return '';
+        // Value is after the last colon on that line
+        return m[0].split(':').slice(1).join(':').trim();
+      };
+
+      const fullName = get('FN') || get('N').split(';').filter(Boolean).reverse().join(' ').trim();
+      const email    = get('EMAIL');
+      const phone    = get('TEL');
+      const org      = get('ORG').replace(/;/g, ' ').trim();
+      const title    = get('TITLE');
+      const note     = get('NOTE');
+      const addr     = get('ADR').replace(/;+/g, ' ').trim();
+
+      if (!fullName && !phone && !email) return null;
+      return {
+        id: `${Date.now()}_vcf_${i}`,
+        createdAt: new Date().toISOString(),
+        isFavorite: false,
+        name:            fullName || phone || 'Unknown',
+        email:           email || '',
+        phone:           phone || '',
+        company:         org || '',
+        jobTitle:        title || '',
+        notes:           [note, addr].filter(Boolean).join(' | ') || '',
+        lastContactDate: '',
+        vibeScore:       5,
+        vibeLabel:       'warm',
+        tags:            [],
+        reminderDays:    30,
+        contactFrequency: 30,
+      };
+    }).filter(Boolean);
   };
 
   const handleBulkEmail = () => {
@@ -1117,6 +1228,10 @@ export default function App() {
               <button onClick={() => isPremium ? setShowBulkImport(true) : (() => { setUpgradeReason('Bulk Import is a Premium feature.'); setShowPremiumModal(true); })()}
                 className={`flex-1 md:flex-none ${isPremium ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
                 {isPremium ? <Upload className="w-5 h-5" /> : <Lock className="w-5 h-5" />} Import
+              </button>
+              <button onClick={() => isPremium ? setShowBulkUpdate(true) : (() => { setUpgradeReason('Bulk Update is a Premium feature.'); setShowPremiumModal(true); })()}
+                className={`flex-1 md:flex-none ${isPremium ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
+                {isPremium ? <Calendar className="w-5 h-5" /> : <Lock className="w-5 h-5" />} Update
               </button>
               <button onClick={() => isPremium ? handleBulkEmail() : (() => { setUpgradeReason('Bulk Email is a Premium feature.'); setShowPremiumModal(true); })()}
                 className={`flex-1 md:flex-none ${isPremium ? 'bg-purple-600 hover:bg-purple-700' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
@@ -1483,12 +1598,34 @@ export default function App() {
         {showBulkImport && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl p-8 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6">Bulk Import Contacts</h2>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">Bulk Import Contacts</h2>
+              <p className="text-sm text-gray-500 mb-6">Import from a spreadsheet, or directly from your phone or WhatsApp contacts.</p>
+
+              {/* Phone / WhatsApp vCard import callout */}
+              <div className="mb-5 bg-green-50 border border-green-200 rounded-xl p-4">
+                <p className="text-sm font-bold text-green-800 mb-1 flex items-center gap-2">📱 Import from Phone or WhatsApp</p>
+                <p className="text-xs text-green-700 mb-3">Export your contacts as a <strong>.vcf</strong> file from your phone, then upload it here. Works with iPhone, Android, and WhatsApp contacts.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs text-green-700">
+                  <div className="bg-white rounded-lg p-2 border border-green-100">
+                    <p className="font-semibold mb-0.5">📱 iPhone</p>
+                    <p>Contacts app → Select All → Share → Export vCard (.vcf)</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-2 border border-green-100">
+                    <p className="font-semibold mb-0.5">🤖 Android</p>
+                    <p>Contacts app → Menu → Import/Export → Export to .vcf</p>
+                  </div>
+                  <div className="bg-white rounded-lg p-2 border border-green-100">
+                    <p className="font-semibold mb-0.5">💬 WhatsApp</p>
+                    <p>Open chat → tap name → Scroll down → Export Contact (.vcf)</p>
+                  </div>
+                </div>
+              </div>
+
               <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Upload File (Excel/CSV)</label>
-                <input type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" onChange={handleFileUpload}
+                <label className="block text-sm font-medium text-gray-700 mb-3">Upload File</label>
+                <input type="file" accept=".xlsx,.xls,.csv,.tsv,.txt,.vcf" onChange={handleFileUpload}
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold hover:file:bg-blue-100" />
-                <p className="text-xs text-gray-500 mt-2">Supported columns (any order): <strong>name</strong>, email, phone, company, title, notes, tags, vibe, date · Quoted fields with commas handled automatically</p>
+                <p className="text-xs text-gray-500 mt-2">Accepts: <strong>.vcf</strong> (phone/WhatsApp contacts), <strong>.csv</strong>, <strong>.xlsx</strong>, <strong>.xls</strong>, <strong>.tsv</strong> · Quoted fields with commas handled automatically</p>
               </div>
               <div className="relative mb-6">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
@@ -1563,6 +1700,143 @@ export default function App() {
                   Prepare {bulkEmailData.selectedContacts.length} Emails
                 </button>
                 <button onClick={() => { setShowBulkEmail(false); setBulkEmailData({ subject: '', body: '', selectedContacts: [] }); }}
+                  className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">Cancel</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Update Modal */}
+        {showBulkUpdate && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-start mb-2">
+                <h2 className="text-2xl font-bold text-gray-800">Bulk Update Last Contact</h2>
+                <button onClick={() => setShowBulkUpdate(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mb-6">Select the clients you spoke to offline, set the date, and optionally add a shared note — all updated in one click.</p>
+
+              {/* Date + Note inputs */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-orange-500" /> Last Contact Date *
+                  </label>
+                  <input type="date" value={bulkUpdate.date}
+                    max={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setBulkUpdate({ ...bulkUpdate, date: e.target.value })}
+                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-orange-400" />
+                </div>
+                <div className="flex flex-col justify-end">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <div onClick={() => setBulkUpdate({ ...bulkUpdate, addActivity: !bulkUpdate.addActivity })}
+                      className={`w-10 h-6 rounded-full transition relative ${bulkUpdate.addActivity ? 'bg-orange-500' : 'bg-gray-300'}`}>
+                      <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all ${bulkUpdate.addActivity ? 'left-5' : 'left-1'}`}></div>
+                    </div>
+                    <span className="text-sm font-medium text-gray-700">Also log as activity</span>
+                  </label>
+                  <p className="text-xs text-gray-400 mt-1 ml-12">Adds a note entry to each contact's timeline</p>
+                </div>
+              </div>
+
+              <div className="mb-5">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Shared Note <span className="text-gray-400 font-normal">(optional — added to each selected contact)</span></label>
+                <textarea
+                  rows="3"
+                  placeholder="e.g. Met at the industry event. Follow up next week."
+                  value={bulkUpdate.note}
+                  onChange={(e) => setBulkUpdate({ ...bulkUpdate, note: e.target.value })}
+                  className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-orange-400 text-sm resize-none"
+                />
+              </div>
+
+              {/* Select All / None */}
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-sm font-semibold text-gray-700">Select Contacts ({bulkUpdate.selectedIds.length} selected)</label>
+                <div className="flex gap-2">
+                  <button type="button"
+                    onClick={() => setBulkUpdate({ ...bulkUpdate, selectedIds: contacts.map(c => c.id) })}
+                    className="text-xs px-3 py-1.5 bg-orange-50 text-orange-600 border border-orange-200 rounded-lg hover:bg-orange-100 transition font-medium">
+                    Select All
+                  </button>
+                  <button type="button"
+                    onClick={() => setBulkUpdate({ ...bulkUpdate, selectedIds: [] })}
+                    className="text-xs px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition font-medium">
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              {/* Contact checklist with search */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden mb-6">
+                <div className="p-3 bg-gray-50 border-b border-gray-100">
+                  <input type="text" placeholder="Search contacts to narrow list…"
+                    className="w-full text-sm bg-white border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-300"
+                    onChange={(e) => {
+                      const q = e.target.value.toLowerCase();
+                      setBulkUpdate(prev => ({ ...prev, _search: q }));
+                    }} />
+                </div>
+                <div className="max-h-56 overflow-y-auto divide-y divide-gray-50">
+                  {contacts
+                    .filter(c => !bulkUpdate._search || c.name.toLowerCase().includes(bulkUpdate._search))
+                    .map(contact => {
+                      const days = contact.lastContactDate
+                        ? Math.ceil((new Date() - new Date(contact.lastContactDate)) / 86400000)
+                        : null;
+                      const checked = bulkUpdate.selectedIds.includes(contact.id);
+                      return (
+                        <label key={contact.id}
+                          className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition ${checked ? 'bg-orange-50' : 'hover:bg-gray-50'}`}>
+                          <input type="checkbox" checked={checked}
+                            onChange={(e) => {
+                              setBulkUpdate(prev => ({
+                                ...prev,
+                                selectedIds: e.target.checked
+                                  ? [...prev.selectedIds, contact.id]
+                                  : prev.selectedIds.filter(id => id !== contact.id)
+                              }));
+                            }}
+                            className="w-4 h-4 accent-orange-500 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-gray-800 truncate">{contact.name}</p>
+                              {contact.vibeLabel === 'hot' && <span className="text-[10px]">🔥</span>}
+                              {contact.vibeLabel === 'warm' && <span className="text-[10px]">☕</span>}
+                              {contact.vibeLabel === 'cold' && <span className="text-[10px]">❄️</span>}
+                              {isStale(contact.lastContactDate) && (
+                                <span className="text-[9px] px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded font-bold">Stale</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-400 truncate">
+                              {contact.email || contact.phone || 'No contact info'}
+                              {days !== null && <span className="ml-2 text-gray-300">· {days}d ago</span>}
+                              {days === null && <span className="ml-2 text-gray-300">· never contacted</span>}
+                            </p>
+                          </div>
+                          {checked && (
+                            <span className="text-[10px] font-bold text-orange-500 flex-shrink-0">→ {bulkUpdate.date}</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  {contacts.length === 0 && (
+                    <p className="text-center text-gray-400 text-sm py-8">No contacts yet.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleBulkUpdate}
+                  disabled={!bulkUpdate.selectedIds.length || !bulkUpdate.date}
+                  className="flex-1 bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                  <CheckCircle className="w-5 h-5" />
+                  Update {bulkUpdate.selectedIds.length} Contact{bulkUpdate.selectedIds.length !== 1 ? 's' : ''}
+                </button>
+                <button onClick={() => { setShowBulkUpdate(false); setBulkUpdate({ selectedIds: [], date: new Date().toISOString().split('T')[0], note: '', addActivity: true }); }}
                   className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">Cancel</button>
               </div>
             </div>
