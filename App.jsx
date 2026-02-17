@@ -94,7 +94,7 @@ function AuthPage({ onLogin }) {
 }
 
 // --- CONTACT DETAIL VIEW ---
-function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activities }) {
+function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activities, categories = [] }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContact, setEditedContact] = useState(contact);
   const [newActivity, setNewActivity] = useState({
@@ -247,6 +247,45 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
               <p className="text-gray-600">{contact.notes}</p>
             </div>
           ) : null}
+
+          {/* Category editor */}
+          {categories.length > 0 && (
+            <div className="mb-6">
+              <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-indigo-500" /> Category
+              </h3>
+              {isEditing ? (
+                <div className="flex gap-2 flex-wrap">
+                  <button type="button"
+                    onClick={() => setEditedContact({...editedContact, category: ''})}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${!editedContact.category ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                    None
+                  </button>
+                  {categories.map(cat => (
+                    <button key={cat.id} type="button"
+                      onClick={() => setEditedContact({...editedContact, category: editedContact.category === cat.id ? '' : cat.id})}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition flex items-center gap-1.5 ${
+                        editedContact.category === cat.id ? 'text-white border-transparent' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                      }`}
+                      style={editedContact.category === cat.id ? { backgroundColor: cat.color, borderColor: cat.color } : {}}>
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: editedContact.category === cat.id ? 'rgba(255,255,255,0.6)' : cat.color }}></span>
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              ) : contact.category ? (() => {
+                const cat = categories.find(c => c.id === contact.category);
+                return cat ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm font-semibold text-white"
+                    style={{ backgroundColor: cat.color }}>
+                    {cat.name}
+                  </span>
+                ) : null;
+              })() : (
+                <p className="text-sm text-gray-400 italic">No category assigned — click Edit to add one.</p>
+              )}
+            </div>
+          )}
 
           <div className="mb-6">
             <div className="flex justify-between items-center mb-4">
@@ -463,13 +502,25 @@ export default function App() {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [filterTag, setFilterTag] = useState('all');
+  const [sortBy, setSortBy] = useState('name'); // 'name' | 'lastContact' | 'vibe' | 'dateAdded'
+  const [sortDir, setSortDir] = useState('asc');
+  const [filterVibe, setFilterVibe] = useState('all'); // 'all' | 'hot' | 'warm' | 'cold'
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterFavorites, setFilterFavorites] = useState(false);
+  const [filterStale, setFilterStale] = useState(false);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [categories, setCategories] = useState([]); // [{ id, name, color }]
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newCategoryColor, setNewCategoryColor] = useState('#6366f1');
+  const [bulkImportCategory, setBulkImportCategory] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [bulkContactsText, setBulkContactsText] = useState('');
   const [importStatus, setImportStatus] = useState('');
   const [bulkEmailData, setBulkEmailData] = useState({ subject: '', body: '', selectedContacts: [] });
   const [newContact, setNewContact] = useState({
     name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '',
     lastContactDate: '', vibeScore: 5, vibeLabel: 'warm',
-    notes: '', tags: [], reminderDays: 30, contactFrequency: 30
+    notes: '', tags: [], category: '', reminderDays: 30, contactFrequency: 30
   });
   const [smartCaptureText, setSmartCaptureText] = useState('');
   const [scanMode, setScanMode] = useState('idle'); // 'idle' | 'camera' | 'preview'
@@ -707,6 +758,8 @@ export default function App() {
       if (savedActivities?.value) setActivities(JSON.parse(savedActivities.value));
       const premiumStatus = await window.storage.get('premium_status');
       if (premiumStatus?.value) setIsPremium(JSON.parse(premiumStatus.value));
+      const savedCategories = await window.storage.get('crm_categories');
+      if (savedCategories?.value) setCategories(JSON.parse(savedCategories.value));
       setIsLoading(false);
     };
     initApp();
@@ -718,6 +771,42 @@ export default function App() {
 
   const saveActivities = async (activitiesList) => {
     await window.storage.set('crm_activities', JSON.stringify(activitiesList));
+  };
+
+  const saveCategories = async (cats) => {
+    await window.storage.set('crm_categories', JSON.stringify(cats));
+  };
+
+  const addCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    if (categories.find(c => c.name.toLowerCase() === name.toLowerCase())) return;
+    const cat = { id: Date.now().toString(), name, color: newCategoryColor };
+    const updated = [...categories, cat];
+    setCategories(updated);
+    await saveCategories(updated);
+    setNewCategoryName('');
+    setNewCategoryColor('#6366f1');
+  };
+
+  const deleteCategory = async (id) => {
+    const updated = categories.filter(c => c.id !== id);
+    setCategories(updated);
+    await saveCategories(updated);
+    // Remove category from any contacts that had it
+    const updatedContacts = contacts.map(c =>
+      c.category === id ? { ...c, category: '' } : c
+    );
+    setContacts(updatedContacts);
+    await saveContacts(updatedContacts);
+  };
+
+  const updateContactCategory = async (contactId, categoryId) => {
+    const updated = contacts.map(c =>
+      c.id === contactId ? { ...c, category: categoryId } : c
+    );
+    setContacts(updated);
+    await saveContacts(updated);
   };
 
   const handleLogout = async () => {
@@ -743,7 +832,7 @@ export default function App() {
     await saveContacts(updated);
     setShowAddModal(false);
     resetScan();
-    setNewContact({ name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm', notes: '', tags: [], reminderDays: 30, contactFrequency: 30 });
+    setNewContact({ name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm', notes: '', tags: [], category: '', reminderDays: 30, contactFrequency: 30 });
   };
 
   const deleteContact = async (id) => {
@@ -779,7 +868,7 @@ export default function App() {
   // mapRowToContact: takes a PapaParse row object (header mode) or a plain array row,
   // and maps whatever columns are present to the CRM contact shape.
   // Column matching is case-insensitive and tolerates common variants.
-  const mapRowToContact = (row, index, isHeaderMode = true) => {
+  const mapRowToContact = (row, index, isHeaderMode = true, overrideCategory = '') => {
     // Helper: find a value from a header-keyed object by trying multiple key variants.
     // Strips surrounding quotes that some CSV exporters leave on values.
     const pick = (obj, ...keys) => {
@@ -795,7 +884,7 @@ export default function App() {
       return '';
     };
 
-    let name, email, notes, lastContactDate, vibeScore, vibeLabel, tags, phone, company, jobTitle;
+    let name, email, notes, lastContactDate, vibeScore, vibeLabel, tags, phone, company, jobTitle, category;
 
     if (isHeaderMode) {
       // Header-keyed object from PapaParse — column order doesn't matter
@@ -810,35 +899,40 @@ export default function App() {
       vibeScore     = rawVibe ? parseInt(rawVibe) || 5 : 5;
       const rawLabel = pick(row, 'vibe label', 'vibelabel', 'label', 'status');
       vibeLabel     = ['hot','warm','cold'].includes(rawLabel.toLowerCase()) ? rawLabel.toLowerCase() : '';
-      const rawTags = pick(row, 'tags', 'tag', 'categories', 'labels');
+      const rawTags = pick(row, 'tags', 'tag', 'labels');
       tags          = rawTags ? rawTags.split(/[;|]/).map(t => t.trim()).filter(Boolean) : [];
+      // category: match by name against existing categories list
+      const rawCat  = pick(row, 'category', 'group', 'segment', 'type');
+      const matchedCat = rawCat ? categories.find(c => c.name.toLowerCase() === rawCat.toLowerCase()) : null;
+      category      = overrideCategory || matchedCat?.id || '';
     } else {
-      // Positional array fallback (no header row): name, email, notes, date, vibe, tags
       name          = row[0] ? String(row[0]).trim() : '';
       email         = row[1] ? String(row[1]).trim() : '';
       notes         = row[2] ? String(row[2]).trim() : '';
       lastContactDate = row[3] ? String(row[3]).trim() : '';
       vibeScore     = row[4] ? parseInt(row[4]) || 5 : 5;
       tags          = row[5] ? String(row[5]).split(/[;|]/).map(t => t.trim()).filter(Boolean) : [];
+      category      = overrideCategory || '';
     }
 
-    if (!name) return null; // skip empty rows
+    if (!name) return null;
 
     return {
       id: `${Date.now()}_${index}`,
       createdAt: new Date().toISOString(),
       isFavorite: false,
       name,
-      email:          email || '',
-      phone:          phone || '',
-      company:        company || '',
-      jobTitle:       jobTitle || '',
-      notes:          notes || '',
+      email:           email || '',
+      phone:           phone || '',
+      company:         company || '',
+      jobTitle:        jobTitle || '',
+      notes:           notes || '',
       lastContactDate: lastContactDate || '',
-      vibeScore:      isNaN(vibeScore) ? 5 : Math.min(10, Math.max(1, vibeScore)),
-      vibeLabel:      vibeLabel || (vibeScore >= 8 ? 'hot' : vibeScore >= 5 ? 'warm' : 'cold'),
-      tags:           tags || [],
-      reminderDays:   30,
+      vibeScore:       isNaN(vibeScore) ? 5 : Math.min(10, Math.max(1, vibeScore)),
+      vibeLabel:       vibeLabel || (vibeScore >= 8 ? 'hot' : vibeScore >= 5 ? 'warm' : 'cold'),
+      tags:            tags || [],
+      category:        category || '',
+      reminderDays:    30,
       contactFrequency: 30,
     };
   };
@@ -912,9 +1006,8 @@ export default function App() {
         const csvText = XLSX.utils.sheet_to_csv(firstSheet);
         const results = await parseCSVText(csvText, ',');
         const newContacts = results.data
-          .map((row, i) => mapRowToContact(row, i, true))
+          .map((row, i) => mapRowToContact(row, i, true, bulkImportCategory))
           .filter(Boolean);
-        if (newContacts.length === 0) { setImportStatus('No valid contacts found in file.'); return; }
         const updated = [...contacts, ...newContacts];
         setContacts(updated);
         await saveContacts(updated);
@@ -940,7 +1033,7 @@ export default function App() {
         : '';
 
       const newContacts = results.data
-        .map((row, i) => mapRowToContact(row, i, true))
+        .map((row, i) => mapRowToContact(row, i, true, bulkImportCategory))
         .filter(Boolean);
 
       if (newContacts.length === 0) {
@@ -975,11 +1068,10 @@ export default function App() {
       if (hasNameHeader) {
         // Pasted text has a proper header row — use header-keyed mapping
         newContacts = results.data
-          .map((row, i) => mapRowToContact(row, i, true))
+          .map((row, i) => mapRowToContact(row, i, true, bulkImportCategory))
           .filter(Boolean);
       } else {
         // No header row — re-parse in array mode for reliable positional access
-        // Column order: name, email, notes, date, vibe, tags
         const arrayResults = await new Promise((resolve, reject) => {
           Papa.parse(text.trimStart(), {
             header: false,
@@ -992,7 +1084,7 @@ export default function App() {
           });
         });
         newContacts = arrayResults.data
-          .map((row, i) => mapRowToContact(row, i, false))
+          .map((row, i) => mapRowToContact(row, i, false, bulkImportCategory))
           .filter(Boolean);
       }
 
@@ -1132,12 +1224,51 @@ export default function App() {
   };
 
   const allTags = [...new Set(contacts.flatMap(c => c.tags || []))];
-  const filteredContacts = contacts.filter(contact => {
-    const matchesSearch = contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (contact.email && contact.email.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesTag = filterTag === 'all' || (contact.tags && contact.tags.includes(filterTag));
-    return matchesSearch && matchesTag;
-  });
+
+  const filteredContacts = contacts
+    .filter(contact => {
+      const q = searchTerm.toLowerCase();
+      const matchesSearch = !q ||
+        contact.name.toLowerCase().includes(q) ||
+        (contact.email && contact.email.toLowerCase().includes(q)) ||
+        (contact.company && contact.company.toLowerCase().includes(q)) ||
+        (contact.phone && contact.phone.includes(q)) ||
+        (contact.notes && contact.notes.toLowerCase().includes(q));
+      const matchesTag      = filterTag === 'all' || (contact.tags && contact.tags.includes(filterTag));
+      const matchesVibe     = filterVibe === 'all' || contact.vibeLabel === filterVibe;
+      const matchesCategory = filterCategory === 'all' || contact.category === filterCategory;
+      const matchesFav      = !filterFavorites || contact.isFavorite;
+      const matchesStale    = !filterStale || isStale(contact.lastContactDate);
+      return matchesSearch && matchesTag && matchesVibe && matchesCategory && matchesFav && matchesStale;
+    })
+    .sort((a, b) => {
+      let valA, valB;
+      if (sortBy === 'name') {
+        valA = a.name.toLowerCase(); valB = b.name.toLowerCase();
+      } else if (sortBy === 'lastContact') {
+        valA = a.lastContactDate ? new Date(a.lastContactDate) : new Date(0);
+        valB = b.lastContactDate ? new Date(b.lastContactDate) : new Date(0);
+      } else if (sortBy === 'vibe') {
+        valA = a.vibeScore; valB = b.vibeScore;
+      } else if (sortBy === 'dateAdded') {
+        valA = new Date(a.createdAt || 0); valB = new Date(b.createdAt || 0);
+      } else if (sortBy === 'company') {
+        valA = (a.company || '').toLowerCase(); valB = (b.company || '').toLowerCase();
+      }
+      if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+  const toggleSort = (field) => {
+    if (sortBy === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(field); setSortDir('asc'); }
+  };
+
+  const activeFilterCount = [
+    filterTag !== 'all', filterVibe !== 'all', filterCategory !== 'all',
+    filterFavorites, filterStale
+  ].filter(Boolean).length;
 
   if (isLoading) return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
@@ -1206,12 +1337,14 @@ export default function App() {
           </div>
         )}
 
-        {/* Search and Actions */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex flex-col md:flex-row gap-4 items-center mb-4">
+        {/* Search, Actions and Sort/Filter */}
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-3">
+
+          {/* Row 1: Search + action buttons */}
+          <div className="flex flex-col md:flex-row gap-3 items-center">
             <div className="relative flex-1 w-full">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input type="text" placeholder="Search contacts..."
+              <input type="text" placeholder="Search name, email, company, notes..."
                 className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20"
                 onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
@@ -1239,20 +1372,140 @@ export default function App() {
               </button>
             </div>
           </div>
-          {allTags.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              <button onClick={() => setFilterTag('all')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${filterTag === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                All
+
+          {/* Row 2: Sort bar + Filter toggle + Category manager */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Sort:</span>
+            {[
+              { id: 'name',        label: 'Name' },
+              { id: 'lastContact', label: 'Last Contact' },
+              { id: 'vibe',        label: 'Vibe' },
+              { id: 'company',     label: 'Company' },
+              { id: 'dateAdded',   label: 'Date Added' },
+            ].map(s => (
+              <button key={s.id} onClick={() => toggleSort(s.id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                  sortBy === s.id ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}>
+                {s.label}
+                {sortBy === s.id && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
               </button>
-              {allTags.map(tag => (
-                <button key={tag} onClick={() => setFilterTag(tag)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${filterTag === tag ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                  {tag}
-                </button>
-              ))}
+            ))}
+            <div className="flex-1" />
+            <button onClick={() => setShowFilters(f => !f)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition ${
+                showFilters || activeFilterCount > 0
+                  ? 'bg-blue-600 text-white border-blue-600'
+                  : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              }`}>
+              <Filter className="w-3.5 h-3.5" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="bg-white text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{activeFilterCount}</span>
+              )}
+            </button>
+            <button onClick={() => setShowCategoryManager(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition">
+              <Tag className="w-3.5 h-3.5" /> Categories
+              {categories.length > 0 && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{categories.length}</span>}
+            </button>
+          </div>
+
+          {/* Row 3: Filter panel — shown when toggled */}
+          {showFilters && (
+            <div className="border border-gray-100 rounded-xl p-4 bg-gray-50 space-y-3">
+
+              {/* Category filter */}
+              {categories.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Category</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => setFilterCategory('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${filterCategory === 'all' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+                      All
+                    </button>
+                    {categories.map(cat => (
+                      <button key={cat.id} onClick={() => setFilterCategory(filterCategory === cat.id ? 'all' : cat.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border flex items-center gap-1.5 ${
+                          filterCategory === cat.id ? 'text-white border-transparent' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                        }`}
+                        style={filterCategory === cat.id ? { backgroundColor: cat.color, borderColor: cat.color } : {}}>
+                        <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: filterCategory === cat.id ? 'rgba(255,255,255,0.7)' : cat.color }}></span>
+                        {cat.name}
+                        <span className="opacity-60 text-[10px]">({contacts.filter(c => c.category === cat.id).length})</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Vibe filter */}
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Vibe</p>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { id: 'all',  label: 'All Vibes' },
+                    { id: 'hot',  label: '🔥 Hot' },
+                    { id: 'warm', label: '☕ Warm' },
+                    { id: 'cold', label: '❄️ Cold' },
+                  ].map(v => (
+                    <button key={v.id} onClick={() => setFilterVibe(v.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${
+                        filterVibe === v.id ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
+                      }`}>{v.label}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tag filter */}
+              {allTags.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Tag</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => setFilterTag('all')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${filterTag === 'all' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+                      All Tags
+                    </button>
+                    {allTags.map(tag => (
+                      <button key={tag} onClick={() => setFilterTag(filterTag === tag ? 'all' : tag)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${filterTag === tag ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick toggles */}
+              <div>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Quick Filters</p>
+                <div className="flex gap-2 flex-wrap">
+                  <button onClick={() => setFilterFavorites(f => !f)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border flex items-center gap-1 ${filterFavorites ? 'bg-yellow-500 text-white border-yellow-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+                    <Star className="w-3 h-3" /> Favorites
+                  </button>
+                  <button onClick={() => setFilterStale(f => !f)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border flex items-center gap-1 ${filterStale ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+                    <Clock className="w-3 h-3" /> Stale only
+                  </button>
+                  {activeFilterCount > 0 && (
+                    <button onClick={() => { setFilterTag('all'); setFilterVibe('all'); setFilterCategory('all'); setFilterFavorites(false); setFilterStale(false); }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-200 text-red-500 bg-white hover:bg-red-50 transition flex items-center gap-1">
+                      <X className="w-3 h-3" /> Clear all filters
+                    </button>
+                  )}
+                </div>
+              </div>
+
             </div>
           )}
+
+          {/* Summary line */}
+          <div className="flex items-center justify-between text-xs text-gray-400">
+            <span>Showing <strong className="text-gray-600">{filteredContacts.length}</strong> of <strong className="text-gray-600">{contacts.length}</strong> contacts</span>
+            {activeFilterCount > 0 && <span className="text-blue-500">{activeFilterCount} filter{activeFilterCount !== 1 ? 's' : ''} active</span>}
+          </div>
+
         </div>
 
         {/* Contacts Grid */}
@@ -1287,6 +1540,16 @@ export default function App() {
                         )}
                       </div>
                     )}
+                    {/* Category badge */}
+                    {contact.category && (() => {
+                      const cat = categories.find(c => c.id === contact.category);
+                      return cat ? (
+                        <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded text-[10px] font-bold text-white"
+                          style={{ backgroundColor: cat.color }}>
+                          {cat.name}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); deleteContact(contact.id); }}
                     className="opacity-0 group-hover:opacity-100 p-2 text-red-300 hover:text-red-500 transition">
@@ -1351,6 +1614,7 @@ export default function App() {
             onUpdate={(updated) => { updateContact(updated); setSelectedContact(updated); }}
             onAddActivity={addActivity}
             activities={activities}
+            categories={categories}
           />
         )}
 
@@ -1556,6 +1820,42 @@ export default function App() {
                   className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
                   onChange={(e) => setNewContact({...newContact, tags: e.target.value.split(',').map(t => t.trim()).filter(t => t)})} />
               </div>
+
+              {categories.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <Tag className="w-4 h-4" /> Category
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    <button type="button" onClick={() => setNewContact({...newContact, category: ''})}
+                      className={`px-3 py-2 rounded-xl text-xs font-semibold border transition ${!newContact.category ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                      None
+                    </button>
+                    {categories.map(cat => (
+                      <button key={cat.id} type="button"
+                        onClick={() => setNewContact({...newContact, category: newContact.category === cat.id ? '' : cat.id})}
+                        className={`px-3 py-2 rounded-xl text-xs font-bold border transition flex items-center gap-1.5 ${
+                          newContact.category === cat.id ? 'text-white border-transparent' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                        }`}
+                        style={newContact.category === cat.id ? { backgroundColor: cat.color, borderColor: cat.color } : {}}>
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: newContact.category === cat.id ? 'rgba(255,255,255,0.6)' : cat.color }}></span>
+                        {cat.name}
+                      </button>
+                    ))}
+                    <button type="button" onClick={() => setShowCategoryManager(true)}
+                      className="px-3 py-2 rounded-xl text-xs font-semibold border border-dashed border-gray-300 text-gray-400 hover:text-gray-600 hover:border-gray-400 transition">
+                      + New category
+                    </button>
+                  </div>
+                </div>
+              )}
+              {categories.length === 0 && (
+                <button type="button" onClick={() => setShowCategoryManager(true)}
+                  className="w-full py-2.5 border border-dashed border-gray-300 rounded-xl text-xs text-gray-400 hover:text-gray-600 hover:border-gray-400 transition flex items-center justify-center gap-2">
+                  <Tag className="w-3.5 h-3.5" /> Create categories to organise contacts
+                </button>
+              )}
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
                 <textarea placeholder="Any additional context..." value={newContact.notes} rows="3"
@@ -1638,10 +1938,37 @@ export default function App() {
                   className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm" />
               </div>
               {importStatus && (
-                <div className={`mb-4 p-4 rounded-xl ${importStatus.includes('Success') ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'}`}>
+                <div className={`mb-4 p-4 rounded-xl ${importStatus.includes('✅') ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'}`}>
                   {importStatus}
                 </div>
               )}
+
+              {/* Assign category to all imported contacts */}
+              {categories.length > 0 && (
+                <div className="mb-5 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+                  <label className="block text-sm font-semibold text-indigo-700 mb-2 flex items-center gap-2">
+                    <Tag className="w-4 h-4" /> Assign category to all imported contacts <span className="font-normal text-indigo-400">(optional)</span>
+                  </label>
+                  <div className="flex gap-2 flex-wrap">
+                    <button type="button" onClick={() => setBulkImportCategory('')}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold border transition ${!bulkImportCategory ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                      No category
+                    </button>
+                    {categories.map(cat => (
+                      <button key={cat.id} type="button"
+                        onClick={() => setBulkImportCategory(bulkImportCategory === cat.id ? '' : cat.id)}
+                        className={`px-3 py-2 rounded-lg text-xs font-bold border transition flex items-center gap-1.5 ${
+                          bulkImportCategory === cat.id ? 'text-white border-transparent' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                        }`}
+                        style={bulkImportCategory === cat.id ? { backgroundColor: cat.color, borderColor: cat.color } : {}}>
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: bulkImportCategory === cat.id ? 'rgba(255,255,255,0.6)' : cat.color }}></span>
+                        {cat.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-3">
                 <button onClick={handleBulkTextImport} disabled={!bulkContactsText.trim()}
                   className="flex-1 bg-green-600 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-green-700 transition">
@@ -1839,6 +2166,107 @@ export default function App() {
                 <button onClick={() => { setShowBulkUpdate(false); setBulkUpdate({ selectedIds: [], date: new Date().toISOString().split('T')[0], note: '', addActivity: true }); }}
                   className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">Cancel</button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Category Manager Modal */}
+        {showCategoryManager && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                  <Tag className="w-6 h-6 text-indigo-500" /> Categories
+                </h2>
+                <button onClick={() => setShowCategoryManager(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+
+              {/* Existing categories */}
+              {categories.length === 0 ? (
+                <div className="text-center py-8 text-gray-400">
+                  <Tag className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">No categories yet — create your first one below.</p>
+                </div>
+              ) : (
+                <div className="space-y-2 mb-6">
+                  {categories.map(cat => {
+                    const count = contacts.filter(c => c.category === cat.id).length;
+                    return (
+                      <div key={cat.id}
+                        className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 group">
+                        <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }}></span>
+                        <span className="flex-1 font-semibold text-gray-800 text-sm">{cat.name}</span>
+                        <span className="text-xs text-gray-400">{count} contact{count !== 1 ? 's' : ''}</span>
+                        {/* Inline category filter shortcut */}
+                        <button
+                          onClick={() => { setFilterCategory(cat.id); setShowFilters(true); setShowCategoryManager(false); }}
+                          className="opacity-0 group-hover:opacity-100 text-xs text-indigo-500 hover:text-indigo-700 transition px-2 py-1 rounded-lg bg-indigo-50">
+                          View
+                        </button>
+                        <button onClick={() => deleteCategory(cat.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 text-red-300 hover:text-red-500 transition rounded-lg hover:bg-red-50">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Create new category */}
+              <div className="border-t border-gray-100 pt-5">
+                <p className="text-sm font-semibold text-gray-700 mb-3">Create New Category</p>
+                <div className="flex gap-3 items-end">
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      placeholder="e.g. VIP Clients, Cold Leads, Partners…"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addCategory()}
+                      className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-indigo-400 text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="cursor-pointer">
+                      <div className="w-10 h-10 rounded-xl border-2 border-gray-200 overflow-hidden flex items-center justify-center"
+                        style={{ backgroundColor: newCategoryColor }}>
+                        <span className="text-white text-[10px] font-bold">color</span>
+                      </div>
+                      <input type="color" value={newCategoryColor}
+                        onChange={(e) => setNewCategoryColor(e.target.value)}
+                        className="sr-only" />
+                    </label>
+                    <button onClick={addCategory} disabled={!newCategoryName.trim()}
+                      className="px-4 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold text-sm hover:bg-indigo-700 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                      Create
+                    </button>
+                  </div>
+                </div>
+                {/* Preset colours */}
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  {['#6366f1','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899','#64748b','#84cc16'].map(col => (
+                    <button key={col} type="button" onClick={() => setNewCategoryColor(col)}
+                      className={`w-6 h-6 rounded-full border-2 transition ${newCategoryColor === col ? 'border-gray-800 scale-110' : 'border-transparent hover:scale-110'}`}
+                      style={{ backgroundColor: col }} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Bulk reassign section */}
+              {categories.length > 0 && contacts.length > 0 && (
+                <div className="border-t border-gray-100 pt-5 mt-5">
+                  <p className="text-sm font-semibold text-gray-700 mb-1">Edit Contact Categories</p>
+                  <p className="text-xs text-gray-400 mb-3">Click any contact card on the dashboard to edit its category in the detail view, or use the filter to select by category and bulk-reassign.</p>
+                  <button onClick={() => { setShowCategoryManager(false); setShowFilters(true); }}
+                    className="text-xs text-indigo-600 hover:text-indigo-800 underline">
+                    Open filters on the dashboard →
+                  </button>
+                </div>
+              )}
+
             </div>
           </div>
         )}
