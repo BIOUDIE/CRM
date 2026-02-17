@@ -682,6 +682,15 @@ export default function App() {
     })
     .slice(0, 3);
 
+  // Load PapaParse from CDN once on mount so CSV parsing is available
+  useEffect(() => {
+    if (typeof Papa !== 'undefined') return; // already loaded
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js';
+    script.async = true;
+    document.head.appendChild(script);
+  }, []);
+
   useEffect(() => {
     const initApp = async () => {
       const savedUser = await window.storage.get('auth_user');
@@ -763,82 +772,203 @@ export default function App() {
     }
   };
 
+  // --- CSV PARSING UTILITIES ---
+
+  // mapRowToContact: takes a PapaParse row object (header mode) or a plain array row,
+  // and maps whatever columns are present to the CRM contact shape.
+  // Column matching is case-insensitive and tolerates common variants.
+  const mapRowToContact = (row, index, isHeaderMode = true) => {
+    // Helper: find a value from a header-keyed object by trying multiple key variants
+    const pick = (obj, ...keys) => {
+      for (const k of keys) {
+        const found = Object.keys(obj).find(ok => ok.trim().toLowerCase() === k.toLowerCase());
+        if (found && obj[found] !== undefined && obj[found] !== '') return String(obj[found]).trim();
+      }
+      return '';
+    };
+
+    let name, email, notes, lastContactDate, vibeScore, vibeLabel, tags, phone, company, jobTitle;
+
+    if (isHeaderMode) {
+      // Header-keyed object from PapaParse — column order doesn't matter
+      name          = pick(row, 'name', 'full name', 'fullname', 'contact name');
+      email         = pick(row, 'email', 'email address', 'e-mail');
+      phone         = pick(row, 'phone', 'phone number', 'mobile', 'cell');
+      company       = pick(row, 'company', 'organization', 'org', 'business');
+      jobTitle      = pick(row, 'title', 'job title', 'role', 'position');
+      notes         = pick(row, 'notes', 'note', 'comments', 'description', 'memo');
+      lastContactDate = pick(row, 'last contact', 'last contact date', 'lastcontactdate', 'date', 'last seen');
+      const rawVibe = pick(row, 'vibe', 'vibe score', 'vibescore', 'score');
+      vibeScore     = rawVibe ? parseInt(rawVibe) || 5 : 5;
+      const rawLabel = pick(row, 'vibe label', 'vibelabel', 'label', 'status');
+      vibeLabel     = ['hot','warm','cold'].includes(rawLabel.toLowerCase()) ? rawLabel.toLowerCase() : '';
+      const rawTags = pick(row, 'tags', 'tag', 'categories', 'labels');
+      tags          = rawTags ? rawTags.split(/[;|]/).map(t => t.trim()).filter(Boolean) : [];
+    } else {
+      // Positional array fallback (no header row): name, email, notes, date, vibe, tags
+      name          = row[0] ? String(row[0]).trim() : '';
+      email         = row[1] ? String(row[1]).trim() : '';
+      notes         = row[2] ? String(row[2]).trim() : '';
+      lastContactDate = row[3] ? String(row[3]).trim() : '';
+      vibeScore     = row[4] ? parseInt(row[4]) || 5 : 5;
+      tags          = row[5] ? String(row[5]).split(/[;|]/).map(t => t.trim()).filter(Boolean) : [];
+    }
+
+    if (!name) return null; // skip empty rows
+
+    return {
+      id: `${Date.now()}_${index}`,
+      createdAt: new Date().toISOString(),
+      isFavorite: false,
+      name,
+      email:          email || '',
+      phone:          phone || '',
+      company:        company || '',
+      jobTitle:       jobTitle || '',
+      notes:          notes || '',
+      lastContactDate: lastContactDate || '',
+      vibeScore:      isNaN(vibeScore) ? 5 : Math.min(10, Math.max(1, vibeScore)),
+      vibeLabel:      vibeLabel || (vibeScore >= 8 ? 'hot' : vibeScore >= 5 ? 'warm' : 'cold'),
+      tags:           tags || [],
+      reminderDays:   30,
+      contactFrequency: 30,
+    };
+  };
+
+  // parseCSVText: uses PapaParse (loaded from CDN) to correctly handle:
+  //   - quoted fields with commas inside:  "Smith, John"
+  //   - escaped quotes inside fields:      "She said ""call me"""
+  //   - newlines inside quoted fields
+  //   - Windows (CRLF) and Unix (LF) line endings
+  //   - BOM characters from Excel exports
+  //   - columns in any order (via header: true)
+  const parseCSVText = (text, delimiter = ',') => {
+    return new Promise((resolve, reject) => {
+      if (typeof Papa === 'undefined') {
+        reject(new Error('PapaParse not loaded'));
+        return;
+      }
+      Papa.parse(text, {
+        header: true,           // use first row as column keys
+        delimiter,              // ',' for CSV, '\t' for TSV
+        skipEmptyLines: 'greedy', // skip rows that are all whitespace
+        transformHeader: h => h.trim(), // strip whitespace from header names
+        transform: v => v,      // keep raw values — we trim in mapRowToContact
+        complete: results => resolve(results),
+        error: err => reject(err),
+      });
+    });
+  };
+
   const handleFileUpload = async (e) => {
     if (!isPremium) { setShowPremiumModal(true); return; }
     const file = e.target.files[0];
     if (!file) return;
-    setImportStatus('Processing file...');
+    // reset input so the same file can be re-selected after a fix
+    e.target.value = '';
+    setImportStatus('Reading file…');
+
     try {
-      const text = await file.text();
-      let rows;
-      if (file.name.endsWith('.csv')) {
-        rows = text.split('\n').map(row => row.split(',').map(cell => cell.trim()));
-      } else if (file.name.endsWith('.tsv') || file.name.endsWith('.txt')) {
-        rows = text.split('\n').map(row => row.split('\t').map(cell => cell.trim()));
-      } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      // --- XLSX / XLS: use SheetJS, convert sheet → CSV, then PapaParse ---
+      if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
         const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
         const data = await file.arrayBuffer();
         const workbook = XLSX.read(data);
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-      } else {
-        setImportStatus('Unsupported file type'); return;
+        // sheet_to_csv produces a proper RFC 4180 CSV string — hand it to PapaParse
+        const csvText = XLSX.utils.sheet_to_csv(firstSheet);
+        const results = await parseCSVText(csvText, ',');
+        const newContacts = results.data
+          .map((row, i) => mapRowToContact(row, i, true))
+          .filter(Boolean);
+        if (newContacts.length === 0) { setImportStatus('No valid contacts found in file.'); return; }
+        const updated = [...contacts, ...newContacts];
+        setContacts(updated);
+        await saveContacts(updated);
+        setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from Excel!`);
+        setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
+        return;
       }
-      rows = rows.filter(row => row.some(cell => cell && cell.toString().trim()));
-      if (rows.length < 2) { setImportStatus('File appears empty'); return; }
-      const newContacts = [];
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row[0]) continue;
-        newContacts.push({
-          id: Date.now() + '_' + i,
-          name: row[0].toString().trim(),
-          email: row[1] || '',
-          lastContactDate: row[2] || '',
-          vibeScore: row[3] ? parseInt(row[3]) || 5 : 5,
-          notes: row[4] || '',
-          tags: row[5] ? row[5].split(';').map(t => t.trim()) : [],
-          isFavorite: false,
-          createdAt: new Date().toISOString()
-        });
+
+      // --- CSV / TSV / TXT: read as text, detect delimiter, parse with PapaParse ---
+      const text = await file.text();
+      const delimiter = file.name.endsWith('.tsv') ? '\t' : ',';
+      const results = await parseCSVText(text, delimiter);
+
+      if (results.errors.length > 0 && results.data.length === 0) {
+        setImportStatus(`Parse error: ${results.errors[0].message}`);
+        return;
       }
+
+      // Warn about any rows PapaParse flagged but still recovered
+      const rowWarnings = results.errors.filter(e => e.type !== 'Delimiter');
+      const warnMsg = rowWarnings.length > 0
+        ? ` (${rowWarnings.length} row${rowWarnings.length !== 1 ? 's' : ''} had minor issues and were skipped)`
+        : '';
+
+      const newContacts = results.data
+        .map((row, i) => mapRowToContact(row, i, true))
+        .filter(Boolean);
+
+      if (newContacts.length === 0) {
+        setImportStatus('No valid contacts found. Check that your file has a header row with at least a "name" column.');
+        return;
+      }
+
       const updated = [...contacts, ...newContacts];
       setContacts(updated);
       await saveContacts(updated);
-      setImportStatus(`Successfully imported ${newContacts.length} contacts!`);
-      setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2000);
+      setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!${warnMsg}`);
+      setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
+
     } catch (error) {
-      setImportStatus(`Error: ${error.message}`);
+      setImportStatus(`❌ Error: ${error.message}`);
     }
   };
 
   const handleBulkTextImport = async () => {
     if (!isPremium) { setShowPremiumModal(true); return; }
-    setImportStatus('Processing...');
+    setImportStatus('Parsing…');
     try {
-      const lines = bulkContactsText.split('\n').filter(line => line.trim());
-      const newContacts = lines.map((line, i) => {
-        const parts = line.split(',').map(p => p.trim());
-        return {
-          id: Date.now() + '_' + i,
-          name: parts[0],
-          email: parts[1] || '',
-          lastContactDate: parts[2] || '',
-          vibeScore: parts[3] ? parseInt(parts[3]) || 5 : 5,
-          notes: parts[4] || '',
-          tags: parts[5] ? parts[5].split(';').map(t => t.trim()) : [],
-          isFavorite: false,
-          createdAt: new Date().toISOString()
-        };
-      });
+      const text = bulkContactsText.trim();
+      if (!text) { setImportStatus('Nothing to import.'); return; }
+
+      // Try PapaParse with header mode first (user may have pasted a header row)
+      const results = await parseCSVText(text, ',');
+      const headers = results.meta?.fields || [];
+      const hasNameHeader = headers.some(h => h.trim().toLowerCase().includes('name'));
+
+      let newContacts;
+      if (hasNameHeader) {
+        // Pasted text has a proper header row — use header-keyed mapping
+        newContacts = results.data
+          .map((row, i) => mapRowToContact(row, i, true))
+          .filter(Boolean);
+      } else {
+        // No header row — treat columns positionally: name, email, notes, date, vibe, tags
+        newContacts = results.data
+          .map((row, i) => {
+            // PapaParse in header mode with no real headers assigns keys like Field1, Field2…
+            // Re-read as array mode for positional access
+            const vals = Object.values(row);
+            return mapRowToContact(vals, i, false);
+          })
+          .filter(Boolean);
+      }
+
+      if (newContacts.length === 0) {
+        setImportStatus('No contacts found. Format: name, email, notes  (one per line)');
+        return;
+      }
+
       const updated = [...contacts, ...newContacts];
       setContacts(updated);
       await saveContacts(updated);
-      setImportStatus(`Successfully imported ${newContacts.length} contacts!`);
+      setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!`);
       setBulkContactsText('');
-      setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2000);
+      setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
     } catch (error) {
-      setImportStatus(`Error: ${error.message}`);
+      setImportStatus(`❌ Error: ${error.message}`);
     }
   };
 
@@ -1358,7 +1488,7 @@ export default function App() {
                 <label className="block text-sm font-medium text-gray-700 mb-3">Upload File (Excel/CSV)</label>
                 <input type="file" accept=".xlsx,.xls,.csv,.tsv,.txt" onChange={handleFileUpload}
                   className="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:bg-blue-50 file:text-blue-700 file:font-semibold hover:file:bg-blue-100" />
-                <p className="text-xs text-gray-500 mt-2">Format: Name, Email, Date, Vibe (1-10), Notes, Tags (semicolon-separated)</p>
+                <p className="text-xs text-gray-500 mt-2">Supported columns (any order): <strong>name</strong>, email, phone, company, title, notes, tags, vibe, date · Quoted fields with commas handled automatically</p>
               </div>
               <div className="relative mb-6">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
@@ -1367,7 +1497,7 @@ export default function App() {
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-3">Paste Contact List</label>
                 <textarea value={bulkContactsText} onChange={(e) => setBulkContactsText(e.target.value)} rows="8"
-                  placeholder="Name, Email, Date, Vibe, Notes, Tags"
+                  placeholder={"Paste CSV rows here — with or without a header row:\n\nname,email,notes\nJohn Smith,john@acme.com,\"Met at conference, very interested\"\nJane Doe,jane@co.com,\"Said \"\"call me\"\" next week\"\n\nOr just positional (no header):\nJohn Smith,john@acme.com,Notes go here"}
                   className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm" />
               </div>
               {importStatus && (
