@@ -988,14 +988,6 @@ export default function App() {
     await saveContacts(updated);
   };
 
-  const updateContactCategory = async (contactId, categoryId) => {
-    const updated = contacts.map(c =>
-      c.id === contactId ? { ...c, category: categoryId } : c
-    );
-    setContacts(updated);
-    await saveContacts(updated);
-  };
-
   // --- FEATURE 1: ICEBREAKER AI ---
   const generateIcebreaker = async (contact, channel = icebreakerChannel) => {
     setIcebreakerContact(contact);
