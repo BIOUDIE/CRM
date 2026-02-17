@@ -465,9 +465,49 @@ export default function App() {
   const [importStatus, setImportStatus] = useState('');
   const [bulkEmailData, setBulkEmailData] = useState({ subject: '', body: '', selectedContacts: [] });
   const [newContact, setNewContact] = useState({
-    name: '', email: '', lastContactDate: '', vibeScore: 5,
+    name: '', email: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm',
     notes: '', tags: [], reminderDays: 30, contactFrequency: 30
   });
+  const [magicPasteText, setMagicPasteText] = useState('');
+  const [upgradeReason, setUpgradeReason] = useState('');
+
+  // --- MAGIC PASTE: extract name + email from raw text ---
+  const handleMagicPaste = (text) => {
+    setMagicPasteText(text);
+    const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+    const lines = text.split(/\n|,|;/).map(s => s.trim()).filter(Boolean);
+    const nameMatch = lines.find(l => !l.includes('@') && l.length > 1 && /^[a-zA-Z\s'-]+$/.test(l));
+    if (emailMatch) setNewContact(prev => ({ ...prev, email: emailMatch[0] }));
+    if (nameMatch) setNewContact(prev => ({ ...prev, name: nameMatch }));
+  };
+
+  // --- VIBE TOGGLE: map label → numeric score ---
+  const vibeLabelToScore = { hot: 9, warm: 5, cold: 2 };
+  const setVibeLabel = (label) => {
+    setNewContact(prev => ({ ...prev, vibeLabel: label, vibeScore: vibeLabelToScore[label] }));
+  };
+
+  // --- STALE BADGE: > 14 days since last contact ---
+  const isStale = (dateString) => {
+    if (!dateString) return true;
+    const days = Math.ceil((new Date() - new Date(dateString)) / (1000 * 60 * 60 * 24));
+    return days > 14;
+  };
+
+  // --- FREE TIER LIMIT: max 10 contacts ---
+  const FREE_CONTACT_LIMIT = 10;
+  const atFreeLimit = !isPremium && contacts.length >= FREE_CONTACT_LIMIT;
+
+  // --- TODAY'S 3: Hot contacts not reached in 7+ days ---
+  const todaysThree = contacts
+    .filter(c => {
+      const isHot = c.vibeLabel === 'hot' || c.vibeScore >= 8;
+      const days = c.lastContactDate
+        ? Math.ceil((new Date() - new Date(c.lastContactDate)) / (1000 * 60 * 60 * 24))
+        : 999;
+      return isHot && days >= 7;
+    })
+    .slice(0, 3);
 
   useEffect(() => {
     const initApp = async () => {
@@ -504,6 +544,11 @@ export default function App() {
 
   const handleAddContact = async (e) => {
     e.preventDefault();
+    if (atFreeLimit) {
+      setUpgradeReason('You have reached the 10 contact limit on the Free plan.');
+      setShowPremiumModal(true);
+      return;
+    }
     const updated = [{
       ...newContact,
       id: Date.now().toString(),
@@ -513,7 +558,8 @@ export default function App() {
     setContacts(updated);
     await saveContacts(updated);
     setShowAddModal(false);
-    setNewContact({ name: '', email: '', lastContactDate: '', vibeScore: 5, notes: '', tags: [], reminderDays: 30, contactFrequency: 30 });
+    setMagicPasteText('');
+    setNewContact({ name: '', email: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm', notes: '', tags: [], reminderDays: 30, contactFrequency: 30 });
   };
 
   const deleteContact = async (id) => {
@@ -721,6 +767,31 @@ export default function App() {
           )}
         </div>
 
+        {/* TODAY'S 3 — Hot contacts needing a nudge */}
+        {todaysThree.length > 0 && (
+          <div className="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl p-5">
+            <h2 className="text-base font-bold text-orange-700 mb-3 flex items-center gap-2">
+              🔥 Today's Focus — Reach out to these 3
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {todaysThree.map(contact => {
+                const days = daysSinceContact(contact.lastContactDate);
+                return (
+                  <div key={contact.id}
+                    onClick={() => setSelectedContact(contact)}
+                    className="bg-white border border-orange-100 rounded-xl p-4 cursor-pointer hover:shadow-md transition flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-lg flex-shrink-0">🔥</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-gray-800 truncate">{contact.name}</p>
+                      <p className="text-xs text-orange-600">{days ? `${days}d since contact` : 'Never contacted'}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Search and Actions */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
           <div className="flex flex-col md:flex-row gap-4 items-center mb-4">
@@ -738,16 +809,15 @@ export default function App() {
               <button onClick={() => setShowAddModal(true)}
                 className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition">
                 <Plus className="w-5 h-5" /> Add
+                {!isPremium && <span className="text-[10px] bg-blue-800 px-1.5 py-0.5 rounded-full">{contacts.length}/10</span>}
               </button>
-              <button onClick={() => isPremium ? setShowBulkImport(true) : setShowPremiumModal(true)}
-                className={`flex-1 md:flex-none ${isPremium ? 'bg-green-600' : 'bg-slate-400'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative`}>
-                <Upload className="w-5 h-5" /> Import
-                {!isPremium && <Crown className="w-4 h-4 absolute -top-1 -right-1" />}
+              <button onClick={() => isPremium ? setShowBulkImport(true) : (() => { setUpgradeReason('Bulk Import is a Premium feature.'); setShowPremiumModal(true); })()}
+                className={`flex-1 md:flex-none ${isPremium ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
+                {isPremium ? <Upload className="w-5 h-5" /> : <Lock className="w-5 h-5" />} Import
               </button>
-              <button onClick={handleBulkEmail}
-                className={`flex-1 md:flex-none ${isPremium ? 'bg-purple-600' : 'bg-slate-400'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative`}>
-                <Mail className="w-5 h-5" /> Email
-                {!isPremium && <Crown className="w-4 h-4 absolute -top-1 -right-1" />}
+              <button onClick={() => isPremium ? handleBulkEmail() : (() => { setUpgradeReason('Bulk Email is a Premium feature.'); setShowPremiumModal(true); })()}
+                className={`flex-1 md:flex-none ${isPremium ? 'bg-purple-600 hover:bg-purple-700' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
+                {isPremium ? <Mail className="w-5 h-5" /> : <Lock className="w-5 h-5" />} Email
               </button>
             </div>
           </div>
@@ -777,8 +847,11 @@ export default function App() {
                 onClick={() => setSelectedContact(contact)}>
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-bold text-gray-800">{contact.name}</h3>
+                      {isStale(contact.lastContactDate) && (
+                        <span className="px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded text-[9px] font-bold uppercase tracking-wide">Stale</span>
+                      )}
                       <button onClick={(e) => { e.stopPropagation(); toggleFavorite(contact.id); }}
                         className="opacity-0 group-hover:opacity-100">
                         <Star className={`w-4 h-4 ${contact.isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
@@ -818,9 +891,14 @@ export default function App() {
                       <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                         <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500" style={{width: `${contact.vibeScore * 10}%`}} />
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getVibeColor(contact.vibeScore)}`}>
-                        {contact.vibeScore}/10
-                      </span>
+                      {contact.vibeLabel === 'hot' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">🔥 Hot</span>}
+                      {contact.vibeLabel === 'warm' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-600">☕ Warm</span>}
+                      {contact.vibeLabel === 'cold' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">❄️ Cold</span>}
+                      {!contact.vibeLabel && (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getVibeColor(contact.vibeScore)}`}>
+                          {contact.vibeScore}/10
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -867,11 +945,36 @@ export default function App() {
           />
         )}
 
-        {/* Add Contact Modal */}
         {showAddModal && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <form onSubmit={handleAddContact} className="bg-white rounded-2xl p-8 w-full max-w-2xl shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
               <h2 className="text-2xl font-bold text-gray-800">Add New Contact</h2>
+
+              {/* Free tier warning */}
+              {atFreeLimit && (
+                <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl flex items-center gap-2 text-orange-700 text-sm font-medium">
+                  <Lock className="w-4 h-4 flex-shrink-0" />
+                  You've reached the 10 contact limit. <button type="button" onClick={() => setShowPremiumModal(true)} className="underline ml-1">Upgrade to add more.</button>
+                </div>
+              )}
+
+              {/* ✨ MAGIC PASTE */}
+              <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
+                <label className="block text-sm font-bold text-violet-700 mb-2">✨ Magic Paste</label>
+                <textarea
+                  rows="3"
+                  placeholder="Paste anything — an email signature, LinkedIn bio, business card text... we'll extract the name and email automatically."
+                  value={magicPasteText}
+                  onChange={(e) => handleMagicPaste(e.target.value)}
+                  className="w-full p-3 bg-white rounded-lg border border-violet-200 outline-none focus:ring-2 focus:ring-violet-400 text-sm resize-none"
+                />
+                {(newContact.name || newContact.email) && magicPasteText && (
+                  <p className="text-xs text-violet-600 mt-1 font-medium">
+                    ✅ Detected: {newContact.name && <span className="mr-2">Name: <strong>{newContact.name}</strong></span>}{newContact.email && <span>Email: <strong>{newContact.email}</strong></span>}
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
@@ -891,12 +994,26 @@ export default function App() {
                     className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
                     onChange={(e) => setNewContact({...newContact, lastContactDate: e.target.value})} />
                 </div>
+
+                {/* 🔥 VIBE TOGGLE */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Vibe Score: {newContact.vibeScore}/10</label>
-                  <input type="range" min="1" max="10" value={newContact.vibeScore} className="w-full"
-                    onChange={(e) => setNewContact({...newContact, vibeScore: parseInt(e.target.value)})} />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Vibe</label>
+                  <div className="flex gap-2">
+                    {[
+                      { label: 'hot',  emoji: '🔥', text: 'Hot',  active: 'bg-red-500 text-white border-red-500',  inactive: 'bg-white text-red-500 border-red-200 hover:bg-red-50' },
+                      { label: 'warm', emoji: '☕', text: 'Warm', active: 'bg-yellow-500 text-white border-yellow-500', inactive: 'bg-white text-yellow-600 border-yellow-200 hover:bg-yellow-50' },
+                      { label: 'cold', emoji: '❄️', text: 'Cold', active: 'bg-blue-500 text-white border-blue-500',  inactive: 'bg-white text-blue-500 border-blue-200 hover:bg-blue-50' },
+                    ].map(v => (
+                      <button key={v.label} type="button"
+                        onClick={() => setVibeLabel(v.label)}
+                        className={`flex-1 py-2.5 rounded-xl border-2 font-bold text-sm transition flex items-center justify-center gap-1 ${newContact.vibeLabel === v.label ? v.active : v.inactive}`}>
+                        {v.emoji} {v.text}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Tags (comma-separated)</label>
                 <input type="text" placeholder="client, prospect, partner"
@@ -930,8 +1047,12 @@ export default function App() {
                 </div>
               )}
               <div className="flex gap-3 pt-4">
-                <button type="submit" className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition">Save Contact</button>
-                <button type="button" onClick={() => setShowAddModal(false)} className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">Cancel</button>
+                <button type="submit" disabled={atFreeLimit}
+                  className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                  Save Contact
+                </button>
+                <button type="button" onClick={() => { setShowAddModal(false); setMagicPasteText(''); }}
+                  className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">Cancel</button>
               </div>
             </form>
           </div>
@@ -1036,6 +1157,9 @@ export default function App() {
                   <Crown className="w-8 h-8 text-white" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-2">Upgrade to Premium</h2>
+                {upgradeReason && (
+                  <p className="text-sm text-orange-600 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 mb-2">{upgradeReason}</p>
+                )}
                 <p className="text-4xl font-bold text-yellow-600 mb-1">$5</p>
                 <p className="text-sm text-gray-500">one-time payment</p>
               </div>
@@ -1051,7 +1175,7 @@ export default function App() {
                   className="flex-1 bg-gradient-to-r from-yellow-400 to-yellow-600 text-white py-3 rounded-xl font-bold hover:brightness-110 transition">
                   Upgrade Now
                 </button>
-                <button onClick={() => setShowPremiumModal(false)}
+                <button onClick={() => { setShowPremiumModal(false); setUpgradeReason(''); }}
                   className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">
                   Later
                 </button>
