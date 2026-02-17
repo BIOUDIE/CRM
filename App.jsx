@@ -465,20 +465,193 @@ export default function App() {
   const [importStatus, setImportStatus] = useState('');
   const [bulkEmailData, setBulkEmailData] = useState({ subject: '', body: '', selectedContacts: [] });
   const [newContact, setNewContact] = useState({
-    name: '', email: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm',
+    name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '',
+    lastContactDate: '', vibeScore: 5, vibeLabel: 'warm',
     notes: '', tags: [], reminderDays: 30, contactFrequency: 30
   });
-  const [magicPasteText, setMagicPasteText] = useState('');
+  const [smartCaptureText, setSmartCaptureText] = useState('');
+  const [scanMode, setScanMode] = useState('idle'); // 'idle' | 'camera' | 'preview'
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanPreview, setScanPreview] = useState(null);
+  const [scanFeedback, setScanFeedback] = useState([]);
   const [upgradeReason, setUpgradeReason] = useState('');
+  const cameraRef = React.useRef(null);
+  const videoRef = React.useRef(null);
+  const streamRef = React.useRef(null);
 
-  // --- MAGIC PASTE: extract name + email from raw text ---
-  const handleMagicPaste = (text) => {
-    setMagicPasteText(text);
+  // --- SMART EXTRACT: parse any text for all contact fields ---
+  const extractFromText = (text) => {
+    const detected = [];
+    const updates = {};
+
     const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-    const lines = text.split(/\n|,|;/).map(s => s.trim()).filter(Boolean);
-    const nameMatch = lines.find(l => !l.includes('@') && l.length > 1 && /^[a-zA-Z\s'-]+$/.test(l));
-    if (emailMatch) setNewContact(prev => ({ ...prev, email: emailMatch[0] }));
-    if (nameMatch) setNewContact(prev => ({ ...prev, name: nameMatch }));
+    if (emailMatch) { updates.email = emailMatch[0]; detected.push(`📧 ${emailMatch[0]}`); }
+
+    const phoneMatch = text.match(/(\+?\d[\d\s\-().]{7,}\d)/);
+    if (phoneMatch) { updates.phone = phoneMatch[1].trim(); detected.push(`📞 ${phoneMatch[1].trim()}`); }
+
+    const urlMatch = text.match(/https?:\/\/[^\s]+|www\.[^\s]+/i);
+    if (urlMatch) { updates.website = urlMatch[0]; detected.push(`🌐 ${urlMatch[0]}`); }
+
+    const lines = text.split(/\n/).map(s => s.trim()).filter(Boolean);
+
+    // Name: first line that looks like a proper name (2+ words, title case, no special chars)
+    const nameMatch = lines.find(l =>
+      !l.includes('@') && !l.match(/\d{3}/) && !l.match(/https?:/) &&
+      l.length > 2 && l.length < 60 &&
+      /^[A-Z][a-z]/.test(l)
+    );
+    if (nameMatch) { updates.name = nameMatch; detected.push(`👤 ${nameMatch}`); }
+
+    // Company: line with Ltd, Inc, Co, LLC, Corp, Agency, Studio, Group etc.
+    const companyMatch = lines.find(l =>
+      l.match(/\b(Ltd|LLC|Inc|Corp|Co\.|Agency|Studio|Group|Solutions|Services|Consulting|Foundation|Associates)\b/i) && !l.includes('@')
+    );
+    if (companyMatch) { updates.company = companyMatch; detected.push(`🏢 ${companyMatch}`); }
+
+    // Title/Role: line with common job title keywords
+    const titleMatch = lines.find(l =>
+      l.match(/\b(CEO|CTO|CFO|COO|Director|Manager|Engineer|Designer|Developer|Founder|President|VP|Lead|Head|Officer|Specialist|Consultant|Analyst|Coordinator|Executive)\b/i) &&
+      !l.includes('@') && l.length < 60
+    );
+    if (titleMatch) { updates.jobTitle = titleMatch; detected.push(`💼 ${titleMatch}`); }
+
+    // Address: line with number + street or zip code pattern
+    const addressMatch = lines.find(l => l.match(/\d+\s+[A-Za-z]+\s+(St|Ave|Rd|Blvd|Dr|Ln|Way|Court|Ct|Place|Pl)\b/i) || l.match(/\b\d{5}(-\d{4})?\b/));
+    if (addressMatch) { updates.address = addressMatch; detected.push(`📍 ${addressMatch}`); }
+
+    // Notes: anything left over after stripping extracted lines
+    const remaining = lines.filter(l =>
+      l !== nameMatch && l !== companyMatch && l !== titleMatch && l !== addressMatch &&
+      !l.includes(emailMatch?.[0]) && !l.match(/(\+?\d[\d\s\-().]{7,}\d)/) && !l.match(/https?:\/\//)
+    ).join(' ').trim();
+    if (remaining && remaining.length > 3) { updates.notes = remaining; detected.push(`📝 notes`); }
+
+    return { updates, detected };
+  };
+
+  // --- LIVE TYPE-TO-FILL ---
+  const handleSmartType = (text) => {
+    setSmartCaptureText(text);
+    if (!text.trim()) { setScanFeedback([]); return; }
+    const { updates, detected } = extractFromText(text);
+    setNewContact(prev => ({ ...prev, ...updates }));
+    setScanFeedback(detected);
+  };
+
+  // --- AI IMAGE SCAN via Claude API ---
+  const analyzeImageWithAI = async (base64Data, mimeType) => {
+    setIsScanning(true);
+    setScanFeedback(['🤖 AI is reading the image...']);
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5-20250929',
+          max_tokens: 500,
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: mimeType, data: base64Data }
+              },
+              {
+                type: 'text',
+                text: 'Extract all contact information from this image (business card, flier, document, email, etc). Return ONLY a plain text block with one piece of info per line, like:\nName: John Smith\nEmail: john@company.com\nPhone: +1 555 123 4567\nCompany: Acme Corp\nTitle: Sales Director\nWebsite: www.acme.com\nAddress: 123 Main St\nNotes: any other relevant info\n\nOnly include fields you can clearly see. No extra commentary.'
+              }
+            ]
+          }]
+        })
+      });
+      const data = await response.json();
+      const rawText = data.content?.[0]?.text || '';
+
+      // Parse the structured AI response
+      const parsed = {};
+      const detected = [];
+      rawText.split('\n').forEach(line => {
+        const [key, ...rest] = line.split(':');
+        const val = rest.join(':').trim();
+        if (!val) return;
+        const k = key.trim().toLowerCase();
+        if (k === 'name')    { parsed.name    = val; detected.push(`👤 ${val}`); }
+        if (k === 'email')   { parsed.email   = val; detected.push(`📧 ${val}`); }
+        if (k === 'phone')   { parsed.phone   = val; detected.push(`📞 ${val}`); }
+        if (k === 'company') { parsed.company  = val; detected.push(`🏢 ${val}`); }
+        if (k === 'title')   { parsed.jobTitle = val; detected.push(`💼 ${val}`); }
+        if (k === 'website') { parsed.website  = val; detected.push(`🌐 ${val}`); }
+        if (k === 'address') { parsed.address  = val; detected.push(`📍 ${val}`); }
+        if (k === 'notes')   { parsed.notes    = val; detected.push(`📝 notes`); }
+      });
+
+      setNewContact(prev => ({ ...prev, ...parsed }));
+      setScanFeedback(detected.length > 0 ? detected : ['⚠️ No contact info found — try a clearer image']);
+      setSmartCaptureText(rawText);
+    } catch (err) {
+      setScanFeedback(['❌ Scan failed — check your connection and try again']);
+    }
+    setIsScanning(false);
+  };
+
+  // --- CAMERA: start stream ---
+  const startCamera = async () => {
+    setScanMode('camera');
+    setScanFeedback([]);
+    setScanPreview(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      streamRef.current = stream;
+      setTimeout(() => { if (videoRef.current) videoRef.current.srcObject = stream; }, 100);
+    } catch {
+      setScanFeedback(['❌ Camera access denied — please allow camera permissions']);
+      setScanMode('idle');
+    }
+  };
+
+  const stopCamera = () => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+  };
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    const base64 = dataUrl.split(',')[1];
+    setScanPreview(dataUrl);
+    stopCamera();
+    setScanMode('preview');
+    analyzeImageWithAI(base64, 'image/jpeg');
+  };
+
+  // --- FILE UPLOAD for image ---
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      const base64 = dataUrl.split(',')[1];
+      const mimeType = file.type || 'image/jpeg';
+      setScanPreview(dataUrl);
+      setScanMode('preview');
+      analyzeImageWithAI(base64, mimeType);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const resetScan = () => {
+    stopCamera();
+    setScanMode('idle');
+    setScanPreview(null);
+    setScanFeedback([]);
+    setSmartCaptureText('');
   };
 
   // --- VIBE TOGGLE: map label → numeric score ---
@@ -558,8 +731,8 @@ export default function App() {
     setContacts(updated);
     await saveContacts(updated);
     setShowAddModal(false);
-    setMagicPasteText('');
-    setNewContact({ name: '', email: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm', notes: '', tags: [], reminderDays: 30, contactFrequency: 30 });
+    resetScan();
+    setNewContact({ name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm', notes: '', tags: [], reminderDays: 30, contactFrequency: 30 });
   };
 
   const deleteContact = async (id) => {
@@ -958,20 +1131,120 @@ export default function App() {
                 </div>
               )}
 
-              {/* ✨ MAGIC PASTE */}
+              {/* ✨ MAGIC PASTE — type or paste any text, fields auto-fill instantly */}
               <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
-                <label className="block text-sm font-bold text-violet-700 mb-2">✨ Magic Paste</label>
+                <label className="block text-sm font-bold text-violet-700 mb-2 flex items-center gap-2">
+                  ✨ Magic Paste
+                  <span className="text-[10px] font-normal text-violet-400">— type or paste anything below</span>
+                </label>
                 <textarea
-                  rows="3"
-                  placeholder="Paste anything — an email signature, LinkedIn bio, business card text... we'll extract the name and email automatically."
-                  value={magicPasteText}
-                  onChange={(e) => handleMagicPaste(e.target.value)}
-                  className="w-full p-3 bg-white rounded-lg border border-violet-200 outline-none focus:ring-2 focus:ring-violet-400 text-sm resize-none"
+                  rows="4"
+                  placeholder={`Just type or paste anything — name, number, email, title — fields fill automatically:\n\nJohn Smith\njohn@acme.com\n+1 555 123 4567\nAcme Corp — Sales Director`}
+                  value={smartCaptureText}
+                  onChange={(e) => handleSmartType(e.target.value)}
+                  className="w-full p-3 bg-white rounded-xl border border-violet-200 outline-none focus:ring-2 focus:ring-violet-400 text-sm resize-none font-mono"
                 />
-                {(newContact.name || newContact.email) && magicPasteText && (
-                  <p className="text-xs text-violet-600 mt-1 font-medium">
-                    ✅ Detected: {newContact.name && <span className="mr-2">Name: <strong>{newContact.name}</strong></span>}{newContact.email && <span>Email: <strong>{newContact.email}</strong></span>}
-                  </p>
+                {scanFeedback.length > 0 && smartCaptureText.length > 0 && !scanPreview && (
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-xs font-semibold text-gray-700 mb-1">✅ Auto-filled {scanFeedback.length} field{scanFeedback.length !== 1 ? 's' : ''}:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {scanFeedback.map((f, i) => (
+                        <span key={i} className="bg-white border border-green-200 text-green-700 text-[10px] px-2 py-0.5 rounded-full">{f}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 📸 SCAN TO FILL — camera or image upload, AI extracts everything */}
+              <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-sm font-bold text-indigo-700 flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> Scan to Fill
+                    <span className="text-[10px] font-normal text-indigo-400 bg-indigo-100 px-2 py-0.5 rounded-full">AI-powered</span>
+                  </label>
+                  {(scanPreview || scanMode === 'camera') && (
+                    <button type="button" onClick={() => { stopCamera(); setScanMode('idle'); setScanPreview(null); setScanFeedback([]); }}
+                      className="text-xs text-indigo-400 hover:text-indigo-700 flex items-center gap-1">
+                      <X className="w-3 h-3" /> Reset
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-indigo-500 mb-3">Point your camera at a business card, flier, name tag, email, or any document — AI reads and fills every field.</p>
+
+                {/* Scan action buttons — shown when idle */}
+                {scanMode !== 'camera' && !scanPreview && (
+                  <div className="flex gap-2">
+                    <button type="button" onClick={startCamera}
+                      className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
+                      📷 Open Camera
+                    </button>
+                    <label className="flex-1 cursor-pointer">
+                      <div className="bg-white border-2 border-indigo-300 text-indigo-700 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-indigo-50 transition">
+                        🖼️ Upload Image
+                      </div>
+                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                    </label>
+                  </div>
+                )}
+
+                {/* Live camera view */}
+                {scanMode === 'camera' && (
+                  <div className="space-y-3">
+                    <div className="relative bg-black rounded-xl overflow-hidden" style={{aspectRatio:'4/3'}}>
+                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                      {/* Corner guides */}
+                      <div className="absolute inset-4 pointer-events-none">
+                        <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-white rounded-tl"></div>
+                        <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-white rounded-tr"></div>
+                        <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-white rounded-bl"></div>
+                        <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-white rounded-br"></div>
+                      </div>
+                      <p className="absolute bottom-2 left-0 right-0 text-center text-white text-[10px] opacity-70">Point at card · flier · document · email</p>
+                    </div>
+                    <button type="button" onClick={capturePhoto}
+                      className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
+                      📸 Capture & Extract Info
+                    </button>
+                  </div>
+                )}
+
+                {/* Scanned image preview */}
+                {scanPreview && (
+                  <div className="relative rounded-xl overflow-hidden border border-indigo-200">
+                    <img src={scanPreview} alt="Scanned document" className="w-full object-contain max-h-44" />
+                    {isScanning && (
+                      <div className="absolute inset-0 bg-indigo-900/60 flex flex-col items-center justify-center gap-2">
+                        <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-white text-xs font-semibold">AI reading document...</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Scan feedback */}
+                {scanFeedback.length > 0 && (scanPreview || scanMode === 'camera') && (
+                  <div className={`mt-3 p-3 rounded-xl text-xs ${
+                    isScanning ? 'bg-indigo-100' :
+                    scanFeedback[0].startsWith('❌') || scanFeedback[0].startsWith('⚠️')
+                      ? 'bg-red-50 border border-red-200'
+                      : 'bg-green-50 border border-green-200'
+                  }`}>
+                    {isScanning ? (
+                      <p className="text-indigo-600 font-medium animate-pulse">{scanFeedback[0]}</p>
+                    ) : scanFeedback[0].startsWith('❌') || scanFeedback[0].startsWith('⚠️') ? (
+                      <p className="text-red-600 font-medium">{scanFeedback[0]}</p>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-gray-700 mb-1">✅ Auto-filled {scanFeedback.length} field{scanFeedback.length !== 1 ? 's' : ''}:</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {scanFeedback.map((f, i) => (
+                            <span key={i} className="bg-white border border-green-200 text-green-700 px-2 py-0.5 rounded-full">{f}</span>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -987,6 +1260,24 @@ export default function App() {
                   <input type="email" placeholder="john@example.com" value={newContact.email}
                     className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
                     onChange={(e) => setNewContact({...newContact, email: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                  <input type="tel" placeholder="+1 555 123 4567" value={newContact.phone || ''}
+                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => setNewContact({...newContact, phone: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Company</label>
+                  <input type="text" placeholder="Acme Corp" value={newContact.company || ''}
+                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => setNewContact({...newContact, company: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Job Title</label>
+                  <input type="text" placeholder="Sales Director" value={newContact.jobTitle || ''}
+                    className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={(e) => setNewContact({...newContact, jobTitle: e.target.value})} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Last Contact Date</label>
@@ -1051,7 +1342,7 @@ export default function App() {
                   className="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed">
                   Save Contact
                 </button>
-                <button type="button" onClick={() => { setShowAddModal(false); setMagicPasteText(''); }}
+                <button type="button" onClick={() => { setShowAddModal(false); resetScan(); }}
                   className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">Cancel</button>
               </div>
             </form>
