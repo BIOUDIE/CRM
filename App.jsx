@@ -94,9 +94,10 @@ function AuthPage({ onLogin }) {
 }
 
 // --- CONTACT DETAIL VIEW ---
-function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activities, categories = [] }) {
+function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activities, categories = [], allContacts = [], onIcebreaker, onOpenContact }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContact, setEditedContact] = useState(contact);
+  const [editedContact, setEditedContact] = useState({ meetingLink: '', referredBy: '', ...contact });
+  const [bookingLogged, setBookingLogged] = useState(false);
   const [newActivity, setNewActivity] = useState({
     type: 'note',
     content: '',
@@ -121,6 +122,24 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
     });
     setNewActivity({ type: 'note', content: '', date: new Date().toISOString().split('T')[0] });
     setShowActivityForm(false);
+  };
+
+  const handleBookCall = () => {
+    const link = contact.meetingLink || editedContact.meetingLink;
+    if (!link) return;
+    window.open(link.startsWith('http') ? link : `https://${link}`, '_blank');
+    // Auto-log a "Meeting Scheduled" activity
+    if (!bookingLogged) {
+      onAddActivity({
+        contactId: contact.id,
+        id: Date.now().toString(),
+        type: 'meeting',
+        content: 'Meeting scheduled via booking link.',
+        date: new Date().toISOString().split('T')[0],
+        timestamp: new Date().toISOString()
+      });
+      setBookingLogged(true);
+    }
   };
 
   const getActivityIcon = (type) => {
@@ -173,6 +192,12 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
               )}
             </div>
             <div className="flex gap-2">
+              {/* Icebreaker AI */}
+              <button onClick={() => onIcebreaker(contact)}
+                title="Draft Icebreaker"
+                className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition flex items-center gap-1.5 text-xs font-bold">
+                <Zap className="w-4 h-4" /> Icebreaker
+              </button>
               {isEditing ? (
                 <button onClick={handleSave} className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
                   <Save className="w-5 h-5" />
@@ -190,46 +215,60 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
         </div>
 
         <div className="flex-1 overflow-y-auto p-6">
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl">
-              <div className="flex items-center gap-2 text-blue-600 mb-2">
-                <TrendingUp className="w-4 h-4" />
-                <span className="text-xs font-medium">Vibe Score</span>
-              </div>
-              {isEditing ? (
-                <div>
-                  <input type="range" min="1" max="10" value={editedContact.vibeScore}
-                    onChange={(e) => setEditedContact({...editedContact, vibeScore: parseInt(e.target.value)})}
-                    className="w-full" />
-                  <p className="text-2xl font-bold text-blue-900">{editedContact.vibeScore}/10</p>
+          {(() => {
+            const referralsSentCount = allContacts.filter(c => c.referredBy === contact.id).length;
+            return (
+              <div className={`grid gap-4 mb-6 ${referralsSentCount > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl">
+                  <div className="flex items-center gap-2 text-blue-600 mb-2">
+                    <TrendingUp className="w-4 h-4" />
+                    <span className="text-xs font-medium">Vibe Score</span>
+                  </div>
+                  {isEditing ? (
+                    <div>
+                      <input type="range" min="1" max="10" value={editedContact.vibeScore}
+                        onChange={(e) => setEditedContact({...editedContact, vibeScore: parseInt(e.target.value)})}
+                        className="w-full" />
+                      <p className="text-2xl font-bold text-blue-900">{editedContact.vibeScore}/10</p>
+                    </div>
+                  ) : (
+                    <p className="text-3xl font-bold text-blue-900">{contact.vibeScore}/10</p>
+                  )}
                 </div>
-              ) : (
-                <p className="text-3xl font-bold text-blue-900">{contact.vibeScore}/10</p>
-              )}
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl">
-              <div className="flex items-center gap-2 text-green-600 mb-2">
-                <Calendar className="w-4 h-4" />
-                <span className="text-xs font-medium">Last Contact</span>
+                <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl">
+                  <div className="flex items-center gap-2 text-green-600 mb-2">
+                    <Calendar className="w-4 h-4" />
+                    <span className="text-xs font-medium">Last Contact</span>
+                  </div>
+                  {isEditing ? (
+                    <input type="date" value={editedContact.lastContactDate || ''}
+                      onChange={(e) => setEditedContact({...editedContact, lastContactDate: e.target.value})}
+                      className="w-full p-2 rounded-lg border" />
+                  ) : (
+                    <p className="text-sm font-bold text-green-900">
+                      {contact.lastContactDate ? new Date(contact.lastContactDate).toLocaleDateString() : 'Never'}
+                    </p>
+                  )}
+                </div>
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl">
+                  <div className="flex items-center gap-2 text-purple-600 mb-2">
+                    <Activity className="w-4 h-4" />
+                    <span className="text-xs font-medium">Activities</span>
+                  </div>
+                  <p className="text-3xl font-bold text-purple-900">{contactActivities.length}</p>
+                </div>
+                {referralsSentCount > 0 && (
+                  <div className="bg-gradient-to-br from-pink-50 to-pink-100 p-4 rounded-xl">
+                    <div className="flex items-center gap-2 text-pink-600 mb-2">
+                      <Users className="w-4 h-4" />
+                      <span className="text-xs font-medium">Referrals Sent</span>
+                    </div>
+                    <p className="text-3xl font-bold text-pink-900">{referralsSentCount}</p>
+                  </div>
+                )}
               </div>
-              {isEditing ? (
-                <input type="date" value={editedContact.lastContactDate || ''}
-                  onChange={(e) => setEditedContact({...editedContact, lastContactDate: e.target.value})}
-                  className="w-full p-2 rounded-lg border" />
-              ) : (
-                <p className="text-sm font-bold text-green-900">
-                  {contact.lastContactDate ? new Date(contact.lastContactDate).toLocaleDateString() : 'Never'}
-                </p>
-              )}
-            </div>
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl">
-              <div className="flex items-center gap-2 text-purple-600 mb-2">
-                <Activity className="w-4 h-4" />
-                <span className="text-xs font-medium">Activities</span>
-              </div>
-              <p className="text-3xl font-bold text-purple-900">{contactActivities.length}</p>
-            </div>
-          </div>
+            );
+          })()}
 
           {isEditing ? (
             <div className="mb-6">
@@ -286,6 +325,98 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
               )}
             </div>
           )}
+
+          {/* FEATURE 3: MEETING LINK / BOOK CALL */}
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-green-500" /> Meeting Link
+            </h3>
+            {isEditing ? (
+              <input
+                type="url"
+                placeholder="https://calendly.com/your-link"
+                value={editedContact.meetingLink || ''}
+                onChange={(e) => setEditedContact({...editedContact, meetingLink: e.target.value})}
+                className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            ) : (contact.meetingLink || editedContact.meetingLink) ? (
+              <button onClick={handleBookCall}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl text-sm font-bold transition">
+                <Calendar className="w-4 h-4" />
+                Book a Call
+                {bookingLogged && <CheckCircle className="w-4 h-4 opacity-70" />}
+              </button>
+            ) : (
+              <p className="text-sm text-gray-400 italic">No booking link — click Edit to add your Calendly or SavvyCal link.</p>
+            )}
+          </div>
+
+          {/* FEATURE 5: REFERRED BY — with clickable referrer link */}
+          <div className="mb-6">
+            <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <Users className="w-4 h-4 text-purple-500" /> Referred By
+            </h3>
+            {isEditing ? (
+              <select
+                value={editedContact.referredBy || ''}
+                onChange={(e) => setEditedContact({...editedContact, referredBy: e.target.value})}
+                className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="">— No referrer —</option>
+                {allContacts.filter(c => c.id !== contact.id).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}{c.company ? ` (${c.company})` : ''}</option>
+                ))}
+              </select>
+            ) : contact.referredBy ? (() => {
+              const referrer = allContacts.find(c => c.id === contact.referredBy);
+              return referrer ? (
+                <button
+                  onClick={() => { onClose(); setTimeout(() => onOpenContact(referrer), 50); }}
+                  className="inline-flex items-center gap-2.5 px-4 py-2.5 bg-purple-50 border border-purple-200 rounded-xl hover:bg-purple-100 transition group">
+                  <span className="w-8 h-8 bg-purple-200 rounded-full flex items-center justify-center text-sm font-bold text-purple-700 flex-shrink-0">
+                    {referrer.name[0].toUpperCase()}
+                  </span>
+                  <div className="text-left">
+                    <p className="text-sm font-semibold text-purple-800 group-hover:underline">{referrer.name}</p>
+                    {referrer.company && <p className="text-xs text-purple-400">{referrer.company}</p>}
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-purple-300 group-hover:text-purple-500 ml-1 transition" />
+                </button>
+              ) : null;
+            })() : (
+              <p className="text-sm text-gray-400 italic">No referrer — click Edit to link one.</p>
+            )}
+          </div>
+
+          {/* Referrals Sent by this contact */}
+          {(() => {
+            const referralsSent = allContacts.filter(c => c.referredBy === contact.id);
+            if (referralsSent.length === 0) return null;
+            return (
+              <div className="mb-6 p-4 bg-purple-50 border border-purple-100 rounded-xl">
+                <h3 className="text-sm font-semibold text-purple-700 mb-3 flex items-center gap-2">
+                  <Users className="w-4 h-4" /> Referrals Sent
+                  <span className="ml-auto bg-purple-200 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">{referralsSent.length}</span>
+                </h3>
+                <div className="space-y-2">
+                  {referralsSent.map(r => (
+                    <button key={r.id}
+                      onClick={() => { onClose(); setTimeout(() => onOpenContact(r), 50); }}
+                      className="w-full flex items-center gap-2.5 p-2.5 bg-white rounded-lg border border-purple-100 hover:border-purple-300 hover:bg-purple-50 transition group text-left">
+                      <span className="w-7 h-7 bg-indigo-100 rounded-full flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
+                        {r.name[0].toUpperCase()}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-gray-800 truncate group-hover:text-purple-700">{r.name}</p>
+                        {r.company && <p className="text-xs text-gray-400 truncate">{r.company}</p>}
+                      </div>
+                      <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-purple-400 flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="mb-6">
             <div className="flex justify-between items-center mb-4">
@@ -470,6 +601,44 @@ function AnalyticsDashboard({ contacts, activities, onClose }) {
           </div>
         </div>
 
+        {/* FEATURE 5: REFERRAL LEADERBOARD */}
+        {(() => {
+          const referralCounts = {};
+          contacts.forEach(c => {
+            if (c.referredBy) {
+              referralCounts[c.referredBy] = (referralCounts[c.referredBy] || 0) + 1;
+            }
+          });
+          const leaderboard = Object.entries(referralCounts)
+            .map(([id, count]) => ({ contact: contacts.find(c => c.id === id), count }))
+            .filter(r => r.contact)
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5);
+
+          if (leaderboard.length === 0) return null;
+          return (
+            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
+              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Users className="w-5 h-5 text-purple-500" /> Top Referrers
+              </h3>
+              <div className="space-y-2">
+                {leaderboard.map((r, i) => (
+                  <div key={r.contact.id} className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">
+                    <span className="w-7 h-7 bg-purple-200 text-purple-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                      {i + 1}
+                    </span>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-800 text-sm">{r.contact.name}</p>
+                      {r.contact.company && <p className="text-xs text-gray-400">{r.contact.company}</p>}
+                    </div>
+                    <span className="text-sm font-bold text-purple-700">{r.count} referral{r.count !== 1 ? 's' : ''}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6">
           <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
             <Download className="w-5 h-5" /> Export Data
@@ -514,13 +683,23 @@ export default function App() {
   const [newCategoryColor, setNewCategoryColor] = useState('#6366f1');
   const [bulkImportCategory, setBulkImportCategory] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'board'
+  const [showIcebreaker, setShowIcebreaker] = useState(false);
+  const [icebreakerContact, setIcebreakerContact] = useState(null);
+  const [icebreakerLines, setIcebreakerLines] = useState([]);
+  const [icebreakerLoading, setIcebreakerLoading] = useState(false);
+  const [icebreakerChannel, setIcebreakerChannel] = useState('linkedin'); // 'linkedin' | 'email'
+  const [icebreakerCopied, setIcebreakerCopied] = useState(null); // index of copied line
+  const [nudgeEnabled, setNudgeEnabled] = useState(false);
+  const [dragOverColumn, setDragOverColumn] = useState(null); // 'cold' | 'warm' | 'hot'
+  const [draggingId, setDraggingId] = useState(null);
   const [bulkContactsText, setBulkContactsText] = useState('');
   const [importStatus, setImportStatus] = useState('');
   const [bulkEmailData, setBulkEmailData] = useState({ subject: '', body: '', selectedContacts: [] });
   const [newContact, setNewContact] = useState({
     name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '',
     lastContactDate: '', vibeScore: 5, vibeLabel: 'warm',
-    notes: '', tags: [], category: '', reminderDays: 30, contactFrequency: 30
+    notes: '', tags: [], category: '', meetingLink: '', referredBy: '', reminderDays: 30, contactFrequency: 30
   });
   const [smartCaptureText, setSmartCaptureText] = useState('');
   const [scanMode, setScanMode] = useState('idle'); // 'idle' | 'camera' | 'preview'
@@ -809,6 +988,111 @@ export default function App() {
     await saveContacts(updated);
   };
 
+  const updateContactCategory = async (contactId, categoryId) => {
+    const updated = contacts.map(c =>
+      c.id === contactId ? { ...c, category: categoryId } : c
+    );
+    setContacts(updated);
+    await saveContacts(updated);
+  };
+
+  // --- FEATURE 1: ICEBREAKER AI ---
+  const generateIcebreaker = async (contact, channel = icebreakerChannel) => {
+    setIcebreakerContact(contact);
+    setIcebreakerLines([]);
+    setIcebreakerLoading(true);
+    setIcebreakerCopied(null);
+    setShowIcebreaker(true);
+    const channelLabel = channel === 'linkedin' ? 'LinkedIn DM' : 'email opener';
+    try {
+      const prompt = `You are a warm, natural-sounding sales coach helping a solopreneur reconnect with a contact.
+
+Contact details:
+- Name: ${contact.name}
+- Company: ${contact.company || 'not specified'}
+- Job Title: ${contact.jobTitle || 'not specified'}
+- Tags: ${(contact.tags || []).join(', ') || 'none'}
+- Notes: ${contact.notes || 'none'}
+- Last contacted: ${contact.lastContactDate ? new Date(contact.lastContactDate).toLocaleDateString() : 'never'}
+
+Write exactly 3 distinct personalized opening lines for a ${channelLabel}. Rules:
+- Each line must feel human, warm, and specific — not generic or salesy
+- Each must reference something concrete from their details above
+- Each must be 1–2 sentences, ready to send as-is
+- Vary the tone: one casual, one professional, one curious/question-based
+- ${channel === 'email' ? 'Include a natural subject line before each message, separated by " | "' : 'No subject line needed — just the opening message'}
+
+Respond ONLY with a valid JSON array of exactly 3 strings. No preamble, no markdown, no explanation.
+Example format: ["Opening line 1.", "Opening line 2.", "Opening line 3."]`;
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-5-20250929',
+          max_tokens: 600,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      const data = await response.json();
+      const raw = data.content?.[0]?.text || '[]';
+      const clean = raw.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      setIcebreakerLines(Array.isArray(parsed) ? parsed.slice(0, 3) : []);
+    } catch (err) {
+      setIcebreakerLines(['Could not generate — check your connection and try again.']);
+    }
+    setIcebreakerLoading(false);
+  };
+
+  const copyIcebreakerLine = (line, index) => {
+    navigator.clipboard.writeText(line);
+    setIcebreakerCopied(index);
+    setTimeout(() => setIcebreakerCopied(null), 2000);
+  };
+
+  const copyAllIcebreakers = () => {
+    navigator.clipboard.writeText(icebreakerLines.join('\n\n'));
+    setIcebreakerCopied('all');
+    setTimeout(() => setIcebreakerCopied(null), 2000);
+  };
+
+  // --- FEATURE 4: BROWSER NUDGE NOTIFICATIONS ---
+  const requestNudgePermission = async () => {
+    if (!('Notification' in window)) return;
+    const perm = await Notification.requestPermission();
+    setNudgeEnabled(perm === 'granted');
+    if (perm === 'granted') checkAndSendNudges(contacts);
+  };
+
+  const checkAndSendNudges = (contactList) => {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const staleHot = contactList.filter(c => {
+      const isHot = c.vibeLabel === 'hot' || c.vibeScore >= 8;
+      const days = c.lastContactDate
+        ? Math.ceil((new Date() - new Date(c.lastContactDate)) / 86400000) : 999;
+      return isHot && days >= 14;
+    });
+    staleHot.slice(0, 3).forEach(c => {
+      new Notification(`🔥 ${c.name} is going cold!`, {
+        body: `You haven't reached out in a while — send a quick message now.`,
+        icon: '/favicon.ico'
+      });
+    });
+  };
+
+  // --- FEATURE 2: BOARD VIEW — move contact vibe by drag column drop ---
+  const moveContactVibe = async (contactId, newVibeLabel) => {
+    const scoreMap = { hot: 9, warm: 5, cold: 2 };
+    const updated = contacts.map(c =>
+      c.id === contactId
+        ? { ...c, vibeLabel: newVibeLabel, vibeScore: scoreMap[newVibeLabel] }
+        : c
+    );
+    setContacts(updated);
+    await saveContacts(updated);
+  };
+
   const handleLogout = async () => {
     await window.storage.delete('auth_token');
     await window.storage.delete('auth_user');
@@ -832,7 +1116,7 @@ export default function App() {
     await saveContacts(updated);
     setShowAddModal(false);
     resetScan();
-    setNewContact({ name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm', notes: '', tags: [], category: '', reminderDays: 30, contactFrequency: 30 });
+    setNewContact({ name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm', notes: '', tags: [], category: '', meetingLink: '', referredBy: '', reminderDays: 30, contactFrequency: 30 });
   };
 
   const deleteContact = async (id) => {
@@ -1409,6 +1693,23 @@ export default function App() {
               <Tag className="w-3.5 h-3.5" /> Categories
               {categories.length > 0 && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{categories.length}</span>}
             </button>
+            {/* View mode toggle */}
+            <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+              <button onClick={() => setViewMode('grid')}
+                className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1 transition ${viewMode === 'grid' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                <Users className="w-3.5 h-3.5" /> Grid
+              </button>
+              <button onClick={() => setViewMode('board')}
+                className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1 transition border-l border-gray-200 ${viewMode === 'board' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                <BarChart3 className="w-3.5 h-3.5" /> Board
+              </button>
+            </div>
+            {/* Nudge notification toggle */}
+            <button onClick={requestNudgePermission}
+              title="Get browser notifications when hot contacts go stale"
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition ${nudgeEnabled ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200'}`}>
+              <Bell className="w-3.5 h-3.5" /> Nudge {nudgeEnabled ? 'On' : 'Off'}
+            </button>
           </div>
 
           {/* Row 3: Filter panel — shown when toggled */}
@@ -1508,85 +1809,186 @@ export default function App() {
 
         </div>
 
-        {/* Contacts Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredContacts.map(contact => {
-            const days = daysSinceContact(contact.lastContactDate);
-            return (
-              <div key={contact.id}
-                className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition group cursor-pointer"
-                onClick={() => setSelectedContact(contact)}>
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-bold text-gray-800">{contact.name}</h3>
-                      {isStale(contact.lastContactDate) && (
-                        <span className="px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded text-[9px] font-bold uppercase tracking-wide">Stale</span>
+        {/* Contacts Grid or Board View */}
+        {viewMode === 'grid' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredContacts.map(contact => {
+              const days = daysSinceContact(contact.lastContactDate);
+              return (
+                <div key={contact.id}
+                  className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition group cursor-pointer"
+                  onClick={() => setSelectedContact(contact)}>
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-gray-800">{contact.name}</h3>
+                        {isStale(contact.lastContactDate) && (
+                          <span className="px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded text-[9px] font-bold uppercase tracking-wide">Stale</span>
+                        )}
+                        <button onClick={(e) => { e.stopPropagation(); toggleFavorite(contact.id); }}
+                          className="opacity-0 group-hover:opacity-100">
+                          <Star className={`w-4 h-4 ${contact.isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                        </button>
+                      </div>
+                      {contact.email && <p className="text-xs text-gray-400">{contact.email}</p>}
+                      {contact.company && <p className="text-xs text-gray-500">{contact.company}</p>}
+                      {contact.notes && <p className="text-xs text-gray-500 mt-1 line-clamp-1">{contact.notes}</p>}
+                      {contact.tags && contact.tags.length > 0 && (
+                        <div className="flex gap-1 mt-2 flex-wrap">
+                          {contact.tags.slice(0, 2).map((tag, i) => (
+                            <span key={i} className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-[10px] font-medium">{tag}</span>
+                          ))}
+                          {contact.tags.length > 2 && (
+                            <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">+{contact.tags.length - 2}</span>
+                          )}
+                        </div>
                       )}
-                      <button onClick={(e) => { e.stopPropagation(); toggleFavorite(contact.id); }}
-                        className="opacity-0 group-hover:opacity-100">
-                        <Star className={`w-4 h-4 ${contact.isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                      {contact.category && (() => {
+                        const cat = categories.find(c => c.id === contact.category);
+                        return cat ? (
+                          <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded text-[10px] font-bold text-white"
+                            style={{ backgroundColor: cat.color }}>
+                            {cat.name}
+                          </span>
+                        ) : null;
+                      })()}
+                    </div>
+                    <div className="flex flex-col gap-1 items-end">
+                      <button onClick={(e) => { e.stopPropagation(); deleteContact(contact.id); }}
+                        className="opacity-0 group-hover:opacity-100 p-2 text-red-300 hover:text-red-500 transition">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); generateIcebreaker(contact); }}
+                        title="Draft Icebreaker"
+                        className="opacity-0 group-hover:opacity-100 p-1.5 text-indigo-400 hover:text-indigo-600 transition">
+                        <Zap className="w-4 h-4" />
                       </button>
                     </div>
-                    {contact.email && <p className="text-xs text-gray-400">{contact.email}</p>}
-                    {contact.notes && <p className="text-xs text-gray-500 mt-1 line-clamp-1">{contact.notes}</p>}
-                    {contact.tags && contact.tags.length > 0 && (
-                      <div className="flex gap-1 mt-2 flex-wrap">
-                        {contact.tags.slice(0, 2).map((tag, i) => (
-                          <span key={i} className="px-2 py-0.5 bg-blue-100 text-blue-600 rounded text-[10px] font-medium">{tag}</span>
-                        ))}
-                        {contact.tags.length > 2 && (
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-medium">+{contact.tags.length - 2}</span>
-                        )}
+                  </div>
+                  <div className="space-y-2">
+                    {contact.lastContactDate && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <span className="text-gray-600">
+                          {new Date(contact.lastContactDate).toLocaleDateString()}
+                          {days && <span className="text-gray-400 ml-1">({days}d ago)</span>}
+                        </span>
                       </div>
                     )}
-                    {/* Category badge */}
-                    {contact.category && (() => {
-                      const cat = categories.find(c => c.id === contact.category);
-                      return cat ? (
-                        <span className="inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded text-[10px] font-bold text-white"
-                          style={{ backgroundColor: cat.color }}>
-                          {cat.name}
-                        </span>
-                      ) : null;
-                    })()}
-                  </div>
-                  <button onClick={(e) => { e.stopPropagation(); deleteContact(contact.id); }}
-                    className="opacity-0 group-hover:opacity-100 p-2 text-red-300 hover:text-red-500 transition">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {contact.lastContactDate && (
-                    <div className="flex items-center gap-2 text-xs">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-600">
-                        {new Date(contact.lastContactDate).toLocaleDateString()}
-                        {days && <span className="text-gray-400 ml-1">({days}d ago)</span>}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-gray-400" />
-                    <div className="flex-1 flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500" style={{width: `${contact.vibeScore * 10}%`}} />
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-gray-400" />
+                      <div className="flex-1 flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500" style={{width: `${contact.vibeScore * 10}%`}} />
+                        </div>
+                        {contact.vibeLabel === 'hot' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">🔥 Hot</span>}
+                        {contact.vibeLabel === 'warm' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-600">☕ Warm</span>}
+                        {contact.vibeLabel === 'cold' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">❄️ Cold</span>}
+                        {!contact.vibeLabel && (
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getVibeColor(contact.vibeScore)}`}>
+                            {contact.vibeScore}/10
+                          </span>
+                        )}
                       </div>
-                      {contact.vibeLabel === 'hot' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-600">🔥 Hot</span>}
-                      {contact.vibeLabel === 'warm' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-600">☕ Warm</span>}
-                      {contact.vibeLabel === 'cold' && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-600">❄️ Cold</span>}
-                      {!contact.vibeLabel && (
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${getVibeColor(contact.vibeScore)}`}>
-                          {contact.vibeScore}/10
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* FEATURE 2: BOARD / KANBAN VIEW — with drag state visuals */
+          <div className="grid grid-cols-3 gap-4">
+            {[
+              { key: 'cold', label: '❄️ Cold', bg: 'bg-blue-50',   border: 'border-blue-200',   over: 'border-blue-400 bg-blue-100',   header: 'bg-blue-100 text-blue-700' },
+              { key: 'warm', label: '☕ Warm', bg: 'bg-yellow-50', border: 'border-yellow-200', over: 'border-yellow-400 bg-yellow-100', header: 'bg-yellow-100 text-yellow-700' },
+              { key: 'hot',  label: '🔥 Hot',  bg: 'bg-red-50',   border: 'border-red-200',    over: 'border-red-400 bg-red-100',     header: 'bg-red-100 text-red-700' },
+            ].map(col => {
+              const colContacts = filteredContacts.filter(c =>
+                (c.vibeLabel === col.key) || (!c.vibeLabel && col.key === 'warm')
+              );
+              const isOver = dragOverColumn === col.key;
+              return (
+                <div key={col.key}
+                  className={`rounded-xl border-2 transition-all duration-150 min-h-64 ${isOver ? col.over : col.border + ' ' + col.bg}`}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverColumn(col.key); }}
+                  onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverColumn(null); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOverColumn(null);
+                    setDraggingId(null);
+                    const id = e.dataTransfer.getData('contactId');
+                    if (id) moveContactVibe(id, col.key);
+                  }}>
+                  <div className={`${col.header} rounded-t-xl px-4 py-3 flex items-center justify-between`}>
+                    <span className="font-bold text-sm">{col.label}</span>
+                    <span className="text-xs font-semibold bg-white/60 px-2 py-0.5 rounded-full">{colContacts.length}</span>
+                  </div>
+                  <div className="p-3 space-y-2">
+                    {colContacts.map(contact => {
+                      const isDragging = draggingId === contact.id;
+                      return (
+                        <div key={contact.id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('contactId', contact.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                            setDraggingId(contact.id);
+                          }}
+                          onDragEnd={() => { setDraggingId(null); setDragOverColumn(null); }}
+                          onClick={() => !isDragging && setSelectedContact(contact)}
+                          className={`bg-white rounded-xl p-3 border transition-all duration-150 group select-none ${
+                            isDragging
+                              ? 'shadow-2xl opacity-50 cursor-grabbing scale-95 border-indigo-300'
+                              : 'shadow-sm border-gray-100 cursor-grab hover:shadow-lg hover:-translate-y-0.5'
+                          }`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-gray-800 text-sm truncate">{contact.name}</p>
+                              {contact.company && <p className="text-xs text-gray-400 truncate">{contact.company}</p>}
+                              {contact.jobTitle && <p className="text-xs text-gray-300 truncate">{contact.jobTitle}</p>}
+                              <div className="flex gap-1 mt-1 flex-wrap">
+                                {isStale(contact.lastContactDate) && (
+                                  <span className="text-[9px] px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded font-bold">Stale</span>
+                                )}
+                                {contact.isFavorite && <span className="text-[9px]">⭐</span>}
+                              </div>
+                            </div>
+                            <button onClick={(e) => { e.stopPropagation(); generateIcebreaker(contact); }}
+                              title="Draft Icebreaker"
+                              className="opacity-0 group-hover:opacity-100 p-1 text-indigo-400 hover:text-indigo-600 flex-shrink-0 transition">
+                              <Zap className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                          {contact.category && (() => {
+                            const cat = categories.find(c => c.id === contact.category);
+                            return cat ? (
+                              <span className="inline-flex mt-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold text-white"
+                                style={{ backgroundColor: cat.color }}>{cat.name}</span>
+                            ) : null;
+                          })()}
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-[10px] text-gray-400">
+                              {contact.lastContactDate
+                                ? `${daysSinceContact(contact.lastContactDate)}d ago`
+                                : 'Never contacted'}
+                            </p>
+                            <span className="text-[9px] text-gray-300 opacity-0 group-hover:opacity-100 transition">⠿ drag</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {colContacts.length === 0 && (
+                      <div className={`flex flex-col items-center justify-center py-8 rounded-xl border-2 border-dashed transition ${isOver ? 'border-gray-400 text-gray-500' : 'border-gray-200 text-gray-300'}`}>
+                        <p className="text-xs font-medium">{isOver ? 'Drop here →' : 'No contacts'}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {filteredContacts.length === 0 && (
           <div className="bg-white rounded-xl p-12 text-center border border-gray-100">
@@ -1615,6 +2017,9 @@ export default function App() {
             onAddActivity={addActivity}
             activities={activities}
             categories={categories}
+            allContacts={contacts}
+            onIcebreaker={generateIcebreaker}
+            onOpenContact={(c) => setSelectedContact(c)}
           />
         )}
 
@@ -2165,6 +2570,130 @@ export default function App() {
                 <button onClick={() => { setShowBulkUpdate(false); setBulkUpdate({ selectedIds: [], date: new Date().toISOString().split('T')[0], note: '', addActivity: true }); }}
                   className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">Cancel</button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* FEATURE 1: ICEBREAKER AI MODAL — upgraded */}
+        {showIcebreaker && icebreakerContact && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+
+              {/* Header */}
+              <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 text-white">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className="text-lg font-bold flex items-center gap-2">
+                      <Zap className="w-5 h-5" /> Icebreaker for {icebreakerContact.name}
+                    </h2>
+                    <p className="text-indigo-200 text-xs mt-0.5">
+                      {icebreakerContact.company && `${icebreakerContact.company} · `}AI-generated opening lines
+                    </p>
+                  </div>
+                  <button onClick={() => setShowIcebreaker(false)} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Channel toggle */}
+                <div className="flex gap-2 mt-4">
+                  <span className="text-xs text-indigo-200 self-center mr-1">Channel:</span>
+                  {[
+                    { id: 'linkedin', icon: '💼', label: 'LinkedIn DM' },
+                    { id: 'email',    icon: '✉️', label: 'Email' },
+                  ].map(ch => (
+                    <button key={ch.id}
+                      onClick={() => { setIcebreakerChannel(ch.id); generateIcebreaker(icebreakerContact, ch.id); }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                        icebreakerChannel === ch.id
+                          ? 'bg-white text-indigo-700'
+                          : 'bg-white/20 text-white hover:bg-white/30'
+                      }`}>
+                      {ch.icon} {ch.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lines */}
+              <div className="p-6">
+                {icebreakerLoading ? (
+                  <div className="py-10 flex flex-col items-center gap-3 text-gray-400">
+                    <div className="w-8 h-8 border-[3px] border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-sm">Crafting {icebreakerChannel === 'email' ? 'email openers' : 'LinkedIn messages'}…</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {icebreakerLines.map((line, i) => {
+                      const isCopied = icebreakerCopied === i;
+                      // For email, split "Subject | Body" format
+                      const parts = icebreakerChannel === 'email' && line.includes(' | ')
+                        ? line.split(' | ')
+                        : null;
+                      return (
+                        <div key={i} className={`rounded-xl border-2 transition ${isCopied ? 'border-green-400 bg-green-50' : 'border-indigo-100 bg-indigo-50'}`}>
+                          <div className="p-4">
+                            <div className="flex items-start gap-3">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${isCopied ? 'bg-green-500 text-white' : 'bg-indigo-200 text-indigo-700'}`}>
+                                {isCopied ? '✓' : i + 1}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                {parts ? (
+                                  <>
+                                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide mb-1">Subject</p>
+                                    <p className="text-xs font-semibold text-gray-700 mb-2">{parts[0]}</p>
+                                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide mb-1">Opening</p>
+                                    <p className="text-sm text-gray-700 leading-relaxed">{parts[1]}</p>
+                                  </>
+                                ) : (
+                                  <p className="text-sm text-gray-700 leading-relaxed">{line}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="border-t border-indigo-100 px-4 py-2 flex justify-end">
+                            <button
+                              onClick={() => copyIcebreakerLine(line, i)}
+                              className={`text-xs font-semibold flex items-center gap-1.5 px-3 py-1 rounded-lg transition ${
+                                isCopied
+                                  ? 'text-green-600 bg-green-100'
+                                  : 'text-indigo-600 hover:bg-indigo-100'
+                              }`}>
+                              {isCopied ? '✓ Copied!' : '📋 Copy'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Footer actions */}
+                {!icebreakerLoading && icebreakerLines.length > 0 && (
+                  <div className="flex gap-2 mt-5">
+                    <button
+                      onClick={copyAllIcebreakers}
+                      className={`flex-1 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition border-2 ${
+                        icebreakerCopied === 'all'
+                          ? 'border-green-500 bg-green-500 text-white'
+                          : 'border-indigo-200 text-indigo-700 hover:bg-indigo-50'
+                      }`}>
+                      {icebreakerCopied === 'all' ? '✓ All Copied!' : '📋 Copy All 3'}
+                    </button>
+                    <button
+                      onClick={() => generateIcebreaker(icebreakerContact, icebreakerChannel)}
+                      className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2">
+                      <Zap className="w-4 h-4" /> Regenerate
+                    </button>
+                    <button
+                      onClick={() => setShowIcebreaker(false)}
+                      className="px-4 bg-gray-100 text-gray-600 rounded-xl text-sm hover:bg-gray-200 transition font-medium">
+                      Done
+                    </button>
+                  </div>
+                )}
+              </div>
+
             </div>
           </div>
         )}
