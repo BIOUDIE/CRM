@@ -781,51 +781,29 @@ export default function App() {
     setIsScanning(true);
     setScanFeedback(['🤖 AI is reading the image...']);
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      // Call our serverless function instead of Claude API directly
+      const response = await fetch('/api/analyze-image', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-api-key': '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',  // ← REPLACE THIS with your actual key
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-5-20250929',
-          max_tokens: 500,
-          messages: [{
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: { type: 'base64', media_type: mimeType, data: base64Data }
-              },
-              {
-                type: 'text',
-                text: 'Extract all contact information from this image (business card, flier, document, email, etc). Return ONLY a plain text block with one piece of info per line, like:\nName: John Smith\nEmail: john@company.com\nPhone: +1 555 123 4567\nCompany: Acme Corp\nTitle: Sales Director\nWebsite: www.acme.com\nAddress: 123 Main St\nNotes: any other relevant info\n\nOnly include fields you can clearly see. No extra commentary.'
-              }
-            ]
-          }]
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64Data, mimeType })
       });
-      const data = await response.json();
-      const rawText = data.content?.[0]?.text || '';
 
-      // Parse the structured AI response
-      const parsed = {};
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to analyze image');
+      }
+
+      const parsed = await response.json();
+      
+      // Build feedback messages
       const detected = [];
-      rawText.split('\n').forEach(line => {
-        const [key, ...rest] = line.split(':');
-        const val = rest.join(':').trim();
-        if (!val) return;
-        const k = key.trim().toLowerCase();
-        if (k === 'name')    { parsed.name    = val; detected.push(`👤 ${val}`); }
-        if (k === 'email')   { parsed.email   = val; detected.push(`📧 ${val}`); }
-        if (k === 'phone')   { parsed.phone   = val; detected.push(`📞 ${val}`); }
-        if (k === 'company') { parsed.company  = val; detected.push(`🏢 ${val}`); }
-        if (k === 'title')   { parsed.jobTitle = val; detected.push(`💼 ${val}`); }
-        if (k === 'website') { parsed.website  = val; detected.push(`🌐 ${val}`); }
-        if (k === 'address') { parsed.address  = val; detected.push(`📍 ${val}`); }
-        if (k === 'notes')   { parsed.notes    = val; detected.push(`📝 notes`); }
-      });
+      if (parsed.name)     detected.push(`👤 ${parsed.name}`);
+      if (parsed.email)    detected.push(`📧 ${parsed.email}`);
+      if (parsed.phone)    detected.push(`📞 ${parsed.phone}`);
+      if (parsed.company)  detected.push(`🏢 ${parsed.company}`);
+      if (parsed.jobTitle) detected.push(`💼 ${parsed.jobTitle}`);
+      if (parsed.website)  detected.push(`🌐 ${parsed.website}`);
+      if (parsed.address)  detected.push(`📍 ${parsed.address}`);
 
       setNewContact(prev => ({ ...prev, ...parsed }));
       setScanFeedback(detected.length > 0 ? detected : ['⚠️ No contact info found — try a clearer image']);
@@ -1004,46 +982,22 @@ export default function App() {
     setIcebreakerLoading(true);
     setIcebreakerCopied(null);
     setShowIcebreaker(true);
-    const channelLabel = channel === 'linkedin' ? 'LinkedIn DM' : 'email opener';
+    
     try {
-      const prompt = `You are a warm, natural-sounding sales coach helping a solopreneur reconnect with a contact.
-
-Contact details:
-- Name: ${contact.name}
-- Company: ${contact.company || 'not specified'}
-- Job Title: ${contact.jobTitle || 'not specified'}
-- Tags: ${(contact.tags || []).join(', ') || 'none'}
-- Notes: ${contact.notes || 'none'}
-- Last contacted: ${contact.lastContactDate ? new Date(contact.lastContactDate).toLocaleDateString() : 'never'}
-
-Write exactly 3 distinct personalized opening lines for a ${channelLabel}. Rules:
-- Each line must feel human, warm, and specific — not generic or salesy
-- Each must reference something concrete from their details above
-- Each must be 1–2 sentences, ready to send as-is
-- Vary the tone: one casual, one professional, one curious/question-based
-- ${channel === 'email' ? 'Include a natural subject line before each message, separated by " | "' : 'No subject line needed — just the opening message'}
-
-Respond ONLY with a valid JSON array of exactly 3 strings. No preamble, no markdown, no explanation.
-Example format: ["Opening line 1.", "Opening line 2.", "Opening line 3."]`;
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
+      // Call our serverless function
+      const response = await fetch('/api/generate-icebreaker', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-api-key': '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',  // ← REPLACE THIS with your actual key
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-5-20250929',
-          max_tokens: 600,
-          messages: [{ role: 'user', content: prompt }]
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact, channel })
       });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate icebreaker');
+      }
+
       const data = await response.json();
-      const raw = data.content?.[0]?.text || '[]';
-      const clean = raw.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(clean);
-      setIcebreakerLines(Array.isArray(parsed) ? parsed.slice(0, 3) : []);
+      setIcebreakerLines(data.lines || []);
     } catch (err) {
       setIcebreakerLines(['Could not generate — check your connection and try again.']);
     }
@@ -1066,54 +1020,35 @@ Example format: ["Opening line 1.", "Opening line 2.", "Opening line 3."]`;
   const generateBulkIcebreakers = async () => {
     const selectedContactsList = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id));
     setBulkIcebreakerLoading(true);
-    const results = {};
     
-    for (const contact of selectedContactsList) {
-      const channelLabel = bulkIcebreakerData.channel === 'linkedin' ? 'LinkedIn DM' : 'email opener';
-      try {
-        const prompt = `You are a warm, natural-sounding sales coach helping a solopreneur reconnect with a contact.
+    try {
+      // Call our serverless function with all contacts at once
+      const response = await fetch('/api/generate-bulk-icebreakers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          contacts: selectedContactsList,
+          channel: bulkIcebreakerData.channel 
+        })
+      });
 
-Contact details:
-- Name: ${contact.name}
-- Company: ${contact.company || 'not specified'}
-- Job Title: ${contact.jobTitle || 'not specified'}
-- Tags: ${(contact.tags || []).join(', ') || 'none'}
-- Notes: ${contact.notes || 'none'}
-- Last contacted: ${contact.lastContactDate ? new Date(contact.lastContactDate).toLocaleDateString() : 'never'}
-
-Write exactly 3 distinct personalized opening lines for a ${channelLabel}. Rules:
-- Each line must feel human, warm, and specific — not generic or salesy
-- Each must reference something concrete from their details above
-- Each must be 1–2 sentences, ready to send as-is
-- Vary the tone: one casual, one professional, one curious/question-based
-- ${bulkIcebreakerData.channel === 'email' ? 'Include a natural subject line before each message, separated by " | "' : 'No subject line needed — just the opening message'}
-
-Respond ONLY with a valid JSON array of exactly 3 strings. No preamble, no markdown, no explanation.`;
-
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'x-api-key': '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',  // ← REPLACE THIS with your actual key
-            'anthropic-version': '2023-06-01'
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-5-20250929',
-            max_tokens: 600,
-            messages: [{ role: 'user', content: prompt }]
-          })
-        });
-        const data = await response.json();
-        const raw = data.content?.[0]?.text || '[]';
-        const clean = raw.replace(/```json|```/g, '').trim();
-        const parsed = JSON.parse(clean);
-        results[contact.id] = Array.isArray(parsed) ? parsed.slice(0, 3) : ['Line generation failed.'];
-      } catch (err) {
-        results[contact.id] = ['Error generating — try again.'];
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate bulk icebreakers');
       }
+
+      const data = await response.json();
+      setBulkIcebreakerData(prev => ({ ...prev, results: data.results || {} }));
+    } catch (err) {
+      console.error('Bulk icebreaker error:', err);
+      // Set error messages for all contacts
+      const errorResults = {};
+      selectedContactsList.forEach(c => {
+        errorResults[c.id] = ['Error generating — try again later.'];
+      });
+      setBulkIcebreakerData(prev => ({ ...prev, results: errorResults }));
     }
     
-    setBulkIcebreakerData(prev => ({ ...prev, results }));
     setBulkIcebreakerLoading(false);
   };
 
