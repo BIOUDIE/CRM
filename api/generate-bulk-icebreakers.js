@@ -2,6 +2,18 @@
 // Serverless function to generate icebreakers for multiple contacts
 
 export default async function handler(req, res) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+  // Handle OPTIONS request
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -11,6 +23,7 @@ export default async function handler(req, res) {
   const API_KEY = process.env.CLAUDE_API_KEY;
   
   if (!API_KEY) {
+    console.error('Missing CLAUDE_API_KEY environment variable');
     return res.status(500).json({ error: 'Server configuration error: Missing API key' });
   }
 
@@ -25,6 +38,8 @@ export default async function handler(req, res) {
     if (contacts.length > 20) {
       return res.status(400).json({ error: 'Maximum 20 contacts allowed per request' });
     }
+
+    console.log(`Generating icebreakers for ${contacts.length} contacts...`);
 
     const channelLabel = channel === 'linkedin' ? 'LinkedIn DM' : 'email opener';
     const results = {};
@@ -71,6 +86,7 @@ Respond ONLY with a valid JSON array of exactly 3 strings. No preamble, no markd
         });
 
         if (!response.ok) {
+          console.error(`Error for contact ${contact.id}:`, response.status);
           results[contact.id] = ['Error generating icebreaker - try again'];
           continue;
         }
@@ -86,6 +102,8 @@ Respond ONLY with a valid JSON array of exactly 3 strings. No preamble, no markd
         results[contact.id] = ['Error generating icebreaker'];
       }
     }
+
+    console.log(`Successfully generated icebreakers for ${Object.keys(results).length} contacts`);
 
     // Return all results
     return res.status(200).json({ results });
