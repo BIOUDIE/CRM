@@ -2,6 +2,18 @@
 // Serverless function to generate personalized icebreaker lines
 
 export default async function handler(req, res) {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+  // Handle OPTIONS request
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -11,6 +23,7 @@ export default async function handler(req, res) {
   const API_KEY = process.env.CLAUDE_API_KEY;
   
   if (!API_KEY) {
+    console.error('Missing CLAUDE_API_KEY environment variable');
     return res.status(500).json({ error: 'Server configuration error: Missing API key' });
   }
 
@@ -43,6 +56,8 @@ Write exactly 3 distinct personalized opening lines for a ${channelLabel}. Rules
 Respond ONLY with a valid JSON array of exactly 3 strings. No preamble, no markdown, no explanation.
 Example format: ["Opening line 1.", "Opening line 2.", "Opening line 3."]`;
 
+    console.log('Calling Claude API for icebreaker generation...');
+
     // Call Claude API server-side
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -59,7 +74,8 @@ Example format: ["Opening line 1.", "Opening line 2.", "Opening line 3."]`;
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Claude API error:', response.status, errorData);
       return res.status(response.status).json({ 
         error: 'Claude API error', 
         details: errorData 
@@ -70,6 +86,8 @@ Example format: ["Opening line 1.", "Opening line 2.", "Opening line 3."]`;
     const raw = data.content?.[0]?.text || '[]';
     const clean = raw.replace(/```json|```/g, '').trim();
     const lines = JSON.parse(clean);
+
+    console.log('Generated icebreaker lines:', lines.length);
 
     // Return the icebreaker lines
     return res.status(200).json({ 
