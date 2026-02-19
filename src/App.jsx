@@ -873,15 +873,29 @@ export default function App() {
     streamRef.current = null;
   };
 
-  const capturePhoto = () => {
+  const capturePhoto = async () => {
     const video = videoRef.current;
     if (!video) return;
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    
+    // Limit size to prevent 413 errors
+    let width = video.videoWidth;
+    let height = video.videoHeight;
+    const maxWidth = 1200;
+    
+    if (width > maxWidth) {
+      height = (height * maxWidth) / width;
+      width = maxWidth;
+    }
+    
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d').drawImage(video, 0, 0, width, height);
+    
+    // Compress to JPEG with 0.8 quality
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
     const base64 = dataUrl.split(',')[1];
+    
     setScanPreview(dataUrl);
     stopCamera();
     setScanMode('preview');
@@ -889,15 +903,48 @@ export default function App() {
   };
 
   // --- FILE UPLOAD for image ---
-  const handleImageUpload = (e) => {
+  // Compress image to prevent 413 Payload Too Large errors
+  const compressImage = (dataUrl, maxWidth = 1200, quality = 0.8) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        // Resize if too large
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convert to JPEG with compression
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(compressedDataUrl);
+      };
+      img.src = dataUrl;
+    });
+  };
+
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const dataUrl = ev.target.result;
-      const base64 = dataUrl.split(',')[1];
-      const mimeType = file.type || 'image/jpeg';
-      setScanPreview(dataUrl);
+      
+      // Compress image before sending to API
+      const compressedDataUrl = await compressImage(dataUrl);
+      const base64 = compressedDataUrl.split(',')[1];
+      const mimeType = 'image/jpeg'; // Always JPEG after compression
+      
+      setScanPreview(compressedDataUrl);
       setScanMode('preview');
       analyzeImageWithAI(base64, mimeType);
     };
