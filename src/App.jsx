@@ -6,6 +6,45 @@ import {
   FileText, Star, ChevronLeft, Filter, Download, Settings
 } from 'lucide-react';
 
+// ===== CRITICAL FIX: localStorage wrapper =====
+// window.storage API only exists in Claude artifacts, not in browsers
+// This wrapper makes the app work in regular web browsers
+const storage = {
+  async get(key) {
+    try {
+      const value = localStorage.getItem(key);
+      return value ? { key, value, shared: false } : null;
+    } catch (e) {
+      console.error('Storage get error:', e);
+      return null;
+    }
+  },
+  async set(key, value) {
+    try {
+      localStorage.setItem(key, value);
+      return { key, value, shared: false };
+    } catch (e) {
+      console.error('Storage set error:', e);
+      return null;
+    }
+  },
+  async delete(key) {
+    try {
+      localStorage.removeItem(key);
+      return { key, deleted: true, shared: false };
+    } catch (e) {
+      console.error('Storage delete error:', e);
+      return null;
+    }
+  }
+};
+
+// Make it available globally for compatibility
+if (typeof window !== 'undefined') {
+  window.storage = storage;
+}
+// ===== END CRITICAL FIX =====
+
 // --- AUTHENTICATION UI ---
 function AuthPage({ onLogin }) {
   const [mode, setMode] = useState('signin');
