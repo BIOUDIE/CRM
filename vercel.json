@@ -4,8 +4,24 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/((?!api).*)",
-      "destination": "/index.html"
+      "source": "/app",
+      "destination": "/dist/index.html"
+    },
+    {
+      "source": "/app/(.*)",
+      "destination": "/dist/index.html"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/",
+      "destination": "/landing.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/landing.html"
     }
   ]
 }

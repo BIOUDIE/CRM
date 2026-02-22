@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Micro-CRM | Manage relationships, not spreadsheets</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet"/>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#6366f1",
+                        "background-light": "#f8fafc",
+                        "background-dark": "#0f172a",
+                    },
+                    fontFamily: {
+                        display: ["Inter", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.75rem",
+                    },
+                },
+            },
+        };
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .dark .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .hero-gradient {
+            background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.1), transparent);
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .modal.active {
+            display: flex;
+        }
+        .modal-content {
+            background: white;
+            border-radius: 1.5rem;
+            max-width: 28rem;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        .dark .modal-content {
+            background: #1e293b;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 transition-colors duration-300">
+
+    <!-- Navigation -->
+    <nav class="fixed top-0 w-full z-50 glass-card border-b border-slate-200 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                        <span class="material-icons-round text-white text-xl">bolt</span>
+                    </div>
+                    <span class="text-xl font-extrabold tracking-tight">Micro-CRM</span>
+                </div>
+                <div class="hidden md:flex items-center space-x-8">
+                    <a class="text-sm font-medium hover:text-primary transition-colors" href="#features">Features</a>
+                    <a class="text-sm font-medium hover:text-primary transition-colors" href="#pricing">Pricing</a>
+                    <a class="text-sm font-medium hover:text-primary transition-colors" href="#cta">Resources</a>
+                </div>
+                <div class="flex items-center gap-4">
+                    <button class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors" onclick="document.documentElement.classList.toggle('dark')">
+                        <span class="material-icons-round text-lg leading-none dark:hidden">dark_mode</span>
+                        <span class="material-icons-round text-lg leading-none hidden dark:block">light_mode</span>
+                    </button>
+                    <button onclick="openModal('signin')" class="text-sm font-semibold px-4 py-2 hover:text-primary transition-colors">
+                        Log in
+                    </button>
+                    <button onclick="openModal('signup')" class="bg-primary text-white text-sm font-semibold px-5 py-2.5 rounded-full hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-95">
+                        Get Started
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="relative pt-32 pb-20 overflow-hidden hero-gradient">
+        <div class="absolute inset-0 -z-10 opacity-20 dark:opacity-10 pointer-events-none">
+            <svg class="h-full w-full" preserveAspectRatio="none" viewBox="0 0 100 100">
+                <defs>
+                    <pattern height="8" id="grid" patternUnits="userSpaceOnUse" width="8">
+                        <path d="M 8 0 L 0 0 0 8" fill="none" stroke="currentColor" stroke-width="0.5"></path>
+                    </pattern>
+                </defs>
+                <rect fill="url(#grid)" height="100%" width="100%"></rect>
+            </svg>
+        </div>
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-primary dark:text-indigo-300 text-xs font-bold uppercase tracking-wider mb-8">
+                <span class="flex h-2 w-2 rounded-full bg-primary animate-ping"></span>
+                Now with AI Smart Import
+            </div>
+            <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-primary to-indigo-600 dark:from-white dark:via-indigo-300 dark:to-primary">
+                Manage relationships,<br/>not spreadsheets.
+            </h1>
+            <p class="max-w-2xl mx-auto text-lg md:text-xl text-slate-600 dark:text-slate-400 mb-10 leading-relaxed">
+                The ultra-simple CRM for modern teams. Organize contacts, track deals, and automate outreach without the complexity of traditional enterprise software.
+            </p>
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+                <button onclick="openModal('signup')" class="w-full sm:w-auto px-8 py-4 bg-primary text-white font-bold rounded-2xl shadow-xl shadow-primary/25 hover:-translate-y-1 hover:shadow-2xl transition-all">
+                    Start Your Free Trial
+                </button>
+                <button class="w-full sm:w-auto px-8 py-4 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold rounded-2xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-2">
+                    <span class="material-icons-round text-xl">play_circle</span>
+                    See how it works
+                </button>
+            </div>
+            <div class="mt-20 relative max-w-5xl mx-auto">
+                <div class="absolute -inset-1 bg-gradient-to-r from-primary to-indigo-600 rounded-[2rem] blur opacity-25"></div>
+                <div class="relative bg-white dark:bg-slate-900 rounded-[1.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-2">
+                    <img alt="Dashboard Preview" class="rounded-xl w-full h-auto" src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=675&fit=crop"/>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Social Proof -->
+    <section class="py-12 border-y border-slate-100 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto px-4">
+            <p class="text-center text-sm font-semibold text-slate-500 dark:text-slate-400 mb-8 uppercase tracking-widest">Trusted by 2,000+ scaling teams</p>
+            <div class="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-50 grayscale">
+                <div class="text-2xl font-bold text-slate-400">Google</div>
+                <div class="text-2xl font-bold text-slate-400">Meta</div>
+                <div class="text-2xl font-bold text-slate-400">Slack</div>
+                <div class="text-2xl font-bold text-slate-400">LinkedIn</div>
+                <div class="text-2xl font-bold text-slate-400">Notion</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="py-24 bg-slate-50 dark:bg-slate-900/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl font-extrabold mb-4">Set up in 60 seconds</h2>
+                <p class="text-slate-600 dark:text-slate-400">Everything you need to grow, nothing you don't.</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-12 relative">
+                <div class="relative group">
+                    <div class="mb-6 w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-lg group-hover:bg-primary transition-colors duration-300">
+                        <span class="material-icons-round text-3xl text-primary group-hover:text-white">file_upload</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">1. Bulk Import</h3>
+                    <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
+                        Drag and drop your messy CSVs or sync your phone contacts instantly with our Magic Paste.
+                    </p>
+                </div>
+                <div class="relative group">
+                    <div class="mb-6 w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-lg group-hover:bg-primary transition-colors duration-300">
+                        <span class="material-icons-round text-3xl text-primary group-hover:text-white">auto_awesome</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">2. Smart Enrichment</h3>
+                    <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
+                        Our AI automatically grabs photos, job titles, and social profiles to fill in the blanks for you.
+                    </p>
+                </div>
+                <div class="relative group">
+                    <div class="mb-6 w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-lg group-hover:bg-primary transition-colors duration-300">
+                        <span class="material-icons-round text-3xl text-primary group-hover:text-white">rocket_launch</span>
+                    </div>
+                    <h3 class="text-xl font-bold mb-3">3. Scale Outreach</h3>
+                    <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
+                        Use bulk personalized emails and automated reminders to keep your pipeline hot.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA -->
+    <section id="cta" class="py-24">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="bg-primary rounded-[2.5rem] p-12 text-center text-white relative overflow-hidden">
+                <div class="absolute top-0 right-0 p-8 opacity-20 transform translate-x-10 -translate-y-10">
+                    <span class="material-icons-round text-[200px]">hub</span>
+                </div>
+                <h2 class="text-4xl md:text-5xl font-extrabold mb-6 relative z-10">Ready to simplify your workflow?</h2>
+                <p class="text-indigo-100 text-lg mb-10 max-w-xl mx-auto relative z-10">
+                    Join thousands of founders and sales professionals who are closing more deals with less stress.
+                </p>
+                <div class="flex flex-col sm:flex-row justify-center gap-4 relative z-10">
+                    <button onclick="openModal('signup')" class="px-8 py-4 bg-white text-primary font-bold rounded-2xl hover:bg-slate-100 transition-all">
+                        Get Started Free
+                    </button>
+                    <button class="px-8 py-4 bg-primary border-2 border-indigo-400 text-white font-bold rounded-2xl hover:bg-indigo-600 transition-all">
+                        Schedule Demo
+                    </button>
+                </div>
+                <p class="mt-8 text-indigo-200 text-sm">No credit card required. 14-day free trial.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-white dark:bg-slate-950 py-12 border-t border-slate-100 dark:border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-8">
+                <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 bg-primary rounded flex items-center justify-center">
+                        <span class="material-icons-round text-white text-xs">bolt</span>
+                    </div>
+                    <span class="font-bold tracking-tight">Micro-CRM</span>
+                </div>
+                <div class="flex gap-8 text-sm font-medium text-slate-500 dark:text-slate-400">
+                    <a class="hover:text-primary" href="#">Privacy</a>
+                    <a class="hover:text-primary" href="#">Terms</a>
+                    <a class="hover:text-primary" href="#">Twitter</a>
+                    <a class="hover:text-primary" href="#">Support</a>
+                </div>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                    © 2024 Micro-CRM Inc. All rights reserved.
+                </p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Sign Up Modal -->
+    <div id="signup-modal" class="modal">
+        <div class="modal-content">
+            <div class="p-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Create your account</h2>
+                    <button onclick="closeModal('signup')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition">
+                        <span class="material-icons-round text-slate-400">close</span>
+                    </button>
+                </div>
+                <form id="signup-form" onsubmit="handleSignup(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Name</label>
+                            <input type="text" required id="signup-name" 
+                                class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                                placeholder="John Doe"/>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email</label>
+                            <input type="email" required id="signup-email"
+                                class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                                placeholder="john@company.com"/>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Password</label>
+                            <input type="password" required id="signup-password" minlength="8"
+                                class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                                placeholder="At least 8 characters"/>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Confirm Password</label>
+                            <input type="password" required id="signup-confirm"
+                                class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                                placeholder="Re-enter password"/>
+                        </div>
+                    </div>
+                    <div id="signup-error" class="mt-4 hidden p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm"></div>
+                    <button type="submit" id="signup-btn"
+                        class="w-full mt-6 px-6 py-3.5 bg-primary text-white font-bold rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-[0.98]">
+                        Create Account
+                    </button>
+                </form>
+                <p class="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+                    Already have an account? 
+                    <button onclick="switchModal('signup', 'signin')" class="text-primary font-semibold hover:underline">Sign in</button>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sign In Modal -->
+    <div id="signin-modal" class="modal">
+        <div class="modal-content">
+            <div class="p-8">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Welcome back</h2>
+                    <button onclick="closeModal('signin')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition">
+                        <span class="material-icons-round text-slate-400">close</span>
+                    </button>
+                </div>
+                <form id="signin-form" onsubmit="handleSignin(event)">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email</label>
+                            <input type="email" required id="signin-email"
+                                class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                                placeholder="john@company.com"/>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Password</label>
+                            <input type="password" required id="signin-password"
+                                class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
+                                placeholder="Enter your password"/>
+                        </div>
+                    </div>
+                    <div id="signin-error" class="mt-4 hidden p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm"></div>
+                    <button type="submit" id="signin-btn"
+                        class="w-full mt-6 px-6 py-3.5 bg-primary text-white font-bold rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all active:scale-[0.98]">
+                        Sign In
+                    </button>
+                </form>
+                <p class="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+                    Don't have an account? 
+                    <button onclick="switchModal('signin', 'signup')" class="text-primary font-semibold hover:underline">Sign up</button>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Modal management
+        function openModal(type) {
+            document.getElementById(`${type}-modal`).classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal(type) {
+            document.getElementById(`${type}-modal`).classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        function switchModal(from, to) {
+            closeModal(from);
+            setTimeout(() => openModal(to), 100);
+        }
+
+        // Close modals on background click
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeModal(modal.id.replace('-modal', ''));
+                }
+            });
+        });
+
+        // Close modals on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal('signup');
+                closeModal('signin');
+            }
+        });
+
+        // Handle Sign Up
+        async function handleSignup(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('signup-name').value;
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const confirm = document.getElementById('signup-confirm').value;
+            const errorEl = document.getElementById('signup-error');
+            const btn = document.getElementById('signup-btn');
+
+            // Clear previous errors
+            errorEl.classList.add('hidden');
+
+            // Validation
+            if (password !== confirm) {
+                errorEl.textContent = 'Passwords do not match';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            if (password.length < 8) {
+                errorEl.textContent = 'Password must be at least 8 characters';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+
+            // Disable button and show loading
+            btn.disabled = true;
+            btn.textContent = 'Creating account...';
+
+            try {
+                // Store user data in localStorage (simulated authentication)
+                const user = {
+                    name,
+                    email,
+                    createdAt: new Date().toISOString()
+                };
+                
+                localStorage.setItem('auth_user', JSON.stringify(user));
+                localStorage.setItem('auth_token', 'token_' + Date.now());
+                
+                // Redirect to app
+                window.location.href = '/app';
+            } catch (error) {
+                errorEl.textContent = 'An error occurred. Please try again.';
+                errorEl.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'Create Account';
+            }
+        }
+
+        // Handle Sign In
+        async function handleSignin(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById('signin-email').value;
+            const password = document.getElementById('signin-password').value;
+            const errorEl = document.getElementById('signin-error');
+            const btn = document.getElementById('signin-btn');
+
+            // Clear previous errors
+            errorEl.classList.add('hidden');
+
+            // Disable button and show loading
+            btn.disabled = true;
+            btn.textContent = 'Signing in...';
+
+            try {
+                // Check if user exists in localStorage
+                const storedUser = localStorage.getItem('auth_user');
+                
+                if (!storedUser) {
+                    errorEl.textContent = 'No account found. Please sign up first.';
+                    errorEl.classList.remove('hidden');
+                    btn.disabled = false;
+                    btn.textContent = 'Sign In';
+                    return;
+                }
+
+                // Simulate authentication (in production, verify with backend)
+                const user = JSON.parse(storedUser);
+                
+                // Store token
+                localStorage.setItem('auth_token', 'token_' + Date.now());
+                
+                // Redirect to app
+                window.location.href = '/app';
+            } catch (error) {
+                errorEl.textContent = 'Invalid email or password';
+                errorEl.classList.remove('hidden');
+                btn.disabled = false;
+                btn.textContent = 'Sign In';
+            }
+        }
+
+        // Check if user is already logged in
+        window.addEventListener('load', () => {
+            const token = localStorage.getItem('auth_token');
+            const user = localStorage.getItem('auth_user');
+            
+            // If already logged in and on landing page, could show different CTA
+            // or just let them browse
+        });
+    </script>
+</body>
+</html>
