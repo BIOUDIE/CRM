@@ -5,11 +5,11 @@
   "rewrites": [
     {
       "source": "/app",
-      "destination": "/dist/index.html"
+      "destination": "/index.html"
     },
     {
       "source": "/app/(.*)",
-      "destination": "/dist/index.html"
+      "destination": "/index.html"
     },
     {
       "source": "/api/(.*)",
@@ -17,10 +17,6 @@
     },
     {
       "source": "/",
-      "destination": "/landing.html"
-    },
-    {
-      "source": "/(.*)",
       "destination": "/landing.html"
     }
   ]
