@@ -1728,7 +1728,7 @@ export default function App() {
           <span className="material-symbols-outlined">checklist</span>
           Tasks
         </a>
-        <a onClick={() => setShowAnalytics(true)} className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-2xl transition-all cursor-pointer" href="#">
+        <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-2xl transition-all" href="#">
           <span className="material-symbols-outlined">analytics</span>
           Analytics
         </a>
@@ -1754,7 +1754,7 @@ export default function App() {
   const HeaderSection = () => (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
       {/* Welcome Card */}
-      <div className="lg:col-span-5 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+      <div className="lg:col-span-5 bg-white px-4 py-3 lg:p-6 rounded-2xl lg:rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
         <div>
           <div className="flex justify-between items-start mb-4">
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
@@ -1776,18 +1776,19 @@ export default function App() {
       </div>
       {/* Premium Banner */}
       {!isPremium && (
-        <div className="lg:col-span-7 bg-gradient-to-r from-amber-400 to-yellow-500 p-6 rounded-3xl shadow-xl shadow-amber-100 flex items-center justify-between group cursor-pointer transition-transform hover:scale-[1.01]"
+        <div className="lg:col-span-7 bg-gradient-to-r from-amber-400 to-yellow-500 px-4 py-3 lg:p-6 rounded-2xl lg:rounded-3xl shadow-lg shadow-amber-100 flex items-center justify-between group cursor-pointer transition-transform hover:scale-[1.01]"
              onClick={() => setShowPremiumModal(true)}>
-          <div className="flex items-center gap-5">
-            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/30">
+          <div className="flex items-center gap-3 lg:gap-5">
+            <div className="hidden lg:flex w-14 h-14 bg-white/20 rounded-2xl items-center justify-center backdrop-blur-md border border-white/30 flex-shrink-0">
               <span className="material-symbols-outlined text-white text-3xl">workspace_premium</span>
             </div>
+            <span className="material-symbols-outlined text-white text-xl lg:hidden">workspace_premium</span>
             <div>
-              <h3 className="text-white text-xl font-extrabold">Upgrade to Premium</h3>
-              <p className="text-amber-50/80 text-sm font-medium">Unlock unlimited contacts and AI icebreakers</p>
+              <h3 className="text-white text-sm lg:text-xl font-extrabold leading-tight">Upgrade to Premium</h3>
+              <p className="text-amber-50/80 text-xs font-medium hidden lg:block">Unlock unlimited contacts and AI icebreakers</p>
             </div>
           </div>
-          <div className="bg-white text-amber-600 px-6 py-3 rounded-2xl font-bold text-sm shadow-lg group-hover:bg-amber-50 transition-colors">
+          <div className="bg-white text-amber-600 px-3 py-1.5 lg:px-6 lg:py-3 rounded-xl lg:rounded-2xl font-bold text-xs lg:text-sm shadow-lg group-hover:bg-amber-50 transition-colors flex-shrink-0 ml-3">
             Get Pro — $5
           </div>
         </div>
@@ -1827,7 +1828,7 @@ export default function App() {
   // Mobile FAB Component
   const MobileFAB = () => (
     <button onClick={() => setShowAddModal(true)}
-            className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-2xl flex items-center justify-center z-50 hover:bg-indigo-700 transition-all active:scale-95">
+            className="lg:hidden fixed bottom-20 right-6 w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-2xl flex items-center justify-center z-50 hover:bg-indigo-700 transition-all active:scale-95">
       <span className="material-symbols-outlined text-3xl">add</span>
     </button>
   );
@@ -1849,8 +1850,49 @@ export default function App() {
       {/* SIDEBAR - Desktop Only */}
       <Sidebar />
 
+      {/* MOBILE TOP NAV */}
+      <nav className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center">
+            <span className="material-symbols-outlined text-white text-base">bolt</span>
+          </div>
+          <span className="text-base font-extrabold tracking-tight text-slate-800">Micro CRM</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowAnalytics(true)} className="p-2 text-slate-500 hover:text-indigo-600 transition">
+            <span className="material-symbols-outlined">analytics</span>
+          </button>
+          <button onClick={() => setShowAddModal(true)} className="w-8 h-8 bg-indigo-600 text-white rounded-xl flex items-center justify-center">
+            <span className="material-symbols-outlined text-base">add</span>
+          </button>
+          <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition">
+            <span className="material-symbols-outlined">logout</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* MOBILE BOTTOM TAB BAR */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 flex items-center justify-around px-2 py-2 safe-area-pb">
+        <button className="flex flex-col items-center gap-0.5 px-3 py-1 text-indigo-600">
+          <span className="material-symbols-outlined text-xl">dashboard</span>
+          <span className="text-[10px] font-semibold">Dashboard</span>
+        </button>
+        <button className="flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400" onClick={() => setShowAddModal(true)}>
+          <span className="material-symbols-outlined text-xl">group</span>
+          <span className="text-[10px] font-semibold">Contacts</span>
+        </button>
+        <button className="flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400" onClick={() => setShowAnalytics(true)}>
+          <span className="material-symbols-outlined text-xl">analytics</span>
+          <span className="text-[10px] font-semibold">Analytics</span>
+        </button>
+        <button className="flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400" onClick={() => isPremium ? setShowBulkImport(true) : setShowPremiumModal(true)}>
+          <span className="material-symbols-outlined text-xl">upload</span>
+          <span className="text-[10px] font-semibold">Import</span>
+        </button>
+      </nav>
+
       {/* MAIN CONTENT */}
-      <main className="lg:ml-64 p-4 lg:p-10 space-y-8">
+      <main className="lg:ml-64 p-4 pt-20 pb-24 lg:pb-10 lg:pt-10 lg:p-10 space-y-8">
 
         {/* Header Row: Welcome + Premium */}
         <HeaderSection />
@@ -2074,7 +2116,7 @@ export default function App() {
         </div>
 
         {/* Contacts Grid or Board View */}
-        {contacts.length > 0 && viewMode === 'grid' ? (
+        {viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredContacts.map(contact => {
               const days = daysSinceContact(contact.lastContactDate);
@@ -2091,7 +2133,7 @@ export default function App() {
                         )}
                         <button onClick={(e) => { e.stopPropagation(); toggleFavorite(contact.id); }}
                           className="opacity-0 group-hover:opacity-100">
-                          <span className={`material-symbols-outlined text-[16px] ${contact.isFavorite ? 'text-yellow-400' : 'text-gray-300'}`} style={contact.isFavorite ? {fontVariationSettings: "'FILL' 1"} : {}}>star</span>
+                          <span className={`material-symbols-outlined text-[16px] ${contact.isFavorite ? 'text-yellow-400' : 'text-gray-300'}`}>star</span>
                         </button>
                       </div>
                       {contact.email && <p className="text-xs text-gray-400">{contact.email}</p>}
@@ -2254,13 +2296,21 @@ export default function App() {
           </div>
         )}
 
-        {contacts.length === 0 ? (
-          <EmptyState />
-        ) : filteredContacts.length === 0 && (
+        {filteredContacts.length === 0 && (
           <div className="bg-white rounded-xl p-12 text-center border border-gray-100">
             <span className="material-symbols-outlined text-[64px] text-gray-300">group</span>
-            <h3 className="text-xl font-bold text-gray-800 mb-2">No contacts found</h3>
-            <p className="text-gray-500 mb-4">Try a different search or filter</p>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">
+              {contacts.length === 0 ? 'No contacts yet' : 'No contacts found'}
+            </h3>
+            <p className="text-gray-500 mb-4">
+              {contacts.length === 0 ? 'Add your first contact to get started' : 'Try a different search or filter'}
+            </p>
+            {contacts.length === 0 && (
+              <button onClick={() => setShowAddModal(true)}
+                className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold inline-flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px]">add</span> Add Contact
+              </button>
+            )}
           </div>
         )}
 
