@@ -1,10 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Plus, Search, Calendar, TrendingUp, AlertCircle, Upload, Users, 
-  Crown, Mail, Bell, Clock, Zap, Lock, User, ArrowRight, CheckCircle, LogOut, Trash2,
-  X, Edit2, Save, Tag, BarChart3, PieChart, Activity, Send, Phone, MessageSquare,
-  FileText, Star, ChevronLeft, Filter, Download, Settings
-} from 'lucide-react';
 
 // ===== CRITICAL FIX: localStorage wrapper =====
 // window.storage API only exists in Claude artifacts, not in browsers
@@ -88,7 +82,7 @@ function AuthPage({ onLogin }) {
       <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-12 items-center relative z-10">
         <div className="hidden lg:block space-y-8">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-medium">
-            <Zap className="w-4 h-4" /> <span>Micro-CRM Auth</span>
+            <span className="material-symbols-outlined text-[16px]">auto_awesome</span> <span>Micro-CRM Auth</span>
           </div>
           <h1 className="text-6xl font-bold text-white leading-tight">
             Relationships are <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">everything.</span>
@@ -109,7 +103,7 @@ function AuthPage({ onLogin }) {
             )}
             {error && <p className="text-red-400 text-sm">{error}</p>}
             <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-3 disabled:opacity-50">
-              {isLoading ? 'Verifying...' : (mode === 'signin' ? 'Sign In' : 'Create Account')} <ArrowRight className="w-5 h-5" />
+              {isLoading ? 'Verifying...' : (mode === 'signin' ? 'Sign In' : 'Create Account')} <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
             </button>
           </form>
           <button onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')} className="mt-8 text-slate-400 text-sm block w-full text-center hover:text-white">
@@ -118,7 +112,7 @@ function AuthPage({ onLogin }) {
           {mode === 'signup' && (
             <div className="mt-6 p-4 bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border border-yellow-500/20 rounded-2xl">
               <div className="flex items-start gap-3">
-                <Crown className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                <span className="material-symbols-outlined text-[20px] text-yellow-400 flex-shrink-0 mt-0.5">workspace_premium</span>
                 <div>
                   <p className="text-sm text-gray-200 font-medium">14-day Premium Trial</p>
                   <p className="text-xs text-gray-400 mt-1">Full access to all features</p>
@@ -183,11 +177,11 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
 
   const getActivityIcon = (type) => {
     switch(type) {
-      case 'email': return <Mail className="w-4 h-4" />;
-      case 'call': return <Phone className="w-4 h-4" />;
-      case 'meeting': return <Users className="w-4 h-4" />;
-      case 'note': return <FileText className="w-4 h-4" />;
-      default: return <Activity className="w-4 h-4" />;
+      case 'email': return <span className="material-symbols-outlined text-[16px]">mail</span>;
+      case 'call': return <span className="material-symbols-outlined text-[16px]">phone</span>;
+      case 'meeting': return <span className="material-symbols-outlined text-[16px]">group</span>;
+      case 'note': return <span className="material-symbols-outlined text-[16px]">description</span>;
+      default: return <span className="material-symbols-outlined text-[16px]">timeline</span>;
     }
   };
 
@@ -219,7 +213,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
               )}
               {contact.email && (
                 <p className="text-blue-100 mt-2 flex items-center gap-2">
-                  <Mail className="w-4 h-4" /> {contact.email}
+                  <span className="material-symbols-outlined text-[16px]">mail</span> {contact.email}
                 </p>
               )}
               {contact.tags && contact.tags.length > 0 && (
@@ -235,19 +229,19 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
               <button onClick={() => onIcebreaker(contact)}
                 title="Draft Icebreaker"
                 className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition flex items-center gap-1.5 text-xs font-bold">
-                <Zap className="w-4 h-4" /> Icebreaker
+                <span className="material-symbols-outlined text-[16px]">auto_awesome</span> Icebreaker
               </button>
               {isEditing ? (
                 <button onClick={handleSave} className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
-                  <Save className="w-5 h-5" />
+                  <span className="material-symbols-outlined text-[20px]">save</span>
                 </button>
               ) : (
                 <button onClick={() => setIsEditing(true)} className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
-                  <Edit2 className="w-5 h-5" />
+                  <span className="material-symbols-outlined text-[20px]">edit</span>
                 </button>
               )}
               <button onClick={onClose} className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition">
-                <X className="w-5 h-5" />
+                <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </div>
           </div>
@@ -260,7 +254,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
               <div className={`grid gap-4 mb-6 ${referralsSentCount > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-xl">
                   <div className="flex items-center gap-2 text-blue-600 mb-2">
-                    <TrendingUp className="w-4 h-4" />
+                    <span className="material-symbols-outlined text-[16px]">trending_up</span>
                     <span className="text-xs font-medium">Vibe Score</span>
                   </div>
                   {isEditing ? (
@@ -276,7 +270,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
                 </div>
                 <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-xl">
                   <div className="flex items-center gap-2 text-green-600 mb-2">
-                    <Calendar className="w-4 h-4" />
+                    <span className="material-symbols-outlined text-[16px]">calendar_today</span>
                     <span className="text-xs font-medium">Last Contact</span>
                   </div>
                   {isEditing ? (
@@ -291,7 +285,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
                 </div>
                 <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-xl">
                   <div className="flex items-center gap-2 text-purple-600 mb-2">
-                    <Activity className="w-4 h-4" />
+                    <span className="material-symbols-outlined text-[16px]">timeline</span>
                     <span className="text-xs font-medium">Activities</span>
                   </div>
                   <p className="text-3xl font-bold text-purple-900">{contactActivities.length}</p>
@@ -299,7 +293,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
                 {referralsSentCount > 0 && (
                   <div className="bg-gradient-to-br from-pink-50 to-pink-100 p-4 rounded-xl">
                     <div className="flex items-center gap-2 text-pink-600 mb-2">
-                      <Users className="w-4 h-4" />
+                      <span className="material-symbols-outlined text-[16px]">group</span>
                       <span className="text-xs font-medium">Referrals Sent</span>
                     </div>
                     <p className="text-3xl font-bold text-pink-900">{referralsSentCount}</p>
@@ -330,7 +324,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
           {categories.length > 0 && (
             <div className="mb-6">
               <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                <Tag className="w-4 h-4 text-indigo-500" /> Category
+                <span className="material-symbols-outlined text-[16px] text-indigo-500">label</span> Category
               </h3>
               {isEditing ? (
                 <div className="flex gap-2 flex-wrap">
@@ -368,7 +362,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
           {/* FEATURE 3: MEETING LINK / BOOK CALL */}
           <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-green-500" /> Meeting Link
+              <span className="material-symbols-outlined text-[16px] text-green-500">calendar_today</span> Meeting Link
             </h3>
             {isEditing ? (
               <input
@@ -381,9 +375,9 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
             ) : (contact.meetingLink || editedContact.meetingLink) ? (
               <button onClick={handleBookCall}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl text-sm font-bold transition">
-                <Calendar className="w-4 h-4" />
+                <span className="material-symbols-outlined text-[16px]">calendar_today</span>
                 Book a Call
-                {bookingLogged && <CheckCircle className="w-4 h-4 opacity-70" />}
+                {bookingLogged && <span className="material-symbols-outlined text-[16px] opacity-70">check_circle</span>}
               </button>
             ) : (
               <p className="text-sm text-gray-400 italic">No booking link — click Edit to add your Calendly or SavvyCal link.</p>
@@ -393,7 +387,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
           {/* FEATURE 5: REFERRED BY — with clickable referrer link */}
           <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-              <Users className="w-4 h-4 text-purple-500" /> Referred By
+              <span className="material-symbols-outlined text-[16px] text-purple-500">group</span> Referred By
             </h3>
             {isEditing ? (
               <select
@@ -419,7 +413,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
                     <p className="text-sm font-semibold text-purple-800 group-hover:underline">{referrer.name}</p>
                     {referrer.company && <p className="text-xs text-purple-400">{referrer.company}</p>}
                   </div>
-                  <ArrowRight className="w-4 h-4 text-purple-300 group-hover:text-purple-500 ml-1 transition" />
+                  <span className="material-symbols-outlined text-[16px] text-purple-300">arrow_forward</span>
                 </button>
               ) : null;
             })() : (
@@ -434,7 +428,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
             return (
               <div className="mb-6 p-4 bg-purple-50 border border-purple-100 rounded-xl">
                 <h3 className="text-sm font-semibold text-purple-700 mb-3 flex items-center gap-2">
-                  <Users className="w-4 h-4" /> Referrals Sent
+                  <span className="material-symbols-outlined text-[16px]">group</span> Referrals Sent
                   <span className="ml-auto bg-purple-200 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">{referralsSent.length}</span>
                 </h3>
                 <div className="space-y-2">
@@ -449,7 +443,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
                         <p className="text-sm font-semibold text-gray-800 truncate group-hover:text-purple-700">{r.name}</p>
                         {r.company && <p className="text-xs text-gray-400 truncate">{r.company}</p>}
                       </div>
-                      <ArrowRight className="w-3.5 h-3.5 text-gray-300 group-hover:text-purple-400 flex-shrink-0" />
+                      <span className="material-symbols-outlined text-[14px] text-gray-300">arrow_forward</span>
                     </button>
                   ))}
                 </div>
@@ -464,7 +458,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
                 onClick={() => setShowActivityForm(!showActivityForm)}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-blue-700"
               >
-                <Plus className="w-4 h-4" /> Add Activity
+                <span className="material-symbols-outlined text-[16px]">add</span> Add Activity
               </button>
             </div>
 
@@ -502,7 +496,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
             <div className="space-y-3">
               {contactActivities.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
-                  <Activity className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <span className="material-symbols-outlined text-[48px] opacity-50">timeline</span>
                   <p>No activities yet. Add your first activity above!</p>
                 </div>
               ) : (
@@ -552,31 +546,31 @@ function AnalyticsDashboard({ contacts, activities, onClose }) {
       <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto p-8">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
-            <BarChart3 className="w-8 h-8 text-blue-600" /> Analytics Dashboard
+            <span className="material-symbols-outlined text-[32px] text-blue-600">analytics</span> Analytics Dashboard
           </h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
-            <X className="w-6 h-6" />
+            <span className="material-symbols-outlined text-[24px]">close</span>
           </button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-xl shadow-lg">
-            <Users className="w-8 h-8 mb-2 opacity-80" />
+            <span className="material-symbols-outlined text-[32px] opacity-80">group</span>
             <p className="text-3xl font-bold">{totalContacts}</p>
             <p className="text-sm opacity-90">Total Contacts</p>
           </div>
           <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-xl shadow-lg">
-            <TrendingUp className="w-8 h-8 mb-2 opacity-80" />
+            <span className="material-symbols-outlined text-[32px] opacity-80">trending_up</span>
             <p className="text-3xl font-bold">{avgVibeScore}</p>
             <p className="text-sm opacity-90">Avg Vibe Score</p>
           </div>
           <div className="bg-gradient-to-br from-red-500 to-red-600 text-white p-6 rounded-xl shadow-lg">
-            <AlertCircle className="w-8 h-8 mb-2 opacity-80" />
+            <span className="material-symbols-outlined text-[32px] opacity-80">error</span>
             <p className="text-3xl font-bold">{overdueContacts}</p>
             <p className="text-sm opacity-90">Need Attention</p>
           </div>
           <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-xl shadow-lg">
-            <Activity className="w-8 h-8 mb-2 opacity-80" />
+            <span className="material-symbols-outlined text-[32px] opacity-80">timeline</span>
             <p className="text-3xl font-bold">{activities.length}</p>
             <p className="text-sm opacity-90">Total Activities</p>
           </div>
@@ -585,7 +579,7 @@ function AnalyticsDashboard({ contacts, activities, onClose }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <PieChart className="w-5 h-5" /> Vibe Score Distribution
+              <span className="material-symbols-outlined text-[20px]">pie_chart</span> Vibe Score Distribution
             </h3>
             <div className="space-y-3">
               <div>
@@ -620,7 +614,7 @@ function AnalyticsDashboard({ contacts, activities, onClose }) {
 
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <Activity className="w-5 h-5" /> Recent Activity
+              <span className="material-symbols-outlined text-[20px]">timeline</span> Recent Activity
             </h3>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {recentActivity.length === 0 ? (
@@ -658,7 +652,7 @@ function AnalyticsDashboard({ contacts, activities, onClose }) {
           return (
             <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
               <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Users className="w-5 h-5 text-purple-500" /> Top Referrers
+                <span className="material-symbols-outlined text-[20px] text-purple-500">group</span> Top Referrers
               </h3>
               <div className="space-y-2">
                 {leaderboard.map((r, i) => (
@@ -680,7 +674,7 @@ function AnalyticsDashboard({ contacts, activities, onClose }) {
 
         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6">
           <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <Download className="w-5 h-5" /> Export Data
+            <span className="material-symbols-outlined text-[20px]">download</span> Export Data
           </h3>
           <div className="flex gap-3">
             <button className="bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">Export to CSV</button>
@@ -1205,11 +1199,13 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-  await window.storage.delete('auth_token');
-  await window.storage.delete('auth_user');
-  setUser(null);
-  window.location.href = '/';  // ← Add this line
-};
+    // Redirect FIRST to avoid flash of old UI
+    window.location.href = '/';
+    
+    // Then clear auth
+    await window.storage.delete('auth_token');
+    await window.storage.delete('auth_user');
+  };
 
   const handleAddContact = async (e) => {
     e.preventDefault();
@@ -1702,6 +1698,140 @@ export default function App() {
     filterFavorites, filterStale
   ].filter(Boolean).length;
 
+  // Sidebar Component
+  const Sidebar = () => (
+    <aside className="fixed top-0 left-0 h-full w-64 bg-white border-r border-slate-200 z-40 hidden lg:flex flex-col">
+      {/* Logo */}
+      <div className="p-8">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
+            <span className="material-symbols-outlined text-white">bolt</span>
+          </div>
+          <span className="text-xl font-extrabold tracking-tight text-slate-800">Micro CRM</span>
+        </div>
+      </div>
+      {/* Navigation */}
+      <nav className="flex-1 px-4 space-y-1.5 mt-2">
+        <a className="flex items-center gap-3 px-4 py-3 bg-indigo-50 text-indigo-700 rounded-2xl font-bold" href="#">
+          <span className="material-symbols-outlined">dashboard</span>
+          Dashboard
+        </a>
+        <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-2xl transition-all" href="#">
+          <span className="material-symbols-outlined">group</span>
+          Contacts
+        </a>
+        <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-2xl transition-all" href="#">
+          <span className="material-symbols-outlined">monetization_on</span>
+          Deals
+        </a>
+        <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-2xl transition-all" href="#">
+          <span className="material-symbols-outlined">checklist</span>
+          Tasks
+        </a>
+        <a onClick={() => setShowAnalytics(true)} className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-2xl transition-all cursor-pointer" href="#">
+          <span className="material-symbols-outlined">analytics</span>
+          Analytics
+        </a>
+      </nav>
+      {/* User Profile */}
+      <div className="p-6 mt-auto">
+        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+          <div className="flex items-center gap-3 mb-1">
+            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+              {user.name ? user.name[0].toUpperCase() : 'U'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold truncate">{user.name || 'User'}</p>
+              <p className="text-[11px] text-slate-500">{isPremium ? 'Premium Account' : 'Free Account'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+
+  // Header Section Component
+  const HeaderSection = () => (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+      {/* Welcome Card */}
+      <div className="lg:col-span-5 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+        <div>
+          <div className="flex justify-between items-start mb-4">
+            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+              Micro-CRM
+              {isPremium && (
+                <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">workspace_premium</span> Premium
+                </span>
+              )}
+            </h2>
+            <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 transition">
+              <span className="material-symbols-outlined">logout</span>
+            </button>
+          </div>
+          <p className="text-slate-500 text-sm">
+            Welcome back, <span className="font-semibold text-slate-800 uppercase">{user.name || 'User'}</span>
+          </p>
+        </div>
+      </div>
+      {/* Premium Banner */}
+      {!isPremium && (
+        <div className="lg:col-span-7 bg-gradient-to-r from-amber-400 to-yellow-500 p-6 rounded-3xl shadow-xl shadow-amber-100 flex items-center justify-between group cursor-pointer transition-transform hover:scale-[1.01]"
+             onClick={() => setShowPremiumModal(true)}>
+          <div className="flex items-center gap-5">
+            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/30">
+              <span className="material-symbols-outlined text-white text-3xl">workspace_premium</span>
+            </div>
+            <div>
+              <h3 className="text-white text-xl font-extrabold">Upgrade to Premium</h3>
+              <p className="text-amber-50/80 text-sm font-medium">Unlock unlimited contacts and AI icebreakers</p>
+            </div>
+          </div>
+          <div className="bg-white text-amber-600 px-6 py-3 rounded-2xl font-bold text-sm shadow-lg group-hover:bg-amber-50 transition-colors">
+            Get Pro — $5
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Empty State Component
+  const EmptyState = () => (
+    <section className="bg-white rounded-3xl border border-slate-200 shadow-sm min-h-[450px] flex flex-col items-center justify-center p-8 text-center">
+      <div className="w-64 h-64 mb-8 relative">
+        <div className="absolute inset-0 bg-indigo-50 rounded-full scale-90 blur-3xl opacity-60"></div>
+        <div className="relative w-full h-full flex items-center justify-center">
+          <div className="relative">
+            <span className="material-symbols-outlined text-[120px] text-indigo-200">group</span>
+            <div className="absolute -top-4 -right-4 w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-50">
+              <span className="material-symbols-outlined text-indigo-500 text-3xl">add_circle</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <h2 className="text-2xl font-extrabold text-slate-800 mb-2">No contacts yet</h2>
+      <p className="text-slate-500 max-w-sm mb-10 text-lg leading-relaxed">
+        Start building your network by adding your first contact or importing your existing database.
+      </p>
+      <button onClick={() => setShowAddModal(true)}
+              className="group flex items-center gap-3 bg-indigo-600 hover:bg-indigo-700 text-white px-10 py-5 rounded-2xl font-bold text-lg shadow-2xl shadow-indigo-200 transition-all hover:-translate-y-1">
+        <span className="material-symbols-outlined">add</span>
+        Add Your First Contact
+      </button>
+      <p className="mt-6 text-sm text-slate-400">
+        Or <button onClick={() => setShowBulkImport(true)} className="text-indigo-500 font-bold hover:underline">upload a CSV file</button> to get started instantly
+      </p>
+    </section>
+  );
+
+  // Mobile FAB Component
+  const MobileFAB = () => (
+    <button onClick={() => setShowAddModal(true)}
+            className="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-2xl flex items-center justify-center z-50 hover:bg-indigo-700 transition-all active:scale-95">
+      <span className="material-symbols-outlined text-3xl">add</span>
+    </button>
+  );
+
   if (isLoading) return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
       <div className="text-center">
@@ -1714,35 +1844,17 @@ export default function App() {
   if (!user) return <AuthPage onLogin={setUser} />;
 
   return (
-    <div className="min-h-screen bg-[#F0F2F9] p-4 sm:p-6 text-left">
-      <div className="max-w-7xl mx-auto space-y-4">
+    <div className="min-h-screen bg-slate-50">
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="bg-white rounded-xl p-6 shadow-sm flex-1 border border-gray-100 relative">
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-              Micro-CRM
-              {isPremium && (
-                <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
-                  <Crown className="w-3 h-3" /> Premium
-                </span>
-              )}
-            </h1>
-            <p className="text-gray-500 text-sm">Welcome back, {user.name}</p>
-            <button onClick={handleLogout} className="absolute top-4 right-4 text-gray-400 hover:text-red-500 transition">
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-          {!isPremium && (
-            <div onClick={() => setShowPremiumModal(true)}
-              className="bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-xl p-6 shadow-md flex-[2] flex items-center justify-center cursor-pointer hover:brightness-105 transition-all">
-              <div className="flex items-center gap-3 text-white">
-                <Crown className="w-6 h-6" />
-                <span className="text-xl font-bold tracking-tight">Upgrade to Premium - $5</span>
-              </div>
-            </div>
-          )}
-        </div>
+      {/* SIDEBAR - Desktop Only */}
+      <Sidebar />
+
+      {/* MAIN CONTENT */}
+      <main className="lg:ml-64 p-4 lg:p-10 space-y-8">
+
+        {/* Header Row: Welcome + Premium */}
+        <HeaderSection />
+
 
         {/* TODAY'S 3 — Hot contacts needing a nudge */}
         {todaysThree.length > 0 && (
@@ -1775,7 +1887,7 @@ export default function App() {
           {/* Row 1: Search + action buttons */}
           <div className="flex flex-col md:flex-row gap-3 items-center">
             <div className="relative flex-1 w-full">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <span className="material-symbols-outlined text-[20px] text-gray-400 absolute left-4 top-1/2 -translate-y-1/2">search</span>
               <input type="text" placeholder="Search name, email, company, notes..."
                 className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20"
                 onChange={(e) => setSearchTerm(e.target.value)} />
@@ -1783,28 +1895,28 @@ export default function App() {
             <div className="flex gap-2 w-full md:w-auto flex-wrap">
               <button onClick={() => setShowAnalytics(true)}
                 className="flex-1 md:flex-none bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 transition">
-                <BarChart3 className="w-5 h-5" /> Analytics
+                <span className="material-symbols-outlined text-[20px]">analytics</span> Analytics
               </button>
               <button onClick={() => setShowAddModal(true)}
                 className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition">
-                <Plus className="w-5 h-5" /> Add
+                <span className="material-symbols-outlined text-[20px]">add</span> Add
                 {!isPremium && <span className="text-[10px] bg-blue-800 px-1.5 py-0.5 rounded-full">{contacts.length}/10</span>}
               </button>
               <button onClick={() => isPremium ? setShowBulkImport(true) : (() => { setUpgradeReason('Bulk Import is a Premium feature.'); setShowPremiumModal(true); })()}
                 className={`flex-1 md:flex-none ${isPremium ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
-                {isPremium ? <Upload className="w-5 h-5" /> : <Lock className="w-5 h-5" />} Import
+                {isPremium ? <span className="material-symbols-outlined text-[20px]">upload</span> : <span className="material-symbols-outlined text-[20px]">lock</span>} Import
               </button>
               <button onClick={() => isPremium ? setShowBulkUpdate(true) : (() => { setUpgradeReason('Bulk Update is a Premium feature.'); setShowPremiumModal(true); })()}
                 className={`flex-1 md:flex-none ${isPremium ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
-                {isPremium ? <Calendar className="w-5 h-5" /> : <Lock className="w-5 h-5" />} Update
+                {isPremium ? <span className="material-symbols-outlined text-[20px]">calendar_today</span> : <span className="material-symbols-outlined text-[20px]">lock</span>} Update
               </button>
               <button onClick={() => isPremium ? handleBulkEmail() : (() => { setUpgradeReason('Bulk Email is a Premium feature.'); setShowPremiumModal(true); })()}
                 className={`flex-1 md:flex-none ${isPremium ? 'bg-purple-600 hover:bg-purple-700' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
-                {isPremium ? <Mail className="w-5 h-5" /> : <Lock className="w-5 h-5" />} Email
+                {isPremium ? <span className="material-symbols-outlined text-[20px]">mail</span> : <span className="material-symbols-outlined text-[20px]">lock</span>} Email
               </button>
               <button onClick={() => isPremium ? setShowBulkIcebreaker(true) : (() => { setUpgradeReason('Bulk Icebreaker is a Premium feature.'); setShowPremiumModal(true); })()}
                 className={`flex-1 md:flex-none ${isPremium ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
-                {isPremium ? <Zap className="w-5 h-5" /> : <Lock className="w-5 h-5" />} Icebreaker
+                {isPremium ? <span className="material-symbols-outlined text-[20px]">auto_awesome</span> : <span className="material-symbols-outlined text-[20px]">lock</span>} Icebreaker
               </button>
             </div>
           </div>
@@ -1834,7 +1946,7 @@ export default function App() {
                   ? 'bg-blue-600 text-white border-blue-600'
                   : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
               }`}>
-              <Filter className="w-3.5 h-3.5" />
+              <span className="material-symbols-outlined text-[14px]">filter_list</span>
               Filters
               {activeFilterCount > 0 && (
                 <span className="bg-white text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{activeFilterCount}</span>
@@ -1842,25 +1954,25 @@ export default function App() {
             </button>
             <button onClick={() => setShowCategoryManager(true)}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition">
-              <Tag className="w-3.5 h-3.5" /> Categories
+              <span className="material-symbols-outlined text-[14px]">label</span> Categories
               {categories.length > 0 && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{categories.length}</span>}
             </button>
             {/* View mode toggle */}
             <div className="flex border border-gray-200 rounded-lg overflow-hidden">
               <button onClick={() => setViewMode('grid')}
                 className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1 transition ${viewMode === 'grid' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
-                <Users className="w-3.5 h-3.5" /> Grid
+                <span className="material-symbols-outlined text-[14px]">group</span> Grid
               </button>
               <button onClick={() => setViewMode('board')}
                 className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1 transition border-l border-gray-200 ${viewMode === 'board' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
-                <BarChart3 className="w-3.5 h-3.5" /> Board
+                <span className="material-symbols-outlined text-[14px]">analytics</span> Board
               </button>
             </div>
             {/* Nudge notification toggle */}
             <button onClick={requestNudgePermission}
               title="Get browser notifications when hot contacts go stale"
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition ${nudgeEnabled ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200'}`}>
-              <Bell className="w-3.5 h-3.5" /> Nudge {nudgeEnabled ? 'On' : 'Off'}
+              <span className="material-symbols-outlined text-[14px]">notifications</span> Nudge {nudgeEnabled ? 'On' : 'Off'}
             </button>
           </div>
 
@@ -1935,16 +2047,16 @@ export default function App() {
                 <div className="flex gap-2 flex-wrap">
                   <button onClick={() => setFilterFavorites(f => !f)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border flex items-center gap-1 ${filterFavorites ? 'bg-yellow-500 text-white border-yellow-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
-                    <Star className="w-3 h-3" /> Favorites
+                    <span className="material-symbols-outlined text-[12px]">star</span> Favorites
                   </button>
                   <button onClick={() => setFilterStale(f => !f)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border flex items-center gap-1 ${filterStale ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
-                    <Clock className="w-3 h-3" /> Stale only
+                    <span className="material-symbols-outlined text-[12px]">schedule</span> Stale only
                   </button>
                   {activeFilterCount > 0 && (
                     <button onClick={() => { setFilterTag('all'); setFilterVibe('all'); setFilterCategory('all'); setFilterFavorites(false); setFilterStale(false); }}
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-red-200 text-red-500 bg-white hover:bg-red-50 transition flex items-center gap-1">
-                      <X className="w-3 h-3" /> Clear all filters
+                      <span className="material-symbols-outlined text-[12px]">close</span> Clear all filters
                     </button>
                   )}
                 </div>
@@ -1962,7 +2074,7 @@ export default function App() {
         </div>
 
         {/* Contacts Grid or Board View */}
-        {viewMode === 'grid' ? (
+        {contacts.length > 0 && viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredContacts.map(contact => {
               const days = daysSinceContact(contact.lastContactDate);
@@ -1979,7 +2091,7 @@ export default function App() {
                         )}
                         <button onClick={(e) => { e.stopPropagation(); toggleFavorite(contact.id); }}
                           className="opacity-0 group-hover:opacity-100">
-                          <Star className={`w-4 h-4 ${contact.isFavorite ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                          <span className={`material-symbols-outlined text-[16px] ${contact.isFavorite ? 'text-yellow-400' : 'text-gray-300'}`} style={contact.isFavorite ? {fontVariationSettings: "'FILL' 1"} : {}}>star</span>
                         </button>
                       </div>
                       {contact.email && <p className="text-xs text-gray-400">{contact.email}</p>}
@@ -2008,19 +2120,19 @@ export default function App() {
                     <div className="flex flex-col gap-1 items-end">
                       <button onClick={(e) => { e.stopPropagation(); deleteContact(contact.id); }}
                         className="opacity-0 group-hover:opacity-100 p-2 text-red-300 hover:text-red-500 transition">
-                        <Trash2 className="w-4 h-4" />
+                        <span className="material-symbols-outlined text-[16px]">delete</span>
                       </button>
                       <button onClick={(e) => { e.stopPropagation(); generateIcebreaker(contact); }}
                         title="Draft Icebreaker"
                         className="opacity-0 group-hover:opacity-100 p-1.5 text-indigo-400 hover:text-indigo-600 transition">
-                        <Zap className="w-4 h-4" />
+                        <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
                       </button>
                     </div>
                   </div>
                   <div className="space-y-2">
                     {contact.lastContactDate && (
                       <div className="flex items-center gap-2 text-xs">
-                        <Calendar className="w-4 h-4 text-gray-400" />
+                        <span className="material-symbols-outlined text-[16px] text-gray-400">calendar_today</span>
                         <span className="text-gray-600">
                           {new Date(contact.lastContactDate).toLocaleDateString()}
                           {days && <span className="text-gray-400 ml-1">({days}d ago)</span>}
@@ -2028,7 +2140,7 @@ export default function App() {
                       </div>
                     )}
                     <div className="flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-gray-400" />
+                      <span className="material-symbols-outlined text-[16px] text-gray-400">trending_up</span>
                       <div className="flex-1 flex items-center gap-2">
                         <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500" style={{width: `${contact.vibeScore * 10}%`}} />
@@ -2109,7 +2221,7 @@ export default function App() {
                             <button onClick={(e) => { e.stopPropagation(); generateIcebreaker(contact); }}
                               title="Draft Icebreaker"
                               className="opacity-0 group-hover:opacity-100 p-1 text-indigo-400 hover:text-indigo-600 flex-shrink-0 transition">
-                              <Zap className="w-3.5 h-3.5" />
+                              <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
                             </button>
                           </div>
                           {contact.category && (() => {
@@ -2142,21 +2254,13 @@ export default function App() {
           </div>
         )}
 
-        {filteredContacts.length === 0 && (
+        {contacts.length === 0 ? (
+          <EmptyState />
+        ) : filteredContacts.length === 0 && (
           <div className="bg-white rounded-xl p-12 text-center border border-gray-100">
-            <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-800 mb-2">
-              {contacts.length === 0 ? 'No contacts yet' : 'No contacts found'}
-            </h3>
-            <p className="text-gray-500 mb-4">
-              {contacts.length === 0 ? 'Add your first contact to get started' : 'Try a different search or filter'}
-            </p>
-            {contacts.length === 0 && (
-              <button onClick={() => setShowAddModal(true)}
-                className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold inline-flex items-center gap-2">
-                <Plus className="w-5 h-5" /> Add Contact
-              </button>
-            )}
+            <span className="material-symbols-outlined text-[64px] text-gray-300">group</span>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">No contacts found</h3>
+            <p className="text-gray-500 mb-4">Try a different search or filter</p>
           </div>
         )}
 
@@ -2192,7 +2296,7 @@ export default function App() {
               {/* Free tier warning */}
               {atFreeLimit && (
                 <div className="p-3 bg-orange-50 border border-orange-200 rounded-xl flex items-center gap-2 text-orange-700 text-sm font-medium">
-                  <Lock className="w-4 h-4 flex-shrink-0" />
+                  <span className="material-symbols-outlined text-[16px]">lock</span>
                   You've reached the 10 contact limit. <button type="button" onClick={() => setShowPremiumModal(true)} className="underline ml-1">Upgrade to add more.</button>
                 </div>
               )}
@@ -2226,13 +2330,13 @@ export default function App() {
               <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <label className="text-sm font-bold text-indigo-700 flex items-center gap-2">
-                    <FileText className="w-4 h-4" /> Scan to Fill
+                    <span className="material-symbols-outlined text-[16px]">description</span> Scan to Fill
                     <span className="text-[10px] font-normal text-indigo-400 bg-indigo-100 px-2 py-0.5 rounded-full">AI-powered</span>
                   </label>
                   {(scanPreview || scanMode === 'camera') && (
                     <button type="button" onClick={() => { stopCamera(); setScanMode('idle'); setScanPreview(null); setScanFeedback([]); }}
                       className="text-xs text-indigo-400 hover:text-indigo-700 flex items-center gap-1">
-                      <X className="w-3 h-3" /> Reset
+                      <span className="material-symbols-outlined text-[12px]">close</span> Reset
                     </button>
                   )}
                 </div>
@@ -2381,7 +2485,7 @@ export default function App() {
               {categories.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <Tag className="w-4 h-4" /> Category
+                    <span className="material-symbols-outlined text-[16px]">label</span> Category
                   </label>
                   <div className="flex gap-2 flex-wrap">
                     <button type="button" onClick={() => setNewContact({...newContact, category: ''})}
@@ -2409,7 +2513,7 @@ export default function App() {
               {categories.length === 0 && (
                 <button type="button" onClick={() => setShowCategoryManager(true)}
                   className="w-full py-2.5 border border-dashed border-gray-300 rounded-xl text-xs text-gray-400 hover:text-gray-600 hover:border-gray-400 transition flex items-center justify-center gap-2">
-                  <Tag className="w-3.5 h-3.5" /> Create categories to organise contacts
+                  <span className="material-symbols-outlined text-[14px]">label</span> Create categories to organise contacts
                 </button>
               )}
               <div>
@@ -2422,7 +2526,7 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                      <Crown className="w-4 h-4 text-yellow-600" /> Reminder (days)
+                      <span className="material-symbols-outlined text-[16px] text-yellow-600">workspace_premium</span> Reminder (days)
                     </label>
                     <input type="number" min="1" value={newContact.reminderDays}
                       className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
@@ -2430,7 +2534,7 @@ export default function App() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                      <Crown className="w-4 h-4 text-yellow-600" /> Contact Frequency
+                      <span className="material-symbols-outlined text-[16px] text-yellow-600">workspace_premium</span> Contact Frequency
                     </label>
                     <input type="number" min="1" value={newContact.contactFrequency}
                       className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500"
@@ -2503,7 +2607,7 @@ export default function App() {
               {categories.length > 0 && (
                 <div className="mb-5 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
                   <label className="block text-sm font-semibold text-indigo-700 mb-2 flex items-center gap-2">
-                    <Tag className="w-4 h-4" /> Assign category to all imported contacts <span className="font-normal text-indigo-400">(optional)</span>
+                    <span className="material-symbols-outlined text-[16px]">label</span> Assign category to all imported contacts <span className="font-normal text-indigo-400">(optional)</span>
                   </label>
                   <div className="flex gap-2 flex-wrap">
                     <button type="button" onClick={() => setBulkImportCategory('')}
@@ -2548,11 +2652,11 @@ export default function App() {
               <div className="mb-6 flex gap-2 p-1 bg-gray-100 rounded-xl">
                 <button onClick={() => setEmailSendMethod('mailto')}
                   className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 ${emailSendMethod === 'mailto' ? 'bg-white shadow-sm text-purple-700' : 'text-gray-500'}`}>
-                  <Send className="w-4 h-4" /> Send via Email Client
+                  <span className="material-symbols-outlined text-[16px]">send</span> Send via Email Client
                 </button>
                 <button onClick={() => setEmailSendMethod('copy')}
                   className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 ${emailSendMethod === 'copy' ? 'bg-white shadow-sm text-purple-700' : 'text-gray-500'}`}>
-                  <FileText className="w-4 h-4" /> Copy to Clipboard
+                  <span className="material-symbols-outlined text-[16px]">description</span> Copy to Clipboard
                 </button>
               </div>
 
@@ -2601,7 +2705,7 @@ export default function App() {
                     </>
                   ) : (
                     <>
-                      <CheckCircle className="w-5 h-5" />
+                      <span className="material-symbols-outlined text-[20px]">check_circle</span>
                       <span className="text-sm font-medium">Done! Check your mail client to send.</span>
                     </>
                   )}
@@ -2613,9 +2717,9 @@ export default function App() {
                   disabled={bulkEmailData.selectedContacts.length === 0 || !bulkEmailData.subject || !bulkEmailData.body || emailSendStatus === 'sending'}
                   className="flex-1 bg-purple-600 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-purple-700 transition flex items-center justify-center gap-2">
                   {emailSendMethod === 'mailto' ? (
-                    <><Send className="w-5 h-5" /> Send {bulkEmailData.selectedContacts.length} Emails</>
+                    <><span className="material-symbols-outlined text-[20px]">send</span> Send {bulkEmailData.selectedContacts.length} Emails</>
                   ) : (
-                    <><FileText className="w-5 h-5" /> Copy {bulkEmailData.selectedContacts.length} Emails</>
+                    <><span className="material-symbols-outlined text-[20px]">description</span> Copy {bulkEmailData.selectedContacts.length} Emails</>
                   )}
                 </button>
                 <button onClick={() => { setShowBulkEmail(false); setBulkEmailData({ subject: '', body: '', selectedContacts: [] }); setEmailSendStatus(''); }}
@@ -2641,7 +2745,7 @@ export default function App() {
                 <div className="flex justify-between items-start">
                   <div>
                     <h2 className="text-xl font-bold flex items-center gap-2">
-                      <Zap className="w-5 h-5" /> Bulk Icebreaker
+                      <span className="material-symbols-outlined text-[20px]">auto_awesome</span> Bulk Icebreaker
                     </h2>
                     <p className="text-indigo-200 text-sm mt-0.5">
                       Generate personalized opening lines for multiple contacts at once
@@ -2649,7 +2753,7 @@ export default function App() {
                   </div>
                   <button onClick={() => { setShowBulkIcebreaker(false); setBulkIcebreakerData({ selectedContacts: [], channel: 'linkedin', results: {} }); }}
                     className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition">
-                    <X className="w-4 h-4" />
+                    <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
                 </div>
 
@@ -2711,7 +2815,7 @@ export default function App() {
                         Generating {bulkIcebreakerData.selectedContacts.length} sets of icebreakers...
                       </>
                     ) : (
-                      <><Zap className="w-5 h-5" /> Generate {bulkIcebreakerData.selectedContacts.length} Icebreakers</>
+                      <><span className="material-symbols-outlined text-[20px]">auto_awesome</span> Generate {bulkIcebreakerData.selectedContacts.length} Icebreakers</>
                     )}
                   </button>
                 )}
@@ -2734,7 +2838,7 @@ export default function App() {
                               </div>
                               <button onClick={() => navigator.clipboard.writeText(lines.join('\n\n'))}
                                 className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
-                                <FileText className="w-3 h-3" /> Copy
+                                <span className="material-symbols-outlined text-[12px]">description</span> Copy
                               </button>
                             </div>
                             <div className="space-y-2">
@@ -2769,12 +2873,12 @@ export default function App() {
                     <div className="flex gap-3">
                       <button onClick={copyAllBulkIcebreakers}
                         className="flex-1 bg-white border-2 border-indigo-600 text-indigo-700 py-3 rounded-xl font-bold hover:bg-indigo-50 transition flex items-center justify-center gap-2">
-                        <FileText className="w-5 h-5" /> Copy All
+                        <span className="material-symbols-outlined text-[20px]">description</span> Copy All
                       </button>
                       {bulkIcebreakerData.channel === 'email' && (
                         <button onClick={sendAllBulkIcebreakers}
                           className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2">
-                          <Send className="w-5 h-5" /> Send All via Email
+                          <span className="material-symbols-outlined text-[20px]">send</span> Send All via Email
                         </button>
                       )}
                       <button onClick={() => setBulkIcebreakerData({ selectedContacts: [], channel: bulkIcebreakerData.channel, results: {} })}
@@ -2798,7 +2902,7 @@ export default function App() {
               <div className="flex justify-between items-start mb-2">
                 <h2 className="text-2xl font-bold text-gray-800">Bulk Update Last Contact</h2>
                 <button onClick={() => setShowBulkUpdate(false)} className="p-2 hover:bg-gray-100 rounded-lg">
-                  <X className="w-5 h-5 text-gray-500" />
+                  <span className="material-symbols-outlined text-[20px] text-gray-500">close</span>
                 </button>
               </div>
               <p className="text-sm text-gray-500 mb-6">Select the clients you spoke to offline, set the date, and optionally add a shared note — all updated in one click.</p>
@@ -2807,7 +2911,7 @@ export default function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-orange-500" /> Last Contact Date *
+                    <span className="material-symbols-outlined text-[16px] text-orange-500">calendar_today</span> Last Contact Date *
                   </label>
                   <input type="date" value={bulkUpdate.date}
                     max={new Date().toISOString().split('T')[0]}
@@ -2918,7 +3022,7 @@ export default function App() {
                   onClick={handleBulkUpdate}
                   disabled={!bulkUpdate.selectedIds.length || !bulkUpdate.date}
                   className="flex-1 bg-orange-500 text-white py-3 rounded-xl font-bold hover:bg-orange-600 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                  <CheckCircle className="w-5 h-5" />
+                  <span className="material-symbols-outlined text-[20px]">check_circle</span>
                   Update {bulkUpdate.selectedIds.length} Contact{bulkUpdate.selectedIds.length !== 1 ? 's' : ''}
                 </button>
                 <button onClick={() => { setShowBulkUpdate(false); setBulkUpdate({ selectedIds: [], date: new Date().toISOString().split('T')[0], note: '', addActivity: true }); }}
@@ -2938,14 +3042,14 @@ export default function App() {
                 <div className="flex justify-between items-start">
                   <div>
                     <h2 className="text-lg font-bold flex items-center gap-2">
-                      <Zap className="w-5 h-5" /> Icebreaker for {icebreakerContact.name}
+                      <span className="material-symbols-outlined text-[20px]">auto_awesome</span> Icebreaker for {icebreakerContact.name}
                     </h2>
                     <p className="text-indigo-200 text-xs mt-0.5">
                       {icebreakerContact.company && `${icebreakerContact.company} · `}AI-generated opening lines
                     </p>
                   </div>
                   <button onClick={() => setShowIcebreaker(false)} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition">
-                    <X className="w-4 h-4" />
+                    <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
                 </div>
 
@@ -3037,7 +3141,7 @@ export default function App() {
                     <button
                       onClick={() => generateIcebreaker(icebreakerContact, icebreakerChannel)}
                       className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2">
-                      <Zap className="w-4 h-4" /> Regenerate
+                      <span className="material-symbols-outlined text-[16px]">auto_awesome</span> Regenerate
                     </button>
                     <button
                       onClick={() => setShowIcebreaker(false)}
@@ -3058,17 +3162,17 @@ export default function App() {
             <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  <Tag className="w-6 h-6 text-indigo-500" /> Categories
+                  <span className="material-symbols-outlined text-[24px] text-indigo-500">label</span> Categories
                 </h2>
                 <button onClick={() => setShowCategoryManager(false)} className="p-2 hover:bg-gray-100 rounded-lg">
-                  <X className="w-5 h-5 text-gray-500" />
+                  <span className="material-symbols-outlined text-[20px] text-gray-500">close</span>
                 </button>
               </div>
 
               {/* Existing categories */}
               {categories.length === 0 ? (
                 <div className="text-center py-8 text-gray-400">
-                  <Tag className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                  <span className="material-symbols-outlined text-[48px] opacity-30">label</span>
                   <p className="text-sm">No categories yet — create your first one below.</p>
                 </div>
               ) : (
@@ -3089,7 +3193,7 @@ export default function App() {
                         </button>
                         <button onClick={() => deleteCategory(cat.id)}
                           className="opacity-0 group-hover:opacity-100 p-1.5 text-red-300 hover:text-red-500 transition rounded-lg hover:bg-red-50">
-                          <Trash2 className="w-4 h-4" />
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
                         </button>
                       </div>
                     );
@@ -3159,7 +3263,7 @@ export default function App() {
             <div className="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl">
               <div className="text-center mb-6">
                 <div className="w-16 h-16 bg-gradient-to-r from-yellow-400 to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Crown className="w-8 h-8 text-white" />
+                  <span className="material-symbols-outlined text-[32px]">workspace_premium</span>
                 </div>
                 <h2 className="text-2xl font-bold text-gray-800 mb-2">Upgrade to Premium</h2>
                 {upgradeReason && (
@@ -3169,11 +3273,11 @@ export default function App() {
                 <p className="text-sm text-gray-500">one-time payment</p>
               </div>
               <div className="space-y-3 mb-6">
-                <div className="flex items-center gap-3"><Bell className="w-5 h-5 text-yellow-600" /><span className="text-sm text-gray-700">Custom Reminders</span></div>
-                <div className="flex items-center gap-3"><Mail className="w-5 h-5 text-yellow-600" /><span className="text-sm text-gray-700">Bulk Personalized Emails</span></div>
-                <div className="flex items-center gap-3"><Upload className="w-5 h-5 text-yellow-600" /><span className="text-sm text-gray-700">Bulk Import (Excel/CSV)</span></div>
-                <div className="flex items-center gap-3"><Activity className="w-5 h-5 text-yellow-600" /><span className="text-sm text-gray-700">Activity Timeline</span></div>
-                <div className="flex items-center gap-3"><BarChart3 className="w-5 h-5 text-yellow-600" /><span className="text-sm text-gray-700">Advanced Analytics</span></div>
+                <div className="flex items-center gap-3"><span className="material-symbols-outlined text-[20px] text-yellow-600">notifications</span><span className="text-sm text-gray-700">Custom Reminders</span></div>
+                <div className="flex items-center gap-3"><span className="material-symbols-outlined text-[20px] text-yellow-600">mail</span><span className="text-sm text-gray-700">Bulk Personalized Emails</span></div>
+                <div className="flex items-center gap-3"><span className="material-symbols-outlined text-[20px] text-yellow-600">upload</span><span className="text-sm text-gray-700">Bulk Import (Excel/CSV)</span></div>
+                <div className="flex items-center gap-3"><span className="material-symbols-outlined text-[20px] text-yellow-600">timeline</span><span className="text-sm text-gray-700">Activity Timeline</span></div>
+                <div className="flex items-center gap-3"><span className="material-symbols-outlined text-[20px] text-yellow-600">analytics</span><span className="text-sm text-gray-700">Advanced Analytics</span></div>
               </div>
               <div className="flex gap-3">
                 <button onClick={activatePremium}
@@ -3189,7 +3293,11 @@ export default function App() {
           </div>
         )}
 
-      </div>
+      </main>
+
+      {/* Mobile FAB */}
+      <MobileFAB />
+
     </div>
   );
 }
