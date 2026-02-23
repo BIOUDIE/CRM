@@ -1205,10 +1205,11 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await window.storage.delete('auth_token');
-    await window.storage.delete('auth_user');
-    setUser(null);
-  };
+  await window.storage.delete('auth_token');
+  await window.storage.delete('auth_user');
+  setUser(null);
+  window.location.href = '/';  // ← Add this line
+};
 
   const handleAddContact = async (e) => {
     e.preventDefault();
