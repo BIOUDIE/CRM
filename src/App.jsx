@@ -1987,23 +1987,19 @@ export default function App() {
                 <span className="material-symbols-outlined text-[20px]">analytics</span> Analytics
               </button>
               
-              {/* TODAY'S FOCUS BUTTON */}
-              <button
-                onClick={() => setShowFocusModal(true)}
-                className={`flex-1 md:flex-none ${
-                  focusContacts.length > 0
-                    ? 'bg-orange-500 hover:bg-orange-600 text-white'
-                    : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'
-                } px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition`}
-              >
-                <span className="material-symbols-outlined text-[20px]">priority_high</span>
-                <span className="hidden sm:inline">Focus</span>
-                {focusContacts.length > 0 && (
+              {/* TODAY'S FOCUS BUTTON - Only shows when contacts exist */}
+              {focusContacts.length > 0 && (
+                <button
+                  onClick={() => setShowFocusModal(true)}
+                  className="flex-1 md:flex-none bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition"
+                >
+                  <span className="material-symbols-outlined text-[20px]">priority_high</span>
+                  <span className="hidden sm:inline">Focus</span>
                   <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs font-bold">
                     {focusContacts.length}
                   </span>
-                )}
-              </button>
+                </button>
+              )}
               
               <button onClick={() => setShowAddModal(true)}
                 className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition">
