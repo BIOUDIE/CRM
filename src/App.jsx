@@ -761,6 +761,30 @@ export default function App() {
     };
   });
 
+  // --- NAVIGATION & VIEW STATES ---
+  const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard' | 'contacts' | 'deals' | 'tasks' | 'analytics'
+  const [showBusinessProfile, setShowBusinessProfile] = useState(false);
+  const [businessProfile, setBusinessProfile] = useState(() => {
+    const saved = localStorage.getItem('business_profile');
+    return saved ? JSON.parse(saved) : {
+      businessName: '',
+      industry: '',
+      description: '',
+      targetAudience: '',
+      valueProposition: ''
+    };
+  });
+
+  // --- IN-APP EMAIL SENDER STATES ---
+  const [showEmailComposer, setShowEmailComposer] = useState(false);
+  const [emailComposerData, setEmailComposerData] = useState({
+    to: [],
+    subject: '',
+    body: '',
+    useAI: false,
+    selectedContacts: []
+  });
+
   // --- SMART EXTRACT: parse any text for all contact fields ---
   const extractFromText = (text) => {
     const detected = [];
@@ -987,6 +1011,11 @@ export default function App() {
     localStorage.setItem('focus_settings', JSON.stringify(focusSettings));
   }, [focusSettings]);
 
+  // --- Persist business profile to localStorage ---
+  useEffect(() => {
+    localStorage.setItem('business_profile', JSON.stringify(businessProfile));
+  }, [businessProfile]);
+
   // --- TODAY'S FOCUS: Hot contacts not reached in X days (user configurable) ---
   const focusContacts = React.useMemo(() => {
     if (!focusSettings.enabled) return [];
@@ -1090,11 +1119,15 @@ export default function App() {
     setShowIcebreaker(true);
     
     try {
-      // Call our serverless function
+      // Call our serverless function with business profile context
       const response = await fetch('/api/generate-icebreaker', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contact, channel })
+        body: JSON.stringify({ 
+          contact, 
+          channel,
+          businessProfile // Include business context for better AI generation
+        })
       });
 
       if (!response.ok) {
@@ -1128,13 +1161,14 @@ export default function App() {
     setBulkIcebreakerLoading(true);
     
     try {
-      // Call our serverless function with all contacts at once
+      // Call our serverless function with all contacts at once + business profile
       const response = await fetch('/api/generate-bulk-icebreakers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           contacts: selectedContactsList,
-          channel: bulkIcebreakerData.channel 
+          channel: bulkIcebreakerData.channel,
+          businessProfile // Include business context
         })
       });
 
@@ -1404,8 +1438,15 @@ export default function App() {
       // --- VCF / vCard: phone contacts exported from iOS, Android, or WhatsApp ---
       if (file.name.endsWith('.vcf')) {
         const text = await file.text();
-        const newContacts = parseVCard(text);
+        let newContacts = parseVCard(text);
         if (newContacts.length === 0) { setImportStatus('No contacts found in vCard file.'); return; }
+        
+        // FREE TIER LIMIT: Cap at 10 contacts per import
+        if (!isPremium && newContacts.length > 10) {
+          setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
+          newContacts = newContacts.slice(0, 10);
+        }
+        
         const updated = [...contacts, ...newContacts];
         setContacts(updated);
         await saveContacts(updated);
@@ -1423,9 +1464,16 @@ export default function App() {
         // sheet_to_csv produces a proper RFC 4180 CSV string — hand it to PapaParse
         const csvText = XLSX.utils.sheet_to_csv(firstSheet);
         const results = await parseCSVText(csvText, ',');
-        const newContacts = results.data
+        let newContacts = results.data
           .map((row, i) => mapRowToContact(row, i, true, bulkImportCategory))
           .filter(Boolean);
+        
+        // FREE TIER LIMIT: Cap at 10 contacts per import
+        if (!isPremium && newContacts.length > 10) {
+          setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
+          newContacts = newContacts.slice(0, 10);
+        }
+        
         const updated = [...contacts, ...newContacts];
         setContacts(updated);
         await saveContacts(updated);
@@ -1450,13 +1498,19 @@ export default function App() {
         ? ` (${rowWarnings.length} row${rowWarnings.length !== 1 ? 's' : ''} had minor issues and were skipped)`
         : '';
 
-      const newContacts = results.data
+      let newContacts = results.data
         .map((row, i) => mapRowToContact(row, i, true, bulkImportCategory))
         .filter(Boolean);
 
       if (newContacts.length === 0) {
         setImportStatus('No valid contacts found. Check that your file has a header row with at least a "name" column.');
         return;
+      }
+
+      // FREE TIER LIMIT: Cap at 10 contacts per import
+      if (!isPremium && newContacts.length > 10) {
+        setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
+        newContacts = newContacts.slice(0, 10);
       }
 
       const updated = [...contacts, ...newContacts];
@@ -1509,6 +1563,12 @@ export default function App() {
       if (newContacts.length === 0) {
         setImportStatus('No contacts found. Format: name, email, notes  (one per line)');
         return;
+      }
+
+      // FREE TIER LIMIT: Cap at 10 contacts per import for free users
+      if (!isPremium && newContacts.length > 10) {
+        setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
+        newContacts = newContacts.slice(0, 10);
       }
 
       const updated = [...contacts, ...newContacts];
@@ -1785,30 +1845,66 @@ export default function App() {
       </div>
       {/* Navigation */}
       <nav className="flex-1 px-4 space-y-1.5 mt-2">
-        <a className="flex items-center gap-3 px-4 py-3 bg-indigo-50 text-indigo-700 rounded-2xl font-bold" href="#">
+        <button
+          onClick={() => setCurrentView('dashboard')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${
+            currentView === 'dashboard'
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
           <span className="material-symbols-outlined">dashboard</span>
           Dashboard
-        </a>
-        <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-2xl transition-all" href="#">
+        </button>
+        <button
+          onClick={() => setCurrentView('contacts')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${
+            currentView === 'contacts'
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
           <span className="material-symbols-outlined">group</span>
           Contacts
-        </a>
-        <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-2xl transition-all" href="#">
+        </button>
+        <button
+          onClick={() => setCurrentView('deals')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${
+            currentView === 'deals'
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
           <span className="material-symbols-outlined">monetization_on</span>
           Deals
-        </a>
-        <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-2xl transition-all" href="#">
+        </button>
+        <button
+          onClick={() => setCurrentView('tasks')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${
+            currentView === 'tasks'
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
           <span className="material-symbols-outlined">checklist</span>
           Tasks
-        </a>
-        <a className="flex items-center gap-3 px-4 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 rounded-2xl transition-all" href="#">
+        </button>
+        <button
+          onClick={() => setCurrentView('analytics')}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${
+            currentView === 'analytics'
+              ? 'bg-indigo-50 text-indigo-700'
+              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+          }`}
+        >
           <span className="material-symbols-outlined">analytics</span>
           Analytics
-        </a>
+        </button>
       </nav>
       {/* User Profile */}
       <div className="p-6 mt-auto">
-        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 cursor-pointer hover:bg-slate-100 transition-all"
+             onClick={() => setShowBusinessProfile(true)}>
           <div className="flex items-center gap-3 mb-1">
             <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
               {user.name ? user.name[0].toUpperCase() : 'U'}
@@ -1817,6 +1913,7 @@ export default function App() {
               <p className="text-sm font-bold truncate">{user.name || 'User'}</p>
               <p className="text-[11px] text-slate-500">{isPremium ? 'Premium Account' : 'Free Account'}</p>
             </div>
+            <span className="material-symbols-outlined text-slate-400 text-sm">settings</span>
           </div>
         </div>
       </div>
@@ -3604,6 +3701,133 @@ export default function App() {
                   ))
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BUSINESS PROFILE MODAL */}
+      {showBusinessProfile && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6">
+              <div className="flex items-center justify-between text-white">
+                <div>
+                  <h2 className="text-2xl font-bold">Business Profile & Settings</h2>
+                  <p className="text-indigo-100 text-sm">Help AI personalize your outreach</p>
+                </div>
+                <button
+                  onClick={() => setShowBusinessProfile(false)}
+                  className="hover:bg-white/10 p-2 rounded-lg transition"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              {/* User Info */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Your Name</label>
+                <input
+                  type="text"
+                  value={user.name || ''}
+                  disabled
+                  className="w-full px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-slate-700"
+                />
+              </div>
+
+              {/* Business Name */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Business Name
+                </label>
+                <input
+                  type="text"
+                  value={businessProfile.businessName}
+                  onChange={(e) => setBusinessProfile({...businessProfile, businessName: e.target.value})}
+                  placeholder="e.g., Acme Corp"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              {/* Industry */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Industry
+                </label>
+                <input
+                  type="text"
+                  value={businessProfile.industry}
+                  onChange={(e) => setBusinessProfile({...businessProfile, industry: e.target.value})}
+                  placeholder="e.g., SaaS, E-commerce, Consulting"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              {/* Business Description */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  What does your business do?
+                </label>
+                <textarea
+                  value={businessProfile.description}
+                  onChange={(e) => setBusinessProfile({...businessProfile, description: e.target.value})}
+                  placeholder="Describe your products/services, what problems you solve..."
+                  rows="4"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  💡 This helps AI generate better, more relevant icebreakers and emails
+                </p>
+              </div>
+
+              {/* Target Audience */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Target Audience
+                </label>
+                <input
+                  type="text"
+                  value={businessProfile.targetAudience}
+                  onChange={(e) => setBusinessProfile({...businessProfile, targetAudience: e.target.value})}
+                  placeholder="e.g., Small business owners, Marketing directors"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              {/* Value Proposition */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Key Value Proposition
+                </label>
+                <input
+                  type="text"
+                  value={businessProfile.valueProposition}
+                  onChange={(e) => setBusinessProfile({...businessProfile, valueProposition: e.target.value})}
+                  placeholder="e.g., Save time, Increase revenue, Reduce costs"
+                  className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+              </div>
+
+              {/* Info Box */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <div className="flex gap-3">
+                  <span className="material-symbols-outlined text-blue-600">info</span>
+                  <div className="text-sm text-blue-800">
+                    <p className="font-semibold mb-1">Why this matters:</p>
+                    <p>This information is used by AI to generate personalized icebreakers and emails that are relevant to your business and audience. The more detail you provide, the better the AI output.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <button
+                onClick={() => setShowBusinessProfile(false)}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold transition"
+              >
+                Save Profile
+              </button>
             </div>
           </div>
         </div>
