@@ -1,6 +1,20 @@
 // api/generate-icebreaker.js
 // Serverless function to generate personalized icebreaker lines
 
+// Add this at the top
+const { contact, channel, businessProfile } = req.body;
+
+// Build context
+const businessContext = businessProfile?.description
+  ? `Business: ${businessProfile.businessName} - ${businessProfile.description}`
+  : '';
+
+// Include in prompt
+const prompt = `${businessContext}
+
+Contact: ${contact.name} at ${contact.company}
+Generate 3 ${channel} icebreakers...`;
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
