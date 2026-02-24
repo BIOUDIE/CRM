@@ -28,7 +28,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { contact, channel = 'linkedin' } = req.body;
+    const { contact, channel, businessProfile } = req.body;
+// Use businessProfile in your AI prompt for better context
 
     if (!contact || !contact.name) {
       return res.status(400).json({ error: 'Missing required field: contact.name' });
