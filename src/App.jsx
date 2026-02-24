@@ -1747,10 +1747,17 @@ export default function App() {
       lastContactDate: new Date().toISOString().split('T')[0]
     };
     
+    // Save individual contact
     await window.storage.set(`contact:${contact.id}`, JSON.stringify(updatedContact));
-    setContacts(prev => prev.map(c => 
+    
+    // Update contacts array
+    const updatedContacts = contacts.map(c => 
       c.id === contact.id ? updatedContact : c
-    ));
+    );
+    setContacts(updatedContacts);
+    
+    // Save entire contacts list
+    await saveContacts(updatedContacts);
     
     alert(`✅ ${contact.name} marked as contacted today!`);
   };
@@ -1758,6 +1765,7 @@ export default function App() {
   const handleBulkFocusContact = async () => {
     const today = new Date().toISOString().split('T')[0];
     
+    // Update all focus contacts
     const updates = focusContacts.map(async contact => {
       const updatedContact = {
         ...contact,
@@ -1767,12 +1775,18 @@ export default function App() {
       return updatedContact;
     });
     
-    await Promise.all(updates);
+    const updatedFocusContacts = await Promise.all(updates);
     
-    setContacts(prev => prev.map(c => {
-      const focusContact = focusContacts.find(fc => fc.id === c.id);
-      return focusContact ? { ...c, lastContactDate: today } : c;
-    }));
+    // Update contacts array
+    const updatedContacts = contacts.map(c => {
+      const focusContact = updatedFocusContacts.find(fc => fc.id === c.id);
+      return focusContact ? focusContact : c;
+    });
+    
+    setContacts(updatedContacts);
+    
+    // Save entire contacts list
+    await saveContacts(updatedContacts);
     
     setShowFocusModal(false);
     alert(`✅ ${focusContacts.length} contacts marked as contacted!`);
@@ -2887,6 +2901,71 @@ export default function App() {
                   ))}
                 </div>
               </div>
+              
+              {/* AI Generate Button */}
+              <div className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-indigo-600">auto_awesome</span>
+                    <span className="text-sm font-semibold text-gray-800">AI Email Generator</span>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (bulkEmailData.selectedContacts.length === 0) {
+                        alert('Please select at least one recipient first');
+                        return;
+                      }
+                      
+                      // Generate AI email content
+                      const firstContact = contacts.find(c => c.id === bulkEmailData.selectedContacts[0]);
+                      if (!firstContact) return;
+                      
+                      try {
+                        const response = await fetch('/api/generate-email', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            contact: firstContact,
+                            businessProfile,
+                            recipientCount: bulkEmailData.selectedContacts.length
+                          })
+                        });
+                        
+                        if (response.ok) {
+                          const data = await response.json();
+                          setBulkEmailData({
+                            ...bulkEmailData,
+                            subject: data.subject || bulkEmailData.subject,
+                            body: data.body || bulkEmailData.body
+                          });
+                        } else {
+                          // Fallback if API not available yet
+                          const businessContext = businessProfile.description 
+                            ? `\n\nContext: ${businessProfile.businessName || 'Our company'} - ${businessProfile.description}`
+                            : '';
+                          
+                          setBulkEmailData({
+                            ...bulkEmailData,
+                            subject: bulkEmailData.subject || `Quick check-in from ${businessProfile.businessName || 'us'}`,
+                            body: bulkEmailData.body || `Hi {firstName},\n\nHope you're doing well! ${businessContext}\n\nI wanted to reach out and see how things are going.\n\nBest regards,\n${businessProfile.businessName || 'Your Name'}`
+                          });
+                        }
+                      } catch (error) {
+                        alert('AI generation not available. Please write manually.');
+                      }
+                    }}
+                    disabled={bulkEmailData.selectedContacts.length === 0}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white text-sm font-semibold rounded-lg transition flex items-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                    Generate with AI
+                  </button>
+                </div>
+                <p className="text-xs text-gray-600">
+                  AI will use your business profile to generate personalized email content
+                </p>
+              </div>
+              
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
                 <input type="text" value={bulkEmailData.subject}
@@ -3823,7 +3902,22 @@ export default function App() {
 
               {/* Save Button */}
               <button
-                onClick={() => setShowBusinessProfile(false)}
+                onClick={() => {
+                  // Show success message
+                  const tempDiv = document.createElement('div');
+                  tempDiv.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-500 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+                  tempDiv.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Business profile saved successfully!';
+                  document.body.appendChild(tempDiv);
+                  
+                  setTimeout(() => {
+                    tempDiv.remove();
+                  }, 3000);
+                  
+                  // Close modal after short delay
+                  setTimeout(() => {
+                    setShowBusinessProfile(false);
+                  }, 500);
+                }}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold transition"
               >
                 Save Profile
