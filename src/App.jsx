@@ -749,6 +749,18 @@ export default function App() {
   const videoRef = React.useRef(null);
   const streamRef = React.useRef(null);
 
+  // --- TODAY'S FOCUS MODAL STATES ---
+  const [showFocusModal, setShowFocusModal] = useState(false);
+  const [showFocusSettings, setShowFocusSettings] = useState(false);
+  const [focusSettings, setFocusSettings] = useState(() => {
+    const saved = localStorage.getItem('focus_settings');
+    return saved ? JSON.parse(saved) : {
+      enabled: true,
+      dayThreshold: 7,
+      vibeScoreMin: 8
+    };
+  });
+
   // --- SMART EXTRACT: parse any text for all contact fields ---
   const extractFromText = (text) => {
     const detected = [];
@@ -970,16 +982,30 @@ export default function App() {
   const FREE_CONTACT_LIMIT = 10;
   const atFreeLimit = !isPremium && contacts.length >= FREE_CONTACT_LIMIT;
 
-  // --- TODAY'S 3: Hot contacts not reached in 7+ days ---
-  const todaysThree = contacts
-    .filter(c => {
-      const isHot = c.vibeLabel === 'hot' || c.vibeScore >= 8;
-      const days = c.lastContactDate
-        ? Math.ceil((new Date() - new Date(c.lastContactDate)) / (1000 * 60 * 60 * 24))
-        : 999;
-      return isHot && days >= 7;
-    })
-    .slice(0, 3);
+  // --- Persist focus settings to localStorage ---
+  useEffect(() => {
+    localStorage.setItem('focus_settings', JSON.stringify(focusSettings));
+  }, [focusSettings]);
+
+  // --- TODAY'S FOCUS: Hot contacts not reached in X days (user configurable) ---
+  const focusContacts = React.useMemo(() => {
+    if (!focusSettings.enabled) return [];
+    
+    return contacts
+      .filter(c => {
+        const isHot = c.vibeLabel === 'hot' || c.vibeScore >= focusSettings.vibeScoreMin;
+        const days = c.lastContactDate
+          ? Math.ceil((new Date() - new Date(c.lastContactDate)) / (1000 * 60 * 60 * 24))
+          : 999;
+        return isHot && days >= focusSettings.dayThreshold;
+      })
+      .sort((a, b) => {
+        // Sort by days since contact (oldest first)
+        const daysA = a.lastContactDate ? Math.ceil((new Date() - new Date(a.lastContactDate)) / (1000 * 60 * 60 * 24)) : 999;
+        const daysB = b.lastContactDate ? Math.ceil((new Date() - new Date(b.lastContactDate)) / (1000 * 60 * 60 * 24)) : 999;
+        return daysB - daysA;
+      });
+  }, [contacts, focusSettings]);
 
   // Load PapaParse from CDN once on mount so CSV parsing is available
   useEffect(() => {
@@ -1645,6 +1671,53 @@ export default function App() {
     return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
+  // --- FOCUS MODAL HELPERS ---
+  const getDaysSinceContact = (contact) => {
+    if (!contact.lastContactDate) return 999;
+    const lastDate = new Date(contact.lastContactDate);
+    const today = new Date();
+    const diffTime = Math.abs(today - lastDate);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const handleQuickContact = async (contact) => {
+    const updatedContact = {
+      ...contact,
+      lastContactDate: new Date().toISOString().split('T')[0]
+    };
+    
+    await window.storage.set(`contact:${contact.id}`, JSON.stringify(updatedContact));
+    setContacts(prev => prev.map(c => 
+      c.id === contact.id ? updatedContact : c
+    ));
+    
+    alert(`✅ ${contact.name} marked as contacted today!`);
+  };
+
+  const handleBulkFocusContact = async () => {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const updates = focusContacts.map(async contact => {
+      const updatedContact = {
+        ...contact,
+        lastContactDate: today
+      };
+      await window.storage.set(`contact:${contact.id}`, JSON.stringify(updatedContact));
+      return updatedContact;
+    });
+    
+    await Promise.all(updates);
+    
+    setContacts(prev => prev.map(c => {
+      const focusContact = focusContacts.find(fc => fc.id === c.id);
+      return focusContact ? { ...c, lastContactDate: today } : c;
+    }));
+    
+    setShowFocusModal(false);
+    alert(`✅ ${focusContacts.length} contacts marked as contacted!`);
+  };
+
   const getVibeColor = (score) => {
     if (score >= 8) return 'bg-green-100 text-green-600';
     if (score >= 5) return 'bg-yellow-100 text-yellow-600';
@@ -1897,32 +1970,6 @@ export default function App() {
         {/* Header Row: Welcome + Premium */}
         <HeaderSection />
 
-
-        {/* TODAY'S 3 — Hot contacts needing a nudge */}
-        {todaysThree.length > 0 && (
-          <div className="bg-gradient-to-r from-orange-50 to-red-50 border border-orange-200 rounded-xl p-5">
-            <h2 className="text-base font-bold text-orange-700 mb-3 flex items-center gap-2">
-              🔥 Today's Focus — Reach out to these 3
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {todaysThree.map(contact => {
-                const days = daysSinceContact(contact.lastContactDate);
-                return (
-                  <div key={contact.id}
-                    onClick={() => setSelectedContact(contact)}
-                    className="bg-white border border-orange-100 rounded-xl p-4 cursor-pointer hover:shadow-md transition flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-lg flex-shrink-0">🔥</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-gray-800 truncate">{contact.name}</p>
-                      <p className="text-xs text-orange-600">{days ? `${days}d since contact` : 'Never contacted'}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Search, Actions and Sort/Filter */}
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-3">
 
@@ -1939,6 +1986,25 @@ export default function App() {
                 className="flex-1 md:flex-none bg-indigo-600 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 transition">
                 <span className="material-symbols-outlined text-[20px]">analytics</span> Analytics
               </button>
+              
+              {/* TODAY'S FOCUS BUTTON */}
+              <button
+                onClick={() => setShowFocusModal(true)}
+                className={`flex-1 md:flex-none ${
+                  focusContacts.length > 0
+                    ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                    : 'bg-white border border-slate-300 text-slate-600 hover:bg-slate-50'
+                } px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition`}
+              >
+                <span className="material-symbols-outlined text-[20px]">priority_high</span>
+                <span className="hidden sm:inline">Focus</span>
+                {focusContacts.length > 0 && (
+                  <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs font-bold">
+                    {focusContacts.length}
+                  </span>
+                )}
+              </button>
+              
               <button onClick={() => setShowAddModal(true)}
                 className="flex-1 md:flex-none bg-blue-600 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition">
                 <span className="material-symbols-outlined text-[20px]">add</span> Add
@@ -3344,6 +3410,208 @@ export default function App() {
         )}
 
       </main>
+
+      {/* TODAY'S FOCUS MODAL */}
+      {showFocusModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
+            
+            {/* Header */}
+            <div className="bg-gradient-to-r from-orange-500 to-red-600 p-6">
+              <div className="flex items-center justify-between text-white">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-4xl">priority_high</span>
+                  <div>
+                    <h2 className="text-2xl font-bold">🔥 Today's Focus</h2>
+                    <p className="text-orange-100 text-sm">Hot contacts that need attention</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowFocusModal(false)}
+                  className="hover:bg-white/10 p-2 rounded-lg transition"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Settings Section */}
+            <div className="border-b border-slate-200 p-6 bg-slate-50">
+              <button
+                onClick={() => setShowFocusSettings(!showFocusSettings)}
+                className="flex items-center justify-between w-full text-left group"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-slate-600">settings</span>
+                  <span className="font-semibold text-slate-800">Focus Settings</span>
+                </div>
+                <span className="material-symbols-outlined text-slate-400 group-hover:text-slate-600">
+                  {showFocusSettings ? 'expand_less' : 'expand_more'}
+                </span>
+              </button>
+
+              {showFocusSettings && (
+                <div className="mt-4 space-y-4 pl-8">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Show contacts not contacted in last:
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min="1"
+                        max="90"
+                        value={focusSettings.dayThreshold}
+                        onChange={(e) => setFocusSettings({
+                          ...focusSettings,
+                          dayThreshold: parseInt(e.target.value) || 7
+                        })}
+                        className="w-20 px-3 py-2 border border-slate-300 rounded-xl text-center font-bold text-lg"
+                      />
+                      <span className="text-slate-600">days</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Quick presets:</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {[3, 7, 14, 30].map(days => (
+                        <button
+                          key={days}
+                          onClick={() => setFocusSettings({...focusSettings, dayThreshold: days})}
+                          className={`px-3 py-1.5 border rounded-lg text-sm font-medium transition ${
+                            focusSettings.dayThreshold === days
+                              ? 'bg-orange-500 text-white border-orange-500'
+                              : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          {days} day{days !== 1 ? 's' : ''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                    <div className="flex gap-2">
+                      <span className="material-symbols-outlined text-blue-600 text-sm">info</span>
+                      <div className="text-xs text-blue-800">
+                        <p className="font-semibold mb-1">How it works:</p>
+                        <p>Focus shows all 🔥 Hot contacts (vibe score ≥8) that you haven't contacted in {focusSettings.dayThreshold}+ days.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Contact List */}
+            <div className="p-6">
+              <div className="mb-4 flex items-center justify-between">
+                <div className="text-sm text-slate-600">
+                  <span className="font-bold text-slate-800">{focusContacts.length}</span> contact
+                  {focusContacts.length !== 1 ? 's' : ''} need{focusContacts.length === 1 ? 's' : ''} attention
+                </div>
+                {focusContacts.length > 0 && (
+                  <button
+                    onClick={handleBulkFocusContact}
+                    className="text-sm text-orange-600 hover:text-orange-700 font-semibold flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-base">done_all</span>
+                    Mark all contacted
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                {focusContacts.length === 0 ? (
+                  <div className="text-center py-12">
+                    <span className="material-symbols-outlined text-6xl text-green-500">check_circle</span>
+                    <h3 className="text-lg font-bold text-slate-800 mt-4">All caught up!</h3>
+                    <p className="text-slate-600 text-sm">No hot contacts need attention right now.</p>
+                  </div>
+                ) : (
+                  focusContacts.map(contact => (
+                    <div
+                      key={contact.id}
+                      onClick={() => {
+                        setShowFocusModal(false);
+                        setSelectedContact(contact);
+                      }}
+                      className="bg-white border border-slate-200 rounded-2xl p-4 hover:border-orange-300 hover:bg-orange-50 cursor-pointer transition-all group"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-2xl">🔥</span>
+                            <h3 className="font-bold text-slate-800 text-lg">{contact.name}</h3>
+                          </div>
+                          
+                          <div className="text-sm text-slate-600 space-y-1">
+                            {contact.company && (
+                              <div className="flex items-center gap-1">
+                                <span className="material-symbols-outlined text-xs">business</span>
+                                {contact.company}
+                              </div>
+                            )}
+                            {contact.email && (
+                              <div className="flex items-center gap-1">
+                                <span className="material-symbols-outlined text-xs">mail</span>
+                                {contact.email}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="mt-2 flex items-center gap-2">
+                            <div className="flex-1 bg-slate-100 rounded-full h-2">
+                              <div
+                                className="bg-gradient-to-r from-orange-400 to-red-500 h-2 rounded-full"
+                                style={{ width: `${(contact.vibeScore / 10) * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-bold text-slate-700">{contact.vibeScore}/10</span>
+                          </div>
+                        </div>
+
+                        <div className="text-right ml-4">
+                          <div className="bg-orange-100 text-orange-800 px-3 py-1.5 rounded-xl text-xs font-bold">
+                            {getDaysSinceContact(contact)} days
+                          </div>
+                          <div className="text-xs text-slate-500 mt-1">since contact</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-slate-100 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleQuickContact(contact);
+                          }}
+                          className="flex-1 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-semibold hover:bg-orange-600 flex items-center justify-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">check</span>
+                          Mark Contacted
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowFocusModal(false);
+                            setShowIcebreaker(true);
+                            setIcebreakerContact(contact);
+                          }}
+                          className="flex-1 px-3 py-1.5 bg-indigo-500 text-white rounded-lg text-sm font-semibold hover:bg-indigo-600 flex items-center justify-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">auto_awesome</span>
+                          Icebreaker
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile FAB */}
       <MobileFAB />
