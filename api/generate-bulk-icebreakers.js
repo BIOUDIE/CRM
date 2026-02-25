@@ -28,8 +28,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Get data from request - INCLUDING businessProfile
     const { contacts, channel, businessProfile } = req.body;
-// Use businessProfile in your AI prompt
 
     if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
       return res.status(400).json({ error: 'Missing required field: contacts (array)' });
@@ -45,6 +45,21 @@ export default async function handler(req, res) {
     const channelLabel = channel === 'linkedin' ? 'LinkedIn DM' : 'email opener';
     const results = {};
 
+    // BUILD BUSINESS CONTEXT - This is the key addition!
+    let businessContext = '';
+    if (businessProfile && businessProfile.description) {
+      businessContext = `
+
+YOUR BUSINESS CONTEXT (use this to make messages relevant):
+- Business Name: ${businessProfile.businessName || 'Not specified'}
+- Industry: ${businessProfile.industry || 'Not specified'}
+- What You Do: ${businessProfile.description}
+- Target Audience: ${businessProfile.targetAudience || 'Not specified'}
+- Value Proposition: ${businessProfile.valueProposition || 'Not specified'}
+
+Make the icebreakers mention how YOUR business can help THEIR business.`;
+    }
+
     // Process each contact sequentially
     for (const contact of contacts) {
       if (!contact.id || !contact.name) {
@@ -52,9 +67,11 @@ export default async function handler(req, res) {
         continue;
       }
 
+      // CREATE PROMPT FOR THIS CONTACT - Now includes business context
       const prompt = `You are a warm, natural-sounding sales coach helping a solopreneur reconnect with a contact.
+${businessContext}
 
-Contact details:
+CONTACT DETAILS:
 - Name: ${contact.name}
 - Company: ${contact.company || 'not specified'}
 - Job Title: ${contact.jobTitle || 'not specified'}
@@ -62,9 +79,12 @@ Contact details:
 - Notes: ${contact.notes || 'none'}
 - Last contacted: ${contact.lastContactDate ? new Date(contact.lastContactDate).toLocaleDateString() : 'never'}
 
-Write exactly 3 distinct personalized opening lines for a ${channelLabel}. Rules:
+Write exactly 3 distinct personalized opening lines for a ${channelLabel}. 
+
+RULES:
 - Each line must feel human, warm, and specific — not generic or salesy
 - Each must reference something concrete from their details above
+${businessContext ? '- Each should mention how YOUR business can help THEIR business' : ''}
 - Each must be 1–2 sentences, ready to send as-is
 - Vary the tone: one casual, one professional, one curious/question-based
 - ${channel === 'email' ? 'Include a natural subject line before each message, separated by " | "' : 'No subject line needed — just the opening message'}
