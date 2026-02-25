@@ -1,20 +1,6 @@
 // api/generate-icebreaker.js
 // Serverless function to generate personalized icebreaker lines
 
-// Add this at the top
-const { contact, channel, businessProfile } = req.body;
-
-// Build context
-const businessContext = businessProfile?.description
-  ? `Business: ${businessProfile.businessName} - ${businessProfile.description}`
-  : '';
-
-// Include in prompt
-const prompt = `${businessContext}
-
-Contact: ${contact.name} at ${contact.company}
-Generate 3 ${channel} icebreakers...`;
-
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -42,8 +28,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Get data from request - INCLUDING businessProfile
     const { contact, channel, businessProfile } = req.body;
-// Use businessProfile in your AI prompt for better context
 
     if (!contact || !contact.name) {
       return res.status(400).json({ error: 'Missing required field: contact.name' });
@@ -51,9 +37,26 @@ export default async function handler(req, res) {
 
     const channelLabel = channel === 'linkedin' ? 'LinkedIn DM' : 'email opener';
 
-    const prompt = `You are a warm, natural-sounding sales coach helping a solopreneur reconnect with a contact.
+    // BUILD BUSINESS CONTEXT - This is the key addition!
+    let businessContext = '';
+    if (businessProfile && businessProfile.description) {
+      businessContext = `
 
-Contact details:
+YOUR BUSINESS CONTEXT (use this to make messages relevant):
+- Business Name: ${businessProfile.businessName || 'Not specified'}
+- Industry: ${businessProfile.industry || 'Not specified'}
+- What You Do: ${businessProfile.description}
+- Target Audience: ${businessProfile.targetAudience || 'Not specified'}
+- Value Proposition: ${businessProfile.valueProposition || 'Not specified'}
+
+Make the icebreakers mention how YOUR business can help THEIR business.`;
+    }
+
+    // CREATE PROMPT - Now includes business context
+    const prompt = `You are a warm, natural-sounding sales coach helping a solopreneur reconnect with a contact.
+${businessContext}
+
+CONTACT DETAILS:
 - Name: ${contact.name}
 - Company: ${contact.company || 'not specified'}
 - Job Title: ${contact.jobTitle || 'not specified'}
@@ -61,9 +64,12 @@ Contact details:
 - Notes: ${contact.notes || 'none'}
 - Last contacted: ${contact.lastContactDate ? new Date(contact.lastContactDate).toLocaleDateString() : 'never'}
 
-Write exactly 3 distinct personalized opening lines for a ${channelLabel}. Rules:
+Write exactly 3 distinct personalized opening lines for a ${channelLabel}. 
+
+RULES:
 - Each line must feel human, warm, and specific — not generic or salesy
 - Each must reference something concrete from their details above
+${businessContext ? '- Each should mention how YOUR business can help THEIR business' : ''}
 - Each must be 1–2 sentences, ready to send as-is
 - Vary the tone: one casual, one professional, one curious/question-based
 - ${channel === 'email' ? 'Include a natural subject line before each message, separated by " | "' : 'No subject line needed — just the opening message'}
