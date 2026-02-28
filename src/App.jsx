@@ -1,5 +1,26 @@
 import React, { useState, useEffect } from 'react';
 
+// ===== SUPPRESS METAMASK/WALLET ERRORS =====
+// These errors are caused by browser extensions and don't affect the app
+if (typeof window !== 'undefined') {
+  const originalError = console.error;
+  console.error = (...args) => {
+    const errorString = args.join(' ');
+    // Suppress MetaMask and wallet extension errors
+    if (
+      errorString.includes('MetaMask') ||
+      errorString.includes('ethereum') ||
+      errorString.includes('evmAsk') ||
+      errorString.includes('inpage.js') ||
+      errorString.includes('wallet extension')
+    ) {
+      return; // Silently ignore these errors
+    }
+    originalError.apply(console, args);
+  };
+}
+// ===== END ERROR SUPPRESSION =====
+
 // ===== CRITICAL FIX: localStorage wrapper =====
 // window.storage API only exists in Claude artifacts, not in browsers
 // This wrapper makes the app work in regular web browsers
@@ -784,6 +805,45 @@ export default function App() {
     useAI: false,
     selectedContacts: []
   });
+
+  // ===== EMERGENCY MODAL ESCAPE SYSTEM =====
+  // Close all modals with ESC key
+  useEffect(() => {
+    const handleEscapeKey = (e) => {
+      if (e.key === 'Escape') {
+        // Close all modals
+        setSelectedContact(null);
+        setShowAddModal(false);
+        setShowBulkImport(false);
+        setShowBulkEmail(false);
+        setShowBulkUpdate(false);
+        setShowPremiumModal(false);
+        setShowAnalytics(false);
+        setShowCategoryManager(false);
+        setShowIcebreaker(false);
+        setShowBulkIcebreaker(false);
+        setShowFocusModal(false);
+        setShowBusinessProfile(false);
+        setShowEmailComposer(false);
+        console.log('✅ All modals closed via ESC key');
+      }
+    };
+    
+    window.addEventListener('keydown', handleEscapeKey);
+    return () => window.removeEventListener('keydown', handleEscapeKey);
+  }, []);
+
+  // Auto-close loading screen after 3 seconds as failsafe
+  useEffect(() => {
+    if (isLoading) {
+      const timer = setTimeout(() => {
+        console.log('⚠️ Loading timeout - forcing app to load');
+        setIsLoading(false);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
+  // ===== END EMERGENCY SYSTEM =====
 
   // --- SMART EXTRACT: parse any text for all contact fields ---
   const extractFromText = (text) => {
