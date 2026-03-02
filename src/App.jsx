@@ -2055,10 +2055,16 @@ const Sidebar = () => (
   const HeaderSection = () => (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
       {/* Welcome Card */}
-      <div className="lg:col-span-5 bg-white px-4 py-3 lg:p-6 rounded-2xl lg:rounded-3xl border border-slate-200 shadow-sm flex flex-col justify-between">
+      <div className={`lg:col-span-5 px-4 py-3 lg:p-6 rounded-2xl lg:rounded-3xl border shadow-sm flex flex-col justify-between ${
+        darkMode 
+          ? 'bg-slate-800 border-slate-700' 
+          : 'bg-white border-slate-200'
+      }`}>
         <div>
           <div className="flex justify-between items-start mb-4">
-            <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+            <h2 className={`text-xl font-bold flex items-center gap-2 ${
+              darkMode ? 'text-white' : 'text-slate-800'
+            }`}>
               Micro-CRM
               {isPremium && (
                 <span className="bg-gradient-to-r from-yellow-400 to-yellow-600 text-white text-xs px-2 py-1 rounded-full flex items-center gap-1">
@@ -2066,12 +2072,18 @@ const Sidebar = () => (
                 </span>
               )}
             </h2>
-            <button onClick={handleLogout} className="text-slate-400 hover:text-red-500 transition">
+            <button onClick={handleLogout} className={`transition ${
+              darkMode 
+                ? 'text-slate-400 hover:text-red-400' 
+                : 'text-slate-400 hover:text-red-500'
+            }`}>
               <span className="material-symbols-outlined">logout</span>
             </button>
           </div>
-          <p className="text-slate-500 text-sm">
-            Welcome back, <span className="font-semibold text-slate-800 uppercase">{user.name || 'User'}</span>
+          <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            Welcome back, <span className={`font-semibold uppercase ${
+              darkMode ? 'text-white' : 'text-slate-800'
+            }`}>{user.name || 'User'}</span>
           </p>
         </div>
       </div>
@@ -2099,20 +2111,38 @@ const Sidebar = () => (
 
   // Empty State Component
   const EmptyState = () => (
-    <section className="bg-white rounded-3xl border border-slate-200 shadow-sm min-h-[450px] flex flex-col items-center justify-center p-8 text-center">
+    <section className={`rounded-3xl border shadow-sm min-h-[450px] flex flex-col items-center justify-center p-8 text-center ${
+      darkMode 
+        ? 'bg-slate-800 border-slate-700' 
+        : 'bg-white border-slate-200'
+    }`}>
       <div className="w-64 h-64 mb-8 relative">
-        <div className="absolute inset-0 bg-indigo-50 rounded-full scale-90 blur-3xl opacity-60"></div>
+        <div className={`absolute inset-0 rounded-full scale-90 blur-3xl opacity-60 ${
+          darkMode ? 'bg-indigo-900' : 'bg-indigo-50'
+        }`}></div>
         <div className="relative w-full h-full flex items-center justify-center">
           <div className="relative">
-            <span className="material-symbols-outlined text-[120px] text-indigo-200">group</span>
-            <div className="absolute -top-4 -right-4 w-16 h-16 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-50">
-              <span className="material-symbols-outlined text-indigo-500 text-3xl">add_circle</span>
+            <span className={`material-symbols-outlined text-[120px] ${
+              darkMode ? 'text-indigo-700' : 'text-indigo-200'
+            }`}>group</span>
+            <div className={`absolute -top-4 -right-4 w-16 h-16 rounded-2xl shadow-xl flex items-center justify-center border ${
+              darkMode 
+                ? 'bg-slate-700 border-slate-600' 
+                : 'bg-white border-slate-50'
+            }`}>
+              <span className={`material-symbols-outlined text-3xl ${
+                darkMode ? 'text-indigo-400' : 'text-indigo-500'
+              }`}>add_circle</span>
             </div>
           </div>
         </div>
       </div>
-      <h2 className="text-2xl font-extrabold text-slate-800 mb-2">No contacts yet</h2>
-      <p className="text-slate-500 max-w-sm mb-10 text-lg leading-relaxed">
+      <h2 className={`text-2xl font-extrabold mb-2 ${
+        darkMode ? 'text-white' : 'text-slate-800'
+      }`}>No contacts yet</h2>
+      <p className={`max-w-sm mb-10 text-lg leading-relaxed ${
+        darkMode ? 'text-slate-400' : 'text-slate-500'
+      }`}>
         Start building your network by adding your first contact or importing your existing database.
       </p>
       <button onClick={() => setShowAddModal(true)}
@@ -2120,7 +2150,7 @@ const Sidebar = () => (
         <span className="material-symbols-outlined">add</span>
         Add Your First Contact
       </button>
-      <p className="mt-6 text-sm text-slate-400">
+      <p className={`mt-6 text-sm ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
         Or <button onClick={() => setShowBulkImport(true)} className="text-indigo-500 font-bold hover:underline">upload a CSV file</button> to get started instantly
       </p>
     </section>
@@ -2218,14 +2248,24 @@ const Sidebar = () => (
         <HeaderSection />
 
         {/* Search, Actions and Sort/Filter */}
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 space-y-3">
+        <div className={`p-4 rounded-xl shadow-sm border space-y-3 ${
+          darkMode 
+            ? 'bg-slate-800 border-slate-700' 
+            : 'bg-white border-gray-100'
+        }`}>
 
           {/* Row 1: Search + action buttons */}
           <div className="flex flex-col md:flex-row gap-3 items-center">
             <div className="relative flex-1 w-full">
-              <span className="material-symbols-outlined text-[20px] text-gray-400 absolute left-4 top-1/2 -translate-y-1/2">search</span>
+              <span className={`material-symbols-outlined text-[20px] absolute left-4 top-1/2 -translate-y-1/2 ${
+                darkMode ? 'text-slate-500' : 'text-gray-400'
+              }`}>search</span>
               <input type="text" placeholder="Search name, email, company, notes..."
-                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20"
+                className={`w-full pl-12 pr-4 py-3 border rounded-xl outline-none focus:ring-2 ${
+                  darkMode
+                    ? 'bg-slate-700 border-slate-600 text-white placeholder-slate-400 focus:ring-indigo-500/20'
+                    : 'bg-gray-50 border-gray-200 focus:ring-blue-500/20'
+                }`}
                 onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
             <div className="flex gap-2 w-full md:w-auto flex-wrap">
@@ -2274,7 +2314,9 @@ const Sidebar = () => (
 
           {/* Row 2: Sort bar + Filter toggle + Category manager */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide mr-1">Sort:</span>
+            <span className={`text-xs font-semibold uppercase tracking-wide mr-1 ${
+              darkMode ? 'text-slate-500' : 'text-gray-400'
+            }`}>Sort:</span>
             {[
               { id: 'name',        label: 'Name' },
               { id: 'lastContact', label: 'Last Contact' },
@@ -2284,7 +2326,13 @@ const Sidebar = () => (
             ].map(s => (
               <button key={s.id} onClick={() => toggleSort(s.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
-                  sortBy === s.id ? 'bg-slate-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  sortBy === s.id 
+                    ? darkMode 
+                      ? 'bg-indigo-600 text-white' 
+                      : 'bg-slate-800 text-white'
+                    : darkMode
+                      ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}>
                 {s.label}
                 {sortBy === s.id && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
