@@ -2660,122 +2660,226 @@ const Sidebar = () => (
                 </div>
               )}
 
-              {/* ✨ MAGIC PASTE — type or paste any text, fields auto-fill instantly */}
-              <div className="bg-violet-50 border border-violet-200 rounded-xl p-4">
-                <label className="block text-sm font-bold text-violet-700 mb-2 flex items-center gap-2">
-                  ✨ Magic Paste
-                  <span className="text-[10px] font-normal text-violet-400">— type or paste anything below</span>
-                </label>
-                <textarea
-                  rows="4"
-                  placeholder={`Just type or paste anything — name, number, email, title — fields fill automatically:\n\nJohn Smith\njohn@acme.com\n+1 555 123 4567\nAcme Corp — Sales Director`}
-                  value={smartCaptureText}
-                  onChange={(e) => handleSmartType(e.target.value)}
-                  className="w-full p-3 bg-white rounded-xl border border-violet-200 outline-none focus:ring-2 focus:ring-violet-400 text-sm resize-none font-mono"
-                />
-                {scanFeedback.length > 0 && smartCaptureText.length > 0 && !scanPreview && (
-                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="text-xs font-semibold text-gray-700 mb-1">✅ Auto-filled {scanFeedback.length} field{scanFeedback.length !== 1 ? 's' : ''}:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {scanFeedback.map((f, i) => (
-                        <span key={i} className="bg-white border border-green-200 text-green-700 text-[10px] px-2 py-0.5 rounded-full">{f}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              {/* COMPACT SMART CAPTURE BUTTONS */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMagicPaste(!showMagicPaste);
+                    if (showScanCapture) setShowScanCapture(false);
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
+                    showMagicPaste
+                      ? darkMode ? 'bg-violet-600 text-white shadow-lg' : 'bg-violet-600 text-white shadow-lg'
+                      : darkMode
+                        ? 'bg-violet-900/30 text-violet-400 hover:bg-violet-900/50'
+                        : 'bg-violet-50 text-violet-700 hover:bg-violet-100'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-xl">auto_fix_high</span>
+                  <span>Magic Paste</span>
+                  <span className="material-symbols-outlined text-sm">
+                    {showMagicPaste ? 'expand_less' : 'expand_more'}
+                  </span>
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowScanCapture(!showScanCapture);
+                    if (showMagicPaste) setShowMagicPaste(false);
+                  }}
+                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
+                    showScanCapture
+                      ? darkMode ? 'bg-indigo-600 text-white shadow-lg' : 'bg-indigo-600 text-white shadow-lg'
+                      : darkMode
+                        ? 'bg-indigo-900/30 text-indigo-400 hover:bg-indigo-900/50'
+                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-xl">photo_camera</span>
+                  <span>Scan Card</span>
+                  <span className="material-symbols-outlined text-sm">
+                    {showScanCapture ? 'expand_less' : 'expand_more'}
+                  </span>
+                </button>
               </div>
 
-              {/* 📸 SCAN TO FILL — camera or image upload, AI extracts everything */}
-              <div className="bg-gradient-to-br from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <label className="text-sm font-bold text-indigo-700 flex items-center gap-2">
-                    <span className="material-symbols-outlined text-[16px]">description</span> Scan to Fill
-                    <span className="text-[10px] font-normal text-indigo-400 bg-indigo-100 px-2 py-0.5 rounded-full">AI-powered</span>
+              {/* EXPANDABLE MAGIC PASTE SECTION */}
+              {showMagicPaste && (
+                <div className={`mb-4 p-4 rounded-xl border ${
+                  darkMode 
+                    ? 'bg-violet-900/20 border-violet-800'
+                    : 'bg-violet-50 border-violet-200'
+                }`}>
+                  <label className={`block text-sm font-bold mb-2 flex items-center gap-2 ${
+                    darkMode ? 'text-violet-400' : 'text-violet-700'
+                  }`}>
+                    ✨ Magic Paste
+                    <span className={`text-[10px] font-normal ${
+                      darkMode ? 'text-violet-500' : 'text-violet-400'
+                    }`}>— type or paste anything below</span>
                   </label>
-                  {(scanPreview || scanMode === 'camera') && (
-                    <button type="button" onClick={() => { stopCamera(); setScanMode('idle'); setScanPreview(null); setScanFeedback([]); }}
-                      className="text-xs text-indigo-400 hover:text-indigo-700 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[12px]">close</span> Reset
-                    </button>
+                  <textarea
+                    rows="4"
+                    placeholder={`Just type or paste anything — name, number, email, title — fields fill automatically:\n\nJohn Smith\njohn@acme.com\n+1 555 123 4567\nAcme Corp — Sales Director`}
+                    value={smartCaptureText}
+                    onChange={(e) => handleSmartType(e.target.value)}
+                    className={`w-full p-3 rounded-xl border outline-none focus:ring-2 text-sm resize-none font-mono ${
+                      darkMode
+                        ? 'bg-slate-800 border-slate-600 text-white focus:ring-violet-500'
+                        : 'bg-white border-violet-200 focus:ring-violet-400'
+                    }`}
+                  />
+                  {scanFeedback.length > 0 && smartCaptureText.length > 0 && !scanPreview && (
+                    <div className={`mt-2 p-2 rounded-lg border ${
+                      darkMode 
+                        ? 'bg-green-900/20 border-green-800'
+                        : 'bg-green-50 border-green-200'
+                    }`}>
+                      <p className={`text-xs font-semibold mb-1 ${
+                        darkMode ? 'text-slate-300' : 'text-gray-700'
+                      }`}>✅ Auto-filled {scanFeedback.length} field{scanFeedback.length !== 1 ? 's' : ''}:</p>
+                      <div className="flex flex-wrap gap-1">
+                        {scanFeedback.map((f, i) => (
+                          <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                            darkMode
+                              ? 'bg-green-900/30 border-green-700 text-green-400'
+                              : 'bg-white border-green-200 text-green-700'
+                          }`}>{f}</span>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
-                <p className="text-xs text-indigo-500 mb-3">Point your camera at a business card, flier, name tag, email, or any document — AI reads and fills every field.</p>
+              )}
 
-                {/* Scan action buttons — shown when idle */}
-                {scanMode !== 'camera' && !scanPreview && (
-                  <div className="flex gap-2">
-                    <button type="button" onClick={startCamera}
-                      className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
-                      📷 Open Camera
-                    </button>
-                    <label className="flex-1 cursor-pointer">
-                      <div className="bg-white border-2 border-indigo-300 text-indigo-700 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-indigo-50 transition">
-                        🖼️ Upload Image
-                      </div>
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+              {/* EXPANDABLE SCAN TO FILL SECTION */}
+              {showScanCapture && (
+                <div className={`mb-4 p-4 rounded-xl border ${
+                  darkMode 
+                    ? 'bg-indigo-900/20 border-indigo-800'
+                    : 'bg-gradient-to-br from-indigo-50 to-blue-50 border-indigo-200'
+                }`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className={`text-sm font-bold flex items-center gap-2 ${
+                      darkMode ? 'text-indigo-400' : 'text-indigo-700'
+                    }`}>
+                      <span className="material-symbols-outlined text-[16px]">description</span> Scan to Fill
+                      <span className={`text-[10px] font-normal px-2 py-0.5 rounded-full ${
+                        darkMode 
+                          ? 'text-indigo-400 bg-indigo-900/30'
+                          : 'text-indigo-400 bg-indigo-100'
+                      }`}>AI-powered</span>
                     </label>
-                  </div>
-                )}
-
-                {/* Live camera view */}
-                {scanMode === 'camera' && (
-                  <div className="space-y-3">
-                    <div className="relative bg-black rounded-xl overflow-hidden" style={{aspectRatio:'4/3'}}>
-                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                      {/* Corner guides */}
-                      <div className="absolute inset-4 pointer-events-none">
-                        <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-white rounded-tl"></div>
-                        <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-white rounded-tr"></div>
-                        <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-white rounded-bl"></div>
-                        <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-white rounded-br"></div>
-                      </div>
-                      <p className="absolute bottom-2 left-0 right-0 text-center text-white text-[10px] opacity-70">Point at card · flier · document · email</p>
-                    </div>
-                    <button type="button" onClick={capturePhoto}
-                      className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
-                      📸 Capture & Extract Info
-                    </button>
-                  </div>
-                )}
-
-                {/* Scanned image preview */}
-                {scanPreview && (
-                  <div className="relative rounded-xl overflow-hidden border border-indigo-200">
-                    <img src={scanPreview} alt="Scanned document" className="w-full object-contain max-h-44" />
-                    {isScanning && (
-                      <div className="absolute inset-0 bg-indigo-900/60 flex flex-col items-center justify-center gap-2">
-                        <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-                        <p className="text-white text-xs font-semibold">AI reading document...</p>
-                      </div>
+                    {(scanPreview || scanMode === 'camera') && (
+                      <button type="button" onClick={() => { stopCamera(); setScanMode('idle'); setScanPreview(null); setScanFeedback([]); }}
+                        className={`text-xs flex items-center gap-1 ${
+                          darkMode 
+                            ? 'text-indigo-400 hover:text-indigo-300'
+                            : 'text-indigo-400 hover:text-indigo-700'
+                        }`}>
+                        <span className="material-symbols-outlined text-[12px]">close</span> Reset
+                      </button>
                     )}
                   </div>
-                )}
+                  <p className={`text-xs mb-3 ${
+                    darkMode ? 'text-indigo-400' : 'text-indigo-500'
+                  }`}>Point your camera at a business card, flier, name tag, email, or any document — AI reads and fills every field.</p>
 
-                {/* Scan feedback */}
-                {scanFeedback.length > 0 && (scanPreview || scanMode === 'camera') && (
-                  <div className={`mt-3 p-3 rounded-xl text-xs ${
-                    isScanning ? 'bg-indigo-100' :
-                    scanFeedback[0].startsWith('❌') || scanFeedback[0].startsWith('⚠️')
-                      ? 'bg-red-50 border border-red-200'
-                      : 'bg-green-50 border border-green-200'
-                  }`}>
-                    {isScanning ? (
-                      <p className="text-indigo-600 font-medium animate-pulse">{scanFeedback[0]}</p>
-                    ) : scanFeedback[0].startsWith('❌') || scanFeedback[0].startsWith('⚠️') ? (
-                      <p className="text-red-600 font-medium">{scanFeedback[0]}</p>
-                    ) : (
-                      <>
-                        <p className="font-semibold text-gray-700 mb-1">✅ Auto-filled {scanFeedback.length} field{scanFeedback.length !== 1 ? 's' : ''}:</p>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {scanFeedback.map((f, i) => (
-                            <span key={i} className="bg-white border border-green-200 text-green-700 px-2 py-0.5 rounded-full">{f}</span>
-                          ))}
+                  {/* Scan action buttons — shown when idle */}
+                  {scanMode !== 'camera' && !scanPreview && (
+                    <div className="flex gap-2">
+                      <button type="button" onClick={startCamera}
+                        className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
+                        📷 Open Camera
+                      </button>
+                      <label className="flex-1 cursor-pointer">
+                        <div className={`py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition border-2 ${
+                          darkMode
+                            ? 'bg-slate-800 border-indigo-700 text-indigo-400 hover:bg-indigo-900/20'
+                            : 'bg-white border-indigo-300 text-indigo-700 hover:bg-indigo-50'
+                        }`}>
+                          🖼️ Upload Image
                         </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
+                        <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                      </label>
+                    </div>
+                  )}
+
+                  {/* Live camera view */}
+                  {scanMode === 'camera' && (
+                    <div className="space-y-3">
+                      <div className="relative bg-black rounded-xl overflow-hidden" style={{aspectRatio:'4/3'}}>
+                        <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                        {/* Corner guides */}
+                        <div className="absolute inset-4 pointer-events-none">
+                          <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-white rounded-tl"></div>
+                          <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-white rounded-tr"></div>
+                          <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-white rounded-bl"></div>
+                          <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-white rounded-br"></div>
+                        </div>
+                        <p className="absolute bottom-2 left-0 right-0 text-center text-white text-[10px] opacity-70">Point at card · flier · document · email</p>
+                      </div>
+                      <button type="button" onClick={capturePhoto}
+                        className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-indigo-700 transition">
+                        📸 Capture & Extract Info
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Scanned image preview */}
+                  {scanPreview && (
+                    <div className={`relative rounded-xl overflow-hidden border ${
+                      darkMode ? 'border-indigo-700' : 'border-indigo-200'
+                    }`}>
+                      <img src={scanPreview} alt="Scanned document" className="w-full object-contain max-h-44" />
+                      {isScanning && (
+                        <div className="absolute inset-0 bg-indigo-900/60 flex flex-col items-center justify-center gap-2">
+                          <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <p className="text-white text-xs font-semibold">AI reading document...</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Scan feedback */}
+                  {scanFeedback.length > 0 && (scanPreview || scanMode === 'camera') && (
+                    <div className={`mt-3 p-3 rounded-xl text-xs ${
+                      isScanning 
+                        ? darkMode ? 'bg-indigo-900/30' : 'bg-indigo-100'
+                        : scanFeedback[0].startsWith('❌') || scanFeedback[0].startsWith('⚠️')
+                          ? darkMode ? 'bg-red-900/20 border border-red-800' : 'bg-red-50 border border-red-200'
+                          : darkMode ? 'bg-green-900/20 border border-green-800' : 'bg-green-50 border border-green-200'
+                    }`}>
+                      {isScanning ? (
+                        <p className={`font-medium animate-pulse ${
+                          darkMode ? 'text-indigo-400' : 'text-indigo-600'
+                        }`}>{scanFeedback[0]}</p>
+                      ) : scanFeedback[0].startsWith('❌') || scanFeedback[0].startsWith('⚠️') ? (
+                        <p className={`font-medium ${
+                          darkMode ? 'text-red-400' : 'text-red-600'
+                        }`}>{scanFeedback[0]}</p>
+                      ) : (
+                        <>
+                          <p className={`font-semibold mb-1 ${
+                            darkMode ? 'text-slate-300' : 'text-gray-700'
+                          }`}>✅ Auto-filled {scanFeedback.length} field{scanFeedback.length !== 1 ? 's' : ''}:</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {scanFeedback.map((f, i) => (
+                              <span key={i} className={`px-2 py-0.5 rounded-full border ${
+                                darkMode
+                                  ? 'bg-green-900/30 border-green-700 text-green-400'
+                                  : 'bg-white border-green-200 text-green-700'
+                              }`}>{f}</span>
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -3540,10 +3644,12 @@ const Sidebar = () => (
         {/* FEATURE 1: ICEBREAKER AI MODAL — upgraded */}
         {showIcebreaker && icebreakerContact && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className={`rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] ${
+              darkMode ? 'bg-slate-800' : 'bg-white'
+            }`}>
 
-              {/* Header */}
-              <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 text-white">
+              {/* FIXED HEADER - Won't scroll */}
+              <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 text-white flex-shrink-0 rounded-t-2xl">
                 <div className="flex justify-between items-start">
                   <div>
                     <h2 className="text-lg font-bold flex items-center gap-2">
@@ -3578,8 +3684,8 @@ const Sidebar = () => (
                 </div>
               </div>
 
-              {/* Lines */}
-              <div className="p-6">
+              {/* SCROLLABLE CONTENT AREA - Only this section scrolls */}
+              <div className="flex-1 overflow-y-auto p-6">
                 {icebreakerLoading ? (
                   <div className="py-10 flex flex-col items-center gap-3 text-gray-400">
                     <div className="w-8 h-8 border-[3px] border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
@@ -3594,33 +3700,53 @@ const Sidebar = () => (
                         ? line.split(' | ')
                         : null;
                       return (
-                        <div key={i} className={`rounded-xl border-2 transition ${isCopied ? 'border-green-400 bg-green-50' : 'border-indigo-100 bg-indigo-50'}`}>
+                        <div key={i} className={`rounded-xl border-2 transition ${
+                          isCopied 
+                            ? darkMode ? 'border-green-500 bg-green-900/20' : 'border-green-400 bg-green-50'
+                            : darkMode ? 'border-indigo-700 bg-indigo-900/20' : 'border-indigo-100 bg-indigo-50'
+                        }`}>
                           <div className="p-4">
                             <div className="flex items-start gap-3">
-                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${isCopied ? 'bg-green-500 text-white' : 'bg-indigo-200 text-indigo-700'}`}>
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
+                                isCopied 
+                                  ? 'bg-green-500 text-white'
+                                  : darkMode ? 'bg-indigo-700 text-indigo-200' : 'bg-indigo-200 text-indigo-700'
+                              }`}>
                                 {isCopied ? '✓' : i + 1}
                               </span>
                               <div className="flex-1 min-w-0">
                                 {parts ? (
                                   <>
-                                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide mb-1">Subject</p>
-                                    <p className="text-xs font-semibold text-gray-700 mb-2">{parts[0]}</p>
-                                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wide mb-1">Opening</p>
-                                    <p className="text-sm text-gray-700 leading-relaxed">{parts[1]}</p>
+                                    <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${
+                                      darkMode ? 'text-indigo-400' : 'text-indigo-500'
+                                    }`}>Subject</p>
+                                    <p className={`text-xs font-semibold mb-2 ${
+                                      darkMode ? 'text-slate-200' : 'text-gray-700'
+                                    }`}>{parts[0]}</p>
+                                    <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${
+                                      darkMode ? 'text-indigo-400' : 'text-indigo-500'
+                                    }`}>Opening</p>
+                                    <p className={`text-sm leading-relaxed ${
+                                      darkMode ? 'text-slate-300' : 'text-gray-700'
+                                    }`}>{parts[1]}</p>
                                   </>
                                 ) : (
-                                  <p className="text-sm text-gray-700 leading-relaxed">{line}</p>
+                                  <p className={`text-sm leading-relaxed ${
+                                    darkMode ? 'text-slate-300' : 'text-gray-700'
+                                  }`}>{line}</p>
                                 )}
                               </div>
                             </div>
                           </div>
-                          <div className="border-t border-indigo-100 px-4 py-2 flex justify-end">
+                          <div className={`border-t px-4 py-2 flex justify-end ${
+                            darkMode ? 'border-indigo-700' : 'border-indigo-100'
+                          }`}>
                             <button
                               onClick={() => copyIcebreakerLine(line, i)}
                               className={`text-xs font-semibold flex items-center gap-1.5 px-3 py-1 rounded-lg transition ${
                                 isCopied
-                                  ? 'text-green-600 bg-green-100'
-                                  : 'text-indigo-600 hover:bg-indigo-100'
+                                  ? darkMode ? 'text-green-400 bg-green-900/30' : 'text-green-600 bg-green-100'
+                                  : darkMode ? 'text-indigo-400 hover:bg-indigo-900/30' : 'text-indigo-600 hover:bg-indigo-100'
                               }`}>
                               {isCopied ? '✓ Copied!' : '📋 Copy'}
                             </button>
@@ -3630,32 +3756,40 @@ const Sidebar = () => (
                     })}
                   </div>
                 )}
-
-                {/* Footer actions */}
-                {!icebreakerLoading && icebreakerLines.length > 0 && (
-                  <div className="flex gap-2 mt-5">
-                    <button
-                      onClick={copyAllIcebreakers}
-                      className={`flex-1 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition border-2 ${
-                        icebreakerCopied === 'all'
-                          ? 'border-green-500 bg-green-500 text-white'
-                          : 'border-indigo-200 text-indigo-700 hover:bg-indigo-50'
-                      }`}>
-                      {icebreakerCopied === 'all' ? '✓ All Copied!' : '📋 Copy All 3'}
-                    </button>
-                    <button
-                      onClick={() => generateIcebreaker(icebreakerContact, icebreakerChannel)}
-                      className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2">
-                      <span className="material-symbols-outlined text-[16px]">auto_awesome</span> Regenerate
-                    </button>
-                    <button
-                      onClick={() => setShowIcebreaker(false)}
-                      className="px-4 bg-gray-100 text-gray-600 rounded-xl text-sm hover:bg-gray-200 transition font-medium">
-                      Done
-                    </button>
-                  </div>
-                )}
               </div>
+
+              {/* FIXED FOOTER - Won't scroll */}
+              {!icebreakerLoading && icebreakerLines.length > 0 && (
+                <div className={`px-6 py-4 border-t flex gap-2 flex-shrink-0 rounded-b-2xl ${
+                  darkMode ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
+                }`}>
+                  <button
+                    onClick={copyAllIcebreakers}
+                    className={`flex-1 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition border-2 ${
+                      icebreakerCopied === 'all'
+                        ? 'border-green-500 bg-green-500 text-white'
+                        : darkMode 
+                          ? 'border-indigo-700 text-indigo-400 hover:bg-indigo-900/20'
+                          : 'border-indigo-200 text-indigo-700 hover:bg-indigo-50'
+                    }`}>
+                    {icebreakerCopied === 'all' ? '✓ All Copied!' : '📋 Copy All 3'}
+                  </button>
+                  <button
+                    onClick={() => generateIcebreaker(icebreakerContact, icebreakerChannel)}
+                    className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2">
+                    <span className="material-symbols-outlined text-[16px]">auto_awesome</span> Regenerate
+                  </button>
+                  <button
+                    onClick={() => setShowIcebreaker(false)}
+                    className={`px-4 rounded-xl text-sm font-medium transition ${
+                      darkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}>
+                    Done
+                  </button>
+                </div>
+              )}
 
             </div>
           </div>
