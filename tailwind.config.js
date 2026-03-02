@@ -1,7 +1,8 @@
-export default {
+module.exports = {
+  darkMode: 'class', // CRITICAL - enables dark mode
   content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    './src/**/*.{js,jsx,ts,tsx}',
+    './public/index.html'
   ],
   theme: {
     extend: {
