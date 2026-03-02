@@ -798,13 +798,32 @@ export default function App() {
 
   // --- IN-APP EMAIL SENDER STATES ---
   const [showEmailComposer, setShowEmailComposer] = useState(false);
-  const [emailComposerData, setEmailComposerData] = useState({
-    to: [],
-    subject: '',
-    body: '',
-    useAI: false,
-    selectedContacts: []
-  });
+ const [emailComposerData, setEmailComposerData] = useState({
+  to: [],
+  subject: '',
+  body: '',
+  useAI: false,
+  selectedContacts: [],
+  purpose: '',        // NEW - Feature 3
+  scheduleDate: '',   // NEW - Feature 2
+  scheduleTime: ''    // NEW - Feature 2
+});
+
+// NEW - Feature 1: Collapsible Sidebar
+const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+  const saved = localStorage.getItem('sidebar_collapsed');
+  return saved ? JSON.parse(saved) : false;
+});
+
+// NEW - Feature 4: Dark Mode
+const [darkMode, setDarkMode] = useState(() => {
+  const saved = localStorage.getItem('dark_mode');
+  return saved ? JSON.parse(saved) : false;
+});
+
+// NEW - Feature 6: Compact Smart Capture
+const [showMagicPaste, setShowMagicPaste] = useState(false);
+const [showScanCapture, setShowScanCapture] = useState(false);
 
   // ===== EMERGENCY MODAL ESCAPE SYSTEM =====
   // Close all modals with ESC key
@@ -832,6 +851,21 @@ export default function App() {
     window.addEventListener('keydown', handleEscapeKey);
     return () => window.removeEventListener('keydown', handleEscapeKey);
   }, []);
+
+  // Persist sidebar collapsed state
+useEffect(() => {
+  localStorage.setItem('sidebar_collapsed', JSON.stringify(sidebarCollapsed));
+}, [sidebarCollapsed]);
+
+// Persist dark mode
+useEffect(() => {
+  localStorage.setItem('dark_mode', JSON.stringify(darkMode));
+  if (darkMode) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+}, [darkMode]);
 
   // Auto-close loading screen after 3 seconds as failsafe
   useEffect(() => {
@@ -1905,94 +1939,117 @@ export default function App() {
     filterFavorites, filterStale
   ].filter(Boolean).length;
 
-  // Sidebar Component
-  const Sidebar = () => (
-    <aside className="fixed top-0 left-0 h-full w-64 bg-white border-r border-slate-200 z-40 hidden lg:flex flex-col">
-      {/* Logo */}
-      <div className="p-8">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
-            <span className="material-symbols-outlined text-white">bolt</span>
-          </div>
-          <span className="text-xl font-extrabold tracking-tight text-slate-800">Micro CRM</span>
+ // Sidebar Component - NOW COLLAPSIBLE WITH DARK MODE
+const Sidebar = () => (
+  <aside className={`fixed top-0 left-0 h-full border-r z-40 hidden lg:flex flex-col transition-all duration-300 ${
+    sidebarCollapsed ? 'w-20' : 'w-64'
+  } ${
+    darkMode 
+      ? 'bg-slate-900 border-slate-700' 
+      : 'bg-white border-slate-200'
+  }`}>
+    {/* Logo & Collapse Button */}
+    <div className="p-8 relative">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200 flex-shrink-0">
+          <span className="material-symbols-outlined text-white">bolt</span>
         </div>
+        {!sidebarCollapsed && (
+          <span className={`text-xl font-extrabold tracking-tight ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+            Micro CRM
+          </span>
+        )}
       </div>
-      {/* Navigation */}
-      <nav className="flex-1 px-4 space-y-1.5 mt-2">
+      {/* Collapse Toggle */}
+      <button
+        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+        className="absolute -right-3 top-10 w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-indigo-700 transition-all"
+        title={sidebarCollapsed ? 'Expand' : 'Collapse'}
+      >
+        <span className="material-symbols-outlined text-[14px]">
+          {sidebarCollapsed ? 'chevron_right' : 'chevron_left'}
+        </span>
+      </button>
+    </div>
+    
+    {/* Navigation */}
+    <nav className="flex-1 px-4 space-y-1.5 mt-2">
+      {['dashboard', 'contacts', 'deals', 'tasks', 'analytics'].map((view) => (
         <button
-          onClick={() => setCurrentView('dashboard')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${
-            currentView === 'dashboard'
-              ? 'bg-indigo-50 text-indigo-700'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+          key={view}
+          onClick={() => setCurrentView(view)}
+          className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-2xl font-bold transition-all ${
+            currentView === view
+              ? darkMode 
+                ? 'bg-indigo-900/30 text-indigo-400'
+                : 'bg-indigo-50 text-indigo-700'
+              : darkMode
+                ? 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
           }`}
+          title={view.charAt(0).toUpperCase() + view.slice(1)}
         >
-          <span className="material-symbols-outlined">dashboard</span>
-          Dashboard
+          <span className="material-symbols-outlined">
+            {view === 'dashboard' ? 'dashboard' : 
+             view === 'contacts' ? 'group' :
+             view === 'deals' ? 'monetization_on' :
+             view === 'tasks' ? 'checklist' : 'analytics'}
+          </span>
+          {!sidebarCollapsed && <span className="capitalize">{view}</span>}
         </button>
+      ))}
+    </nav>
+    
+    {/* User Profile */}
+    <div className="p-6 mt-auto">
+      {sidebarCollapsed ? (
         <button
-          onClick={() => setCurrentView('contacts')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${
-            currentView === 'contacts'
-              ? 'bg-indigo-50 text-indigo-700'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+          onClick={() => setShowBusinessProfile(true)}
+          className={`w-full flex justify-center p-3 rounded-2xl border transition-all ${
+            darkMode 
+              ? 'bg-slate-800 border-slate-700 hover:bg-slate-700'
+              : 'bg-slate-50 border-slate-100 hover:bg-slate-100'
           }`}
+          title={user.name || 'User'}
         >
-          <span className="material-symbols-outlined">group</span>
-          Contacts
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+            darkMode ? 'bg-indigo-900 text-indigo-400' : 'bg-indigo-100 text-indigo-700'
+          }`}>
+            {user.name ? user.name[0].toUpperCase() : 'U'}
+          </div>
         </button>
-        <button
-          onClick={() => setCurrentView('deals')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${
-            currentView === 'deals'
-              ? 'bg-indigo-50 text-indigo-700'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+      ) : (
+        <div 
+          className={`rounded-2xl p-4 border cursor-pointer transition-all ${
+            darkMode
+              ? 'bg-slate-800 border-slate-700 hover:bg-slate-700'
+              : 'bg-slate-50 border-slate-100 hover:bg-slate-100'
           }`}
+          onClick={() => setShowBusinessProfile(true)}
         >
-          <span className="material-symbols-outlined">monetization_on</span>
-          Deals
-        </button>
-        <button
-          onClick={() => setCurrentView('tasks')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${
-            currentView === 'tasks'
-              ? 'bg-indigo-50 text-indigo-700'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-          }`}
-        >
-          <span className="material-symbols-outlined">checklist</span>
-          Tasks
-        </button>
-        <button
-          onClick={() => setCurrentView('analytics')}
-          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${
-            currentView === 'analytics'
-              ? 'bg-indigo-50 text-indigo-700'
-              : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-          }`}
-        >
-          <span className="material-symbols-outlined">analytics</span>
-          Analytics
-        </button>
-      </nav>
-      {/* User Profile */}
-      <div className="p-6 mt-auto">
-        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 cursor-pointer hover:bg-slate-100 transition-all"
-             onClick={() => setShowBusinessProfile(true)}>
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-sm">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
+              darkMode ? 'bg-indigo-900 text-indigo-400' : 'bg-indigo-100 text-indigo-700'
+            }`}>
               {user.name ? user.name[0].toUpperCase() : 'U'}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold truncate">{user.name || 'User'}</p>
-              <p className="text-[11px] text-slate-500">{isPremium ? 'Premium Account' : 'Free Account'}</p>
+              <p className={`text-sm font-bold truncate ${darkMode ? 'text-white' : ''}`}>
+                {user.name || 'User'}
+              </p>
+              <p className={`text-[11px] ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                {isPremium ? 'Premium' : 'Free'}
+              </p>
             </div>
-            <span className="material-symbols-outlined text-slate-400 text-sm">settings</span>
+            <span className={`material-symbols-outlined text-sm ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+              settings
+            </span>
           </div>
         </div>
-      </div>
-    </aside>
-  );
+      )}
+    </div>
+  </aside>
+);
 
   // Header Section Component
   const HeaderSection = () => (
@@ -2089,7 +2146,24 @@ export default function App() {
   if (!user) return <AuthPage onLogin={setUser} />;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+  <div className={`min-h-screen transition-colors duration-200 ${
+    darkMode ? 'dark bg-slate-900' : 'bg-slate-50'
+  }`}>
+    
+    {/* Dark Mode Toggle - Desktop */}
+    <button
+      onClick={() => setDarkMode(!darkMode)}
+      className={`hidden lg:block fixed top-4 right-4 z-50 p-3 rounded-xl shadow-lg hover:shadow-xl transition-all ${
+        darkMode 
+          ? 'bg-slate-800 border border-slate-700' 
+          : 'bg-white border border-slate-200'
+      }`}
+      title={darkMode ? 'Light mode' : 'Dark mode'}
+    >
+      <span className={`material-symbols-outlined ${darkMode ? 'text-yellow-400' : 'text-slate-700'}`}>
+        {darkMode ? 'light_mode' : 'dark_mode'}
+      </span>
+    </button>
 
       {/* SIDEBAR - Desktop Only */}
       <Sidebar />
@@ -2136,7 +2210,9 @@ export default function App() {
       </nav>
 
       {/* MAIN CONTENT */}
-      <main className="lg:ml-64 p-4 pt-20 pb-24 lg:pb-10 lg:pt-10 lg:p-10 space-y-8">
+      <main className={`p-4 pt-20 pb-24 lg:pb-10 lg:pt-10 lg:p-10 space-y-8 transition-all duration-300 ${
+  sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
+}`}>
 
         {/* Header Row: Welcome + Premium */}
         <HeaderSection />
@@ -2957,6 +3033,85 @@ export default function App() {
                           }
                         }} className="w-4 h-4 text-blue-600" />
                       <span className="text-sm">{contact.name} ({contact.email})</span>
+                      {/* NEW - Email Purpose Dropdown */}
+<div className="mb-4">
+  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>
+    Email Purpose (helps AI generate better content)
+  </label>
+  <select
+    value={bulkEmailData.purpose || ''}
+    onChange={(e) => setBulkEmailData({...bulkEmailData, purpose: e.target.value})}
+    className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-blue-500 ${
+      darkMode 
+        ? 'bg-slate-800 border-slate-600 text-white'
+        : 'bg-gray-50 border-gray-200'
+    }`}
+  >
+    <option value="">Select purpose...</option>
+    <option value="follow-up">Follow-up / Check-in</option>
+    <option value="introduction">Introduction / Meeting Request</option>
+    <option value="sales">Sales Pitch / Product Offer</option>
+    <option value="update">Update / News Share</option>
+    <option value="thank-you">Thank You / Appreciation</option>
+    <option value="feedback">Request Feedback</option>
+    <option value="networking">Networking / Collaboration</option>
+  </select>
+</div>
+
+{/* NEW - Email Scheduling */}
+<div className={`mb-4 p-4 rounded-xl border ${
+  darkMode 
+    ? 'bg-blue-900/20 border-blue-800'
+    : 'bg-blue-50 border-blue-200'
+}`}>
+  <div className="flex items-center gap-2 mb-3">
+    <span className={`material-symbols-outlined ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+      schedule_send
+    </span>
+    <span className={`font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+      Schedule Email (Optional)
+    </span>
+  </div>
+  <div className="grid grid-cols-2 gap-3">
+    <div>
+      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+        Date
+      </label>
+      <input
+        type="date"
+        value={bulkEmailData.scheduleDate || ''}
+        onChange={(e) => setBulkEmailData({...bulkEmailData, scheduleDate: e.target.value})}
+        min={new Date().toISOString().split('T')[0]}
+        className={`w-full px-3 py-2 border rounded-xl ${
+          darkMode 
+            ? 'bg-slate-800 border-slate-600 text-white'
+            : 'bg-white border-slate-300'
+        }`}
+      />
+    </div>
+    <div>
+      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+        Time
+      </label>
+      <input
+        type="time"
+        value={bulkEmailData.scheduleTime || ''}
+        onChange={(e) => setBulkEmailData({...bulkEmailData, scheduleTime: e.target.value})}
+        className={`w-full px-3 py-2 border rounded-xl ${
+          darkMode 
+            ? 'bg-slate-800 border-slate-600 text-white'
+            : 'bg-white border-slate-300'
+        }`}
+      />
+    </div>
+  </div>
+  {bulkEmailData.scheduleDate && (
+    <p className={`text-xs mt-2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+      📅 Will send on {new Date(bulkEmailData.scheduleDate).toLocaleDateString()}
+      {bulkEmailData.scheduleTime && ` at ${bulkEmailData.scheduleTime}`}
+    </p>
+  )}
+</div>
                     </label>
                   ))}
                 </div>
@@ -2986,9 +3141,11 @@ export default function App() {
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             contact: firstContact,
-                            businessProfile,
-                            recipientCount: bulkEmailData.selectedContacts.length
+                           businessProfile,
+                           recipientCount: bulkEmailData.selectedContacts.length,
+                          purpose: bulkEmailData.purpose // NEW - Send purpose to API
                           })
+
                         });
                         
                         if (response.ok) {
