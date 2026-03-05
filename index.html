@@ -1,6 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
+    import { getAuth, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
+    import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyDAGh6d-ANtRYCdFO-X_h2cYXxHmuflYjY",
+        authDomain: "elektro-micro-crm-44df0.firebaseapp.com",
+        projectId: "elektro-micro-crm-44df0",
+        storageBucket: "elektro-micro-crm-44df0.firebasestorage.app",
+        messagingSenderId: "800547908958",
+        appId: "1:800547908958:web:33435ce327db23b79af3cf"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    window.firebaseAuth = getAuth(app);
+    window.firebaseDb = getFirestore(app);
+    window.signOut = signOut;
+    window.onAuthStateChanged = onAuthStateChanged;
+    window.setDoc = setDoc;
+    window.getDoc = getDoc;
+    window.doc = doc;
+</script>
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
