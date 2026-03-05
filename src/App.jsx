@@ -801,7 +801,7 @@ useEffect(() => {
 useEffect(() => {
   let unsubscribe;
   
-  const checkAuth = async () => {
+  const checkAuth = () => {
     // Wait for Firebase to be ready
     if (!window.firebaseReady || !window.firebaseAuth || !window.onAuthStateChanged) {
       console.log('⏳ Waiting for Firebase to load...');
@@ -812,52 +812,59 @@ useEffect(() => {
     console.log('✅ Firebase ready, checking auth state...');
     
     try {
-      unsubscribe = window.onAuthStateChanged(window.firebaseAuth, async (firebaseUser) => {
+      unsubscribe = window.onAuthStateChanged(window.firebaseAuth, (firebaseUser) => {
         console.log('🔍 Auth state:', firebaseUser ? firebaseUser.email : 'No user');
         
         if (firebaseUser) {
-          try {
-            const userDocRef = window.doc(window.firebaseDb, 'users', firebaseUser.uid);
-            const userDoc = await window.getDoc(userDocRef);
-            
-            if (userDoc.exists()) {
-              const userData = userDoc.data();
-              console.log('✅ User data loaded:', userData.name);
-              setUser({
-                uid: firebaseUser.uid,
-                email: firebaseUser.email,
-                name: userData.name || firebaseUser.email.split('@')[0],
-                isPremium: userData.isPremium || false
-              });
-              setIsPremium(userData.isPremium || false);
-            } else {
-              console.log('📝 Creating user doc');
-              await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), {
-                email: firebaseUser.email,
-                name: firebaseUser.email.split('@')[0],
-                isPremium: false,
-                createdAt: new Date().toISOString()
-              });
-              setUser({
-                uid: firebaseUser.uid,
-                email: firebaseUser.email,
-                name: firebaseUser.email.split('@')[0],
-                isPremium: false
-              });
+          // Create inner async function for Firestore operations
+          const loadUserData = async () => {
+            try {
+              const userDocRef = window.doc(window.firebaseDb, 'users', firebaseUser.uid);
+              const userDoc = await window.getDoc(userDocRef);
+              
+              if (userDoc.exists()) {
+                const userData = userDoc.data();
+                console.log('✅ User data loaded:', userData.name);
+                setUser({
+                  uid: firebaseUser.uid,
+                  email: firebaseUser.email,
+                  name: userData.name || firebaseUser.email.split('@')[0],
+                  isPremium: userData.isPremium || false
+                });
+                setIsPremium(userData.isPremium || false);
+              } else {
+                console.log('📝 Creating new user document');
+                await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), {
+                  email: firebaseUser.email,
+                  name: firebaseUser.email.split('@')[0],
+                  isPremium: false,
+                  createdAt: new Date().toISOString()
+                });
+                setUser({
+                  uid: firebaseUser.uid,
+                  email: firebaseUser.email,
+                  name: firebaseUser.email.split('@')[0],
+                  isPremium: false
+                });
+              }
+              setIsLoading(false);
+            } catch (error) {
+              console.error('❌ Error loading user data:', error);
+              setIsLoading(false);
             }
-            setIsLoading(false);
-          } catch (error) {
-            console.error('❌ Firestore error:', error);
-            setIsLoading(false);
-          }
+          };
+          
+          // Call the async function
+          loadUserData();
         } else {
-          console.log('❌ No user - redirecting to landing');
+          // No Firebase user - redirect to landing page
+          console.log('❌ No Firebase user - redirecting to landing');
           setIsLoading(false);
           window.location.href = '/';
         }
       });
     } catch (error) {
-      console.error('❌ Auth error:', error);
+      console.error('❌ Firebase auth check error:', error);
       setIsLoading(false);
     }
   };
