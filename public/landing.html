@@ -7,6 +7,40 @@
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet"/>
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
+        import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDAGh6d-ANtRYCdFO-X_h2cYXxHmuflYjY",
+            authDomain: "elektro-micro-crm-44df0.firebaseapp.com",
+            projectId: "elektro-micro-crm-44df0",
+            storageBucket: "elektro-micro-crm-44df0.firebasestorage.app",
+            messagingSenderId: "800547908958",
+            appId: "1:800547908958:web:33435ce327db23b79af3cf",
+            measurementId: "G-W3HXE1B8NF"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Make available globally
+        window.firebaseAuth = auth;
+        window.firebaseDb = db;
+        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.setDoc = setDoc;
+        window.getDoc = getDoc;
+        window.doc = doc;
+    </script>
+    
     <script>
         tailwind.config = {
             darkMode: "class",
@@ -103,143 +137,90 @@
     </nav>
 
     <!-- Hero Section -->
-    <header class="relative pt-32 pb-20 overflow-hidden hero-gradient">
-        <div class="absolute inset-0 -z-10 opacity-20 dark:opacity-10 pointer-events-none">
-            <svg class="h-full w-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-                <defs>
-                    <pattern height="8" id="grid" patternUnits="userSpaceOnUse" width="8">
-                        <path d="M 8 0 L 0 0 0 8" fill="none" stroke="currentColor" stroke-width="0.5"></path>
-                    </pattern>
-                </defs>
-                <rect fill="url(#grid)" height="100%" width="100%"></rect>
-            </svg>
-        </div>
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-primary dark:text-indigo-300 text-xs font-bold uppercase tracking-wider mb-8">
-                <span class="flex h-2 w-2 rounded-full bg-primary animate-ping"></span>
-                Now with AI Smart Import
-            </div>
-            <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 bg-clip-text text-transparent bg-gradient-to-r from-slate-900 via-primary to-indigo-600 dark:from-white dark:via-indigo-300 dark:to-primary">
-                Manage relationships,<br/>not spreadsheets.
-            </h1>
-            <p class="max-w-2xl mx-auto text-lg md:text-xl text-slate-600 dark:text-slate-400 mb-10 leading-relaxed">
-                The ultra-simple CRM for modern teams. Organize contacts, track deals, and automate outreach without the complexity of traditional enterprise software.
-            </p>
-            <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <button onclick="openModal('signup')" class="w-full sm:w-auto px-8 py-4 bg-primary text-white font-bold rounded-2xl shadow-xl shadow-primary/25 hover:-translate-y-1 hover:shadow-2xl transition-all">
-                    Start Your Free Trial
-                </button>
-                <button class="w-full sm:w-auto px-8 py-4 bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold rounded-2xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-2">
-                    <span class="material-icons-round text-xl">play_circle</span>
-                    See how it works
-                </button>
-            </div>
-            <div class="mt-20 relative max-w-5xl mx-auto">
-                <div class="absolute -inset-1 bg-gradient-to-r from-primary to-indigo-600 rounded-[2rem] blur opacity-25"></div>
-                <div class="relative bg-white dark:bg-slate-900 rounded-[1.5rem] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden p-2">
-                    <img alt="Dashboard Preview" class="rounded-xl w-full h-auto" src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=1200&h=675&fit=crop"/>
+    <section class="relative pt-24 pb-16 md:pt-32 md:pb-24 hero-gradient overflow-hidden">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center max-w-4xl mx-auto">
+                <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-8">
+                    <span class="material-icons-round text-base">rocket_launch</span>
+                    <span>Powered by Firebase 🔥 - Real Authentication</span>
                 </div>
-            </div>
-        </div>
-    </header>
-
-    <!-- Social Proof -->
-    <section class="py-12 border-y border-slate-100 dark:border-slate-800">
-        <div class="max-w-7xl mx-auto px-4">
-            <p class="text-center text-sm font-semibold text-slate-500 dark:text-slate-400 mb-8 uppercase tracking-widest">Trusted by 2,000+ scaling teams</p>
-            <div class="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-50 grayscale">
-                <div class="text-2xl font-bold text-slate-400">Google</div>
-                <div class="text-2xl font-bold text-slate-400">Meta</div>
-                <div class="text-2xl font-bold text-slate-400">Slack</div>
-                <div class="text-2xl font-bold text-slate-400">LinkedIn</div>
-                <div class="text-2xl font-bold text-slate-400">Notion</div>
+                <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6 leading-tight">
+                    Manage relationships,<br/>
+                    <span class="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">not spreadsheets</span>
+                </h1>
+                <p class="text-xl md:text-2xl text-slate-600 dark:text-slate-400 mb-10 max-w-3xl mx-auto leading-relaxed">
+                    Your AI-powered CRM that helps you nurture relationships, track interactions, and grow your network — all without the complexity.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                    <button onclick="openModal('signup')" class="group px-8 py-4 bg-primary text-white text-lg font-bold rounded-full hover:shadow-2xl hover:shadow-primary/40 transition-all duration-300 active:scale-95 flex items-center gap-2">
+                        Start Free Today
+                        <span class="material-icons-round group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                    </button>
+                    <button onclick="openModal('signin')" class="px-8 py-4 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-lg font-bold rounded-full border-2 border-slate-200 dark:border-slate-700 hover:border-primary dark:hover:border-primary transition-all duration-300">
+                        Sign In
+                    </button>
+                </div>
+                <p class="mt-6 text-sm text-slate-500 dark:text-slate-400">
+                    ✨ No credit card required • Free forever for up to 10 contacts
+                </p>
             </div>
         </div>
     </section>
 
-    <!-- Features -->
-    <section id="features" class="py-24 bg-slate-50 dark:bg-slate-900/50">
+    <!-- Features Section -->
+    <section id="features" class="py-20 bg-white dark:bg-slate-900">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="text-center mb-16">
-                <h2 class="text-3xl font-extrabold mb-4">Set up in 60 seconds</h2>
-                <p class="text-slate-600 dark:text-slate-400">Everything you need to grow, nothing you don't.</p>
+                <h2 class="text-4xl md:text-5xl font-extrabold mb-4">Everything you need</h2>
+                <p class="text-xl text-slate-600 dark:text-slate-400">Built for modern professionals who value relationships</p>
             </div>
-            <div class="grid md:grid-cols-3 gap-12 relative">
-                <div class="relative group">
-                    <div class="mb-6 w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-lg group-hover:bg-primary transition-colors duration-300">
-                        <span class="material-icons-round text-3xl text-primary group-hover:text-white">file_upload</span>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="glass-card p-8 rounded-2xl">
+                    <div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
+                        <span class="material-icons-round text-primary text-2xl">auto_awesome</span>
                     </div>
-                    <h3 class="text-xl font-bold mb-3">1. Bulk Import</h3>
-                    <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
-                        Drag and drop your messy CSVs or sync your phone contacts instantly with our Magic Paste.
-                    </p>
+                    <h3 class="text-xl font-bold mb-3">AI-Powered Insights</h3>
+                    <p class="text-slate-600 dark:text-slate-400">Smart icebreakers and relationship scoring powered by AI</p>
                 </div>
-                <div class="relative group">
-                    <div class="mb-6 w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-lg group-hover:bg-primary transition-colors duration-300">
-                        <span class="material-icons-round text-3xl text-primary group-hover:text-white">auto_awesome</span>
+                <div class="glass-card p-8 rounded-2xl">
+                    <div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
+                        <span class="material-icons-round text-primary text-2xl">dashboard</span>
                     </div>
-                    <h3 class="text-xl font-bold mb-3">2. Smart Enrichment</h3>
-                    <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
-                        Our AI automatically grabs photos, job titles, and social profiles to fill in the blanks for you.
-                    </p>
+                    <h3 class="text-xl font-bold mb-3">Beautiful Dashboard</h3>
+                    <p class="text-slate-600 dark:text-slate-400">Clean, intuitive interface that makes CRM a joy to use</p>
                 </div>
-                <div class="relative group">
-                    <div class="mb-6 w-16 h-16 bg-white dark:bg-slate-800 rounded-2xl flex items-center justify-center shadow-lg group-hover:bg-primary transition-colors duration-300">
-                        <span class="material-icons-round text-3xl text-primary group-hover:text-white">rocket_launch</span>
+                <div class="glass-card p-8 rounded-2xl">
+                    <div class="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center mb-4">
+                        <span class="material-icons-round text-primary text-2xl">bolt</span>
                     </div>
-                    <h3 class="text-xl font-bold mb-3">3. Scale Outreach</h3>
-                    <p class="text-slate-600 dark:text-slate-400 leading-relaxed">
-                        Use bulk personalized emails and automated reminders to keep your pipeline hot.
-                    </p>
+                    <h3 class="text-xl font-bold mb-3">Lightning Fast</h3>
+                    <p class="text-slate-600 dark:text-slate-400">Add contacts in seconds with smart capture technology</p>
                 </div>
             </div>
         </div>
     </section>
 
-    <!-- CTA -->
-    <section id="cta" class="py-24">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="bg-primary rounded-[2.5rem] p-12 text-center text-white relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-8 opacity-20 transform translate-x-10 -translate-y-10">
-                    <span class="material-icons-round text-[200px]">hub</span>
-                </div>
-                <h2 class="text-4xl md:text-5xl font-extrabold mb-6 relative z-10">Ready to simplify your workflow?</h2>
-                <p class="text-indigo-100 text-lg mb-10 max-w-xl mx-auto relative z-10">
-                    Join thousands of founders and sales professionals who are closing more deals with less stress.
-                </p>
-                <div class="flex flex-col sm:flex-row justify-center gap-4 relative z-10">
-                    <button onclick="openModal('signup')" class="px-8 py-4 bg-white text-primary font-bold rounded-2xl hover:bg-slate-100 transition-all">
-                        Get Started Free
-                    </button>
-                    <button class="px-8 py-4 bg-primary border-2 border-indigo-400 text-white font-bold rounded-2xl hover:bg-indigo-600 transition-all">
-                        Schedule Demo
-                    </button>
-                </div>
-                <p class="mt-8 text-indigo-200 text-sm">No credit card required. 14-day free trial.</p>
-            </div>
+    <!-- CTA Section -->
+    <section id="cta" class="py-20 bg-gradient-to-br from-primary to-purple-600">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 class="text-4xl md:text-5xl font-extrabold text-white mb-6">Ready to transform your relationships?</h2>
+            <p class="text-xl text-indigo-100 mb-10">Join hundreds of professionals using Micro-CRM to build better connections</p>
+            <button onclick="openModal('signup')" class="px-10 py-5 bg-white text-primary text-lg font-bold rounded-full hover:shadow-2xl transition-all active:scale-95">
+                Get Started Free
+            </button>
         </div>
     </section>
 
     <!-- Footer -->
-    <footer class="bg-white dark:bg-slate-950 py-12 border-t border-slate-100 dark:border-slate-800">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex flex-col md:flex-row justify-between items-center gap-8">
-                <div class="flex items-center gap-2">
-                    <div class="w-6 h-6 bg-primary rounded flex items-center justify-center">
-                        <span class="material-icons-round text-white text-xs">bolt</span>
-                    </div>
-                    <span class="font-bold tracking-tight">Micro-CRM</span>
+    <footer class="py-12 bg-slate-900 text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div class="flex items-center justify-center gap-2 mb-4">
+                <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                    <span class="material-icons-round text-white text-xl">bolt</span>
                 </div>
-                <div class="flex gap-8 text-sm font-medium text-slate-500 dark:text-slate-400">
-                    <a class="hover:text-primary" href="#">Privacy</a>
-                    <a class="hover:text-primary" href="#">Terms</a>
-                    <a class="hover:text-primary" href="#">Twitter</a>
-                    <a class="hover:text-primary" href="#">Support</a>
-                </div>
-                <p class="text-sm text-slate-500 dark:text-slate-400">
-                    © 2026 Micro-CRM Inc. All rights reserved.
-                </p>
+                <span class="text-xl font-bold text-white">Micro-CRM</span>
             </div>
+            <p class="text-sm">&copy; 2024 Micro-CRM. All rights reserved.</p>
         </div>
     </footer>
 
@@ -248,7 +229,7 @@
         <div class="modal-content">
             <div class="p-8">
                 <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Create your account</h2>
+                    <h2 class="text-2xl font-bold text-slate-900 dark:text-white">Create account</h2>
                     <button onclick="closeModal('signup')" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition">
                         <span class="material-icons-round text-slate-400">close</span>
                     </button>
@@ -256,10 +237,10 @@
                 <form id="signup-form" onsubmit="handleSignup(event)">
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Name</label>
-                            <input type="text" required id="signup-name" 
+                            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Full Name</label>
+                            <input type="text" required id="signup-name"
                                 class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-                                placeholder="John Doe"/>
+                                placeholder="John Smith"/>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Email</label>
@@ -269,15 +250,15 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Password</label>
-                            <input type="password" required id="signup-password" minlength="8"
+                            <input type="password" required id="signup-password" minlength="6"
                                 class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-                                placeholder="At least 8 characters"/>
+                                placeholder="At least 6 characters"/>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Confirm Password</label>
-                            <input type="password" required id="signup-confirm"
+                            <input type="password" required id="signup-confirm" minlength="6"
                                 class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition"
-                                placeholder="Re-enter password"/>
+                                placeholder="Confirm your password"/>
                         </div>
                     </div>
                     <div id="signup-error" class="mt-4 hidden p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm"></div>
@@ -367,7 +348,9 @@
             }
         });
 
-        // Handle Sign Up
+        // FIREBASE AUTHENTICATION FUNCTIONS
+
+        // Handle Sign Up with Firebase
         async function handleSignup(e) {
             e.preventDefault();
             
@@ -388,38 +371,57 @@
                 return;
             }
 
-            if (password.length < 8) {
-                errorEl.textContent = 'Password must be at least 8 characters';
+            if (password.length < 6) {
+                errorEl.textContent = 'Password must be at least 6 characters';
                 errorEl.classList.remove('hidden');
                 return;
             }
 
             // Disable button and show loading
             btn.disabled = true;
-            btn.textContent = 'Creating account...';
+            btn.innerHTML = '<span class="inline-block animate-spin mr-2">⏳</span> Creating account...';
 
             try {
-                // Store user data in localStorage (simulated authentication)
-                const user = {
-                    name,
-                    email,
+                // Create Firebase user
+                const userCredential = await window.createUserWithEmailAndPassword(
+                    window.firebaseAuth, 
+                    email, 
+                    password
+                );
+                
+                const user = userCredential.user;
+                
+                // Create user document in Firestore
+                await window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), {
+                    email: user.email,
+                    name: name,
+                    isPremium: false,
                     createdAt: new Date().toISOString()
-                };
+                });
                 
-                localStorage.setItem('auth_user', JSON.stringify(user));
-                localStorage.setItem('auth_token', 'token_' + Date.now());
-                
-                // Redirect to app
+                // Success! Redirect to app
                 window.location.href = '/app';
+                
             } catch (error) {
-                errorEl.textContent = 'An error occurred. Please try again.';
+                console.error('Signup error:', error);
+                let errorMessage = 'An error occurred. Please try again.';
+                
+                if (error.code === 'auth/email-already-in-use') {
+                    errorMessage = 'This email is already registered. Please sign in instead.';
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = 'Invalid email address.';
+                } else if (error.code === 'auth/weak-password') {
+                    errorMessage = 'Password is too weak. Please use a stronger password.';
+                }
+                
+                errorEl.textContent = errorMessage;
                 errorEl.classList.remove('hidden');
                 btn.disabled = false;
                 btn.textContent = 'Create Account';
             }
         }
 
-        // Handle Sign In
+        // Handle Sign In with Firebase
         async function handleSignin(e) {
             e.preventDefault();
             
@@ -433,30 +435,34 @@
 
             // Disable button and show loading
             btn.disabled = true;
-            btn.textContent = 'Signing in...';
+            btn.innerHTML = '<span class="inline-block animate-spin mr-2">⏳</span> Signing in...';
 
             try {
-                // Check if user exists in localStorage
-                const storedUser = localStorage.getItem('auth_user');
+                // Sign in with Firebase
+                const userCredential = await window.signInWithEmailAndPassword(
+                    window.firebaseAuth, 
+                    email, 
+                    password
+                );
                 
-                if (!storedUser) {
-                    errorEl.textContent = 'No account found. Please sign up first.';
-                    errorEl.classList.remove('hidden');
-                    btn.disabled = false;
-                    btn.textContent = 'Sign In';
-                    return;
-                }
-
-                // Simulate authentication (in production, verify with backend)
-                const user = JSON.parse(storedUser);
-                
-                // Store token
-                localStorage.setItem('auth_token', 'token_' + Date.now());
-                
-                // Redirect to app
+                // Success! Redirect to app
                 window.location.href = '/app';
+                
             } catch (error) {
-                errorEl.textContent = 'Invalid email or password';
+                console.error('Signin error:', error);
+                let errorMessage = 'Invalid email or password';
+                
+                if (error.code === 'auth/user-not-found') {
+                    errorMessage = 'No account found with this email. Please sign up first.';
+                } else if (error.code === 'auth/wrong-password') {
+                    errorMessage = 'Incorrect password. Please try again.';
+                } else if (error.code === 'auth/invalid-email') {
+                    errorMessage = 'Invalid email address.';
+                } else if (error.code === 'auth/user-disabled') {
+                    errorMessage = 'This account has been disabled.';
+                }
+                
+                errorEl.textContent = errorMessage;
                 errorEl.classList.remove('hidden');
                 btn.disabled = false;
                 btn.textContent = 'Sign In';
@@ -465,11 +471,12 @@
 
         // Check if user is already logged in
         window.addEventListener('load', () => {
-            const token = localStorage.getItem('auth_token');
-            const user = localStorage.getItem('auth_user');
-            
-            // If already logged in and on landing page, could show different CTA
-            // or just let them browse
+            window.onAuthStateChanged(window.firebaseAuth, (user) => {
+                if (user) {
+                    // User is logged in, could redirect to app or show different CTA
+                    console.log('User already logged in:', user.email);
+                }
+            });
         });
     </script>
 </body>
