@@ -798,11 +798,77 @@ useEffect(() => {
   // ===== END EMERGENCY SYSTEM =====
 
   // ===== FIREBASE AUTH CHECK =====
-  useEffect(() => {
-    // Wait for Firebase to load from CDN
-    const checkAuth = () => {
-      if (typeof window !== 'undefined' && window.firebaseAuth && window.onAuthStateChanged) {
-        const unsubscribe = window.onAuthStateChanged(window.firebaseAuth, async (firebaseUser) => {
+useEffect(() => {
+  let unsubscribe;
+  
+  const checkAuth = async () => {
+    // Wait for Firebase to be ready
+    if (!window.firebaseReady || !window.firebaseAuth || !window.onAuthStateChanged) {
+      console.log('⏳ Waiting for Firebase to load...');
+      setTimeout(checkAuth, 100);
+      return;
+    }
+    
+    console.log('✅ Firebase ready, checking auth state...');
+    
+    try {
+      unsubscribe = window.onAuthStateChanged(window.firebaseAuth, async (firebaseUser) => {
+        console.log('🔍 Auth state:', firebaseUser ? firebaseUser.email : 'No user');
+        
+        if (firebaseUser) {
+          try {
+            const userDocRef = window.doc(window.firebaseDb, 'users', firebaseUser.uid);
+            const userDoc = await window.getDoc(userDocRef);
+            
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              console.log('✅ User data loaded:', userData.name);
+              setUser({
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                name: userData.name || firebaseUser.email.split('@')[0],
+                isPremium: userData.isPremium || false
+              });
+              setIsPremium(userData.isPremium || false);
+            } else {
+              console.log('📝 Creating user doc');
+              await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), {
+                email: firebaseUser.email,
+                name: firebaseUser.email.split('@')[0],
+                isPremium: false,
+                createdAt: new Date().toISOString()
+              });
+              setUser({
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                name: firebaseUser.email.split('@')[0],
+                isPremium: false
+              });
+            }
+            setIsLoading(false);
+          } catch (error) {
+            console.error('❌ Firestore error:', error);
+            setIsLoading(false);
+          }
+        } else {
+          console.log('❌ No user - redirecting to landing');
+          setIsLoading(false);
+          window.location.href = '/';
+        }
+      });
+    } catch (error) {
+      console.error('❌ Auth error:', error);
+      setIsLoading(false);
+    }
+  };
+  
+  checkAuth();
+  
+  return () => {
+    if (unsubscribe) unsubscribe();
+  };
+}, []);
+// ===== END FIREBASE AUTH CHECK =====
           if (firebaseUser) {
             // User is logged in - get their data from Firestore
             try {
