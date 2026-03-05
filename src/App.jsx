@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { signUp, signIn, logOut, onAuthChange, getUserData } from './firebaseUtils';
 
 // ===== SUPPRESS METAMASK/WALLET ERRORS =====
 // These errors are caused by browser extensions and don't affect the app
@@ -60,41 +61,143 @@ if (typeof window !== 'undefined') {
 }
 // ===== END CRITICAL FIX =====
 
-// --- AUTHENTICATION UI ---
+// --- AUTHENTICATION UI WITH FIREBASE ---
 function AuthPage({ onLogin }) {
   const [mode, setMode] = useState('signin');
   const [formData, setFormData] = useState({ email: '', password: '', name: '', confirmPassword: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [resetMode, setResetMode] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
   
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
+    
     if (mode === 'signup') {
+      // Validation
       if (formData.password !== formData.confirmPassword) {
         setError('Passwords do not match');
         setIsLoading(false);
         return;
       }
-      if (formData.password.length < 8) {
-        setError('Password must be at least 8 characters');
+      if (formData.password.length < 6) {
+        setError('Password must be at least 6 characters');
         setIsLoading(false);
         return;
       }
+      
+      // Firebase Signup
+      const result = await signUp(formData.email, formData.password, formData.name);
+      
+      if (result.success) {
+        const userData = await getUserData(result.user.uid);
+        if (userData.success) {
+          onLogin({ 
+            uid: result.user.uid,
+            email: result.user.email, 
+            name: userData.data.name,
+            isPremium: userData.data.isPremium || false
+          });
+        }
+      } else {
+        setError(result.error || 'Signup failed. Please try again.');
+      }
+    } else {
+      // Firebase Signin
+      const result = await signIn(formData.email, formData.password);
+      
+      if (result.success) {
+        const userData = await getUserData(result.user.uid);
+        if (userData.success) {
+          onLogin({ 
+            uid: result.user.uid,
+            email: result.user.email, 
+            name: userData.data.name,
+            isPremium: userData.data.isPremium || false
+          });
+        }
+      } else {
+        setError(result.error || 'Invalid email or password');
+      }
     }
-    setTimeout(async () => {
-      const user = {
-        email: formData.email,
-        name: formData.name || formData.email.split('@')[0],
-        isPremium: mode === 'signup'
-      };
-      await window.storage.set('auth_user', JSON.stringify(user));
-      await window.storage.set('auth_token', 'token_' + Date.now());
-      setIsLoading(false);
-      onLogin(user);
-    }, 1200);
+    
+    setIsLoading(false);
   };
+  
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+    
+    const { resetPassword } = await import('./firebaseUtils');
+    const result = await resetPassword(resetEmail);
+    
+    if (result.success) {
+      setResetSuccess(true);
+      setTimeout(() => {
+        setResetMode(false);
+        setResetSuccess(false);
+        setResetEmail('');
+      }, 3000);
+    } else {
+      setError(result.error || 'Failed to send reset email');
+    }
+    
+    setIsLoading(false);
+  };
+  
+  if (resetMode) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden text-left">
+        <div className="absolute top-0 -left-4 w-96 h-96 bg-blue-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20 animate-pulse"></div>
+        <div className="absolute bottom-0 -right-4 w-96 h-96 bg-purple-600 rounded-full mix-blend-multiply filter blur-[128px] opacity-20 animate-pulse delay-700"></div>
+        
+        <div className="w-full max-w-md relative z-10">
+          <div className="bg-slate-900/40 backdrop-blur-2xl border border-slate-800 rounded-[2.5rem] p-8 lg:p-12 shadow-2xl">
+            <button onClick={() => setResetMode(false)} className="text-slate-400 hover:text-white mb-4 flex items-center gap-2 transition">
+              <span className="material-symbols-outlined">arrow_back</span> Back to login
+            </button>
+            
+            <h2 className="text-3xl font-bold text-white mb-2">Reset Password</h2>
+            <p className="text-slate-400 mb-6">Enter your email to receive a reset link</p>
+            
+            {resetSuccess ? (
+              <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-4 mb-4">
+                <p className="text-green-400 text-sm">✅ Password reset email sent! Check your inbox.</p>
+              </div>
+            ) : (
+              <form onSubmit={handlePasswordReset} className="space-y-5">
+                <input 
+                  type="email" 
+                  placeholder="Email Address" 
+                  required 
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl py-4 px-6 text-white placeholder-slate-500 outline-none focus:border-blue-500 transition" 
+                />
+                {error && <p className="text-red-400 text-sm">{error}</p>}
+                <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-3 disabled:opacity-50 hover:from-blue-700 hover:to-indigo-700 transition-all">
+                  {isLoading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      Send Reset Link <span className="material-symbols-outlined text-[20px]">mail</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden text-left">
@@ -103,11 +206,26 @@ function AuthPage({ onLogin }) {
       <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-12 items-center relative z-10">
         <div className="hidden lg:block space-y-8">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-medium">
-            <span className="material-symbols-outlined text-[16px]">auto_awesome</span> <span>Micro-CRM Auth</span>
+            <span className="material-symbols-outlined text-[16px]">auto_awesome</span> 
+            <span>Powered by Firebase 🔥</span>
           </div>
           <h1 className="text-6xl font-bold text-white leading-tight">
             Relationships are <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">everything.</span>
           </h1>
+          <div className="space-y-3 text-slate-300">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-green-400">check_circle</span>
+              <span>Real authentication & secure accounts</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-green-400">check_circle</span>
+              <span>Access from any device</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-green-400">check_circle</span>
+              <span>Password reset & recovery</span>
+            </div>
+          </div>
         </div>
         <div className="bg-slate-900/40 backdrop-blur-2xl border border-slate-800 rounded-[2.5rem] p-8 lg:p-12 shadow-2xl">
           <h2 className="text-3xl font-bold text-white mb-6">
@@ -115,28 +233,78 @@ function AuthPage({ onLogin }) {
           </h2>
           <form onSubmit={handleSubmit} className="space-y-5">
             {mode === 'signup' && (
-              <input type="text" placeholder="Full Name" required className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl py-4 px-6 text-white outline-none focus:border-blue-500" onChange={(e) => setFormData({...formData, name: e.target.value})} />
+              <input 
+                type="text" 
+                placeholder="Full Name" 
+                required 
+                value={formData.name} 
+                className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl py-4 px-6 text-white placeholder-slate-500 outline-none focus:border-blue-500 transition" 
+                onChange={(e) => setFormData({...formData, name: e.target.value})} 
+              />
             )}
-            <input type="email" placeholder="Email Address" required className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl py-4 px-6 text-white outline-none focus:border-blue-500" onChange={(e) => setFormData({...formData, email: e.target.value})} />
-            <input type="password" placeholder="Password" required className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl py-4 px-6 text-white outline-none focus:border-blue-500" onChange={(e) => setFormData({...formData, password: e.target.value})} />
+            <input 
+              type="email" 
+              placeholder="Email Address" 
+              required 
+              value={formData.email} 
+              className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl py-4 px-6 text-white placeholder-slate-500 outline-none focus:border-blue-500 transition" 
+              onChange={(e) => setFormData({...formData, email: e.target.value})} 
+            />
+            <input 
+              type="password" 
+              placeholder="Password (min 6 characters)" 
+              required 
+              value={formData.password} 
+              className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl py-4 px-6 text-white placeholder-slate-500 outline-none focus:border-blue-500 transition" 
+              onChange={(e) => setFormData({...formData, password: e.target.value})} 
+            />
             {mode === 'signup' && (
-              <input type="password" placeholder="Confirm Password" required className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl py-4 px-6 text-white outline-none focus:border-blue-500" onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})} />
+              <input 
+                type="password" 
+                placeholder="Confirm Password" 
+                required 
+                value={formData.confirmPassword} 
+                className="w-full bg-slate-800/40 border border-slate-700/50 rounded-2xl py-4 px-6 text-white placeholder-slate-500 outline-none focus:border-blue-500 transition" 
+                onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})} 
+              />
             )}
-            {error && <p className="text-red-400 text-sm">{error}</p>}
-            <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-3 disabled:opacity-50">
-              {isLoading ? 'Verifying...' : (mode === 'signin' ? 'Sign In' : 'Create Account')} <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                <p className="text-red-400 text-sm">{error}</p>
+              </div>
+            )}
+            <button type="submit" disabled={isLoading} className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-3 disabled:opacity-50 hover:from-blue-700 hover:to-indigo-700 transition-all">
+              {isLoading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  {mode === 'signin' ? 'Signing in...' : 'Creating account...'}
+                </>
+              ) : (
+                <>
+                  {mode === 'signin' ? 'Sign In' : 'Create Account'} <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                </>
+              )}
             </button>
           </form>
-          <button onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')} className="mt-8 text-slate-400 text-sm block w-full text-center hover:text-white">
-            {mode === 'signin' ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
-          </button>
+          
+          <div className="mt-6 flex items-center justify-between gap-4">
+            <button onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')} className="text-slate-400 text-sm hover:text-white transition">
+              {mode === 'signin' ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+            </button>
+            {mode === 'signin' && (
+              <button onClick={() => setResetMode(true)} className="text-blue-400 text-sm hover:text-blue-300 transition whitespace-nowrap">
+                Forgot password?
+              </button>
+            )}
+          </div>
+          
           {mode === 'signup' && (
             <div className="mt-6 p-4 bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border border-yellow-500/20 rounded-2xl">
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-[20px] text-yellow-400 flex-shrink-0 mt-0.5">workspace_premium</span>
                 <div>
-                  <p className="text-sm text-gray-200 font-medium">14-day Premium Trial</p>
-                  <p className="text-xs text-gray-400 mt-1">Full access to all features</p>
+                  <p className="text-sm text-gray-200 font-medium">Free Account</p>
+                  <p className="text-xs text-gray-400 mt-1">Up to 10 contacts • All features included</p>
                 </div>
               </div>
             </div>
@@ -146,6 +314,7 @@ function AuthPage({ onLogin }) {
     </div>
   );
 }
+
 
 // --- CONTACT DETAIL VIEW ---
 function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activities, categories = [], allContacts = [], onIcebreaker, onOpenContact }) {
@@ -879,6 +1048,33 @@ useEffect(() => {
   }, [isLoading]);
   // ===== END EMERGENCY SYSTEM =====
 
+  // ===== FIREBASE AUTH STATE LISTENER =====
+  useEffect(() => {
+    const unsubscribe = onAuthChange(async (firebaseUser) => {
+      if (firebaseUser) {
+        // User is logged in - get their data
+        const userData = await getUserData(firebaseUser.uid);
+        if (userData.success) {
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            name: userData.data.name,
+            isPremium: userData.data.isPremium || false
+          });
+          setIsPremium(userData.data.isPremium || false);
+        }
+      } else {
+        // User is logged out
+        setUser(null);
+        setIsPremium(false);
+      }
+      setIsLoading(false);
+    });
+    
+    return () => unsubscribe();
+  }, []);
+  // ===== END FIREBASE AUTH LISTENER =====
+
   // --- SMART EXTRACT: parse any text for all contact fields ---
   const extractFromText = (text) => {
     const detected = [];
@@ -1353,12 +1549,14 @@ useEffect(() => {
   };
 
   const handleLogout = async () => {
-    // Redirect FIRST to avoid flash of old UI
-    window.location.href = '/';
+    // Firebase Logout
+    await logOut();
     
-    // Then clear auth
-    await window.storage.delete('auth_token');
-    await window.storage.delete('auth_user');
+    // Clear local state
+    setUser(null);
+    setContacts([]);
+    setActivities([]);
+    setIsPremium(false);
   };
 
   const handleAddContact = async (e) => {
