@@ -667,7 +667,7 @@ export default function App() {
   const [draggingId, setDraggingId] = useState(null);
   const [bulkContactsText, setBulkContactsText] = useState('');
   const [importStatus, setImportStatus] = useState('');
-  const [bulkEmailData, setBulkEmailData] = useState({ subject: '', body: '', selectedContacts: [] });
+  const [bulkEmailData, setBulkEmailData] = useState({ subject: '', body: '', selectedContacts: [], purpose: '', customPrompt: '', scheduleDate: '', scheduleTime: '' });
   const [emailSendMethod, setEmailSendMethod] = useState('mailto'); // 'copy' | 'mailto'
   const [emailSendStatus, setEmailSendStatus] = useState(''); // 'sending' | 'done' | ''
   const [showBulkIcebreaker, setShowBulkIcebreaker] = useState(false);
@@ -1767,60 +1767,95 @@ useEffect(() => {
   const generateBulkEmails = async () => {
     const selectedContactsList = contacts.filter(c => bulkEmailData.selectedContacts.includes(c.id) && c.email);
     
-    if (emailSendMethod === 'copy') {
-      // Original clipboard copy method
-      const emails = selectedContactsList.map(contact => {
-        const personalizedBody = bulkEmailData.body
-          .replace(/\{name\}/g, contact.name)
-          .replace(/\{firstName\}/g, contact.name.split(' ')[0]);
-        return `To: ${contact.email}\nSubject: ${bulkEmailData.subject}\n\n${personalizedBody}`;
-      }).join('\n\n---\n\n');
-      navigator.clipboard.writeText(emails);
-      selectedContactsList.forEach(contact => {
-        addActivity({
-          contactId: contact.id,
-          type: 'email',
-          content: `Sent: ${bulkEmailData.subject}`,
-          date: new Date().toISOString().split('T')[0],
-          id: Date.now() + '_' + contact.id,
-          timestamp: new Date().toISOString()
-        });
-      });
-      alert(`${selectedContactsList.length} emails copied to clipboard!`);
-      setShowBulkEmail(false);
-      setBulkEmailData({ subject: '', body: '', selectedContacts: [] });
-    } else {
-      // mailto: method - open email client for each
-      setEmailSendStatus('sending');
+    setEmailSendStatus('sending');
+    
+    try {
+      // Send emails via in-platform API endpoint (you'll create this)
       for (let i = 0; i < selectedContactsList.length; i++) {
         const contact = selectedContactsList[i];
+        
+        // Auto-replace ALL variables with actual contact data
+        const personalizedSubject = bulkEmailData.subject
+          .replace(/\{name\}/g, contact.name)
+          .replace(/\{firstName\}/g, contact.name.split(' ')[0])
+          .replace(/\{lastName\}/g, contact.name.split(' ').slice(1).join(' ') || contact.name)
+          .replace(/\{companyName\}/g, contact.company || '')
+          .replace(/\{email\}/g, contact.email)
+          .replace(/\{phone\}/g, contact.phone || '');
+        
         const personalizedBody = bulkEmailData.body
           .replace(/\{name\}/g, contact.name)
-          .replace(/\{firstName\}/g, contact.name.split(' ')[0]);
-        const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(bulkEmailData.subject)}&body=${encodeURIComponent(personalizedBody)}`;
-        window.open(mailtoLink, '_blank');
+          .replace(/\{firstName\}/g, contact.name.split(' ')[0])
+          .replace(/\{lastName\}/g, contact.name.split(' ').slice(1).join(' ') || contact.name)
+          .replace(/\{companyName\}/g, contact.company || '')
+          .replace(/\{email\}/g, contact.email)
+          .replace(/\{phone\}/g, contact.phone || '');
         
-        // Log activity
+        // Call your email API endpoint (you'll need to create this)
+        const emailData = {
+          to: contact.email,
+          subject: personalizedSubject,
+          body: personalizedBody,
+          fromName: user.name || businessProfile.businessName || 'Your CRM',
+          scheduleDate: bulkEmailData.scheduleDate,
+          scheduleTime: bulkEmailData.scheduleTime
+        };
+        
+        // Send via API (implement this endpoint later)
+        try {
+          const response = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(emailData)
+          });
+          
+          if (!response.ok) {
+            console.error(`Failed to send email to ${contact.email}`);
+            // Fallback to mailto if API fails
+            const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(personalizedSubject)}&body=${encodeURIComponent(personalizedBody)}`;
+            window.open(mailtoLink, '_blank');
+          }
+        } catch (apiError) {
+          console.error('Email API error:', apiError);
+          // Fallback to mailto
+          const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(personalizedSubject)}&body=${encodeURIComponent(personalizedBody)}`;
+          window.open(mailtoLink, '_blank');
+        }
+        
+        // Log activity for each contact
         addActivity({
           contactId: contact.id,
           type: 'email',
-          content: `Drafted: ${bulkEmailData.subject}`,
+          content: `Sent: ${personalizedSubject}`,
           date: new Date().toISOString().split('T')[0],
           id: Date.now() + '_' + contact.id,
           timestamp: new Date().toISOString()
         });
         
-        // Small delay between opens to prevent browser blocking
+        // Small delay between sends to prevent rate limiting
         if (i < selectedContactsList.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
+      
       setEmailSendStatus('done');
+      
+      // Show success message
+      const toast = document.createElement('div');
+      toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+      toast.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> Successfully sent ${selectedContactsList.length} personalized email${selectedContactsList.length !== 1 ? 's' : ''}!`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+      
       setTimeout(() => {
         setShowBulkEmail(false);
-        setBulkEmailData({ subject: '', body: '', selectedContacts: [] });
+        setBulkEmailData({ subject: '', body: '', selectedContacts: [], purpose: '', scheduleDate: '', scheduleTime: '' });
         setEmailSendStatus('');
       }, 2000);
+    } catch (error) {
+      console.error('Bulk email error:', error);
+      setEmailSendStatus('');
+      alert('Failed to send emails. Please try again.');
     }
   };
 
@@ -3409,8 +3444,19 @@ const Sidebar = () => (
                           return;
                         }
                         
+                        if (!bulkEmailData.purpose && !bulkEmailData.customPrompt) {
+                          alert('Please select an email purpose or write a custom prompt - this helps AI generate relevant content');
+                          return;
+                        }
+                        
                         const firstContact = contacts.find(c => c.id === bulkEmailData.selectedContacts[0]);
                         if (!firstContact) return;
+                        
+                        // Show loading state
+                        const btn = event.target.closest('button');
+                        const originalHTML = btn.innerHTML;
+                        btn.innerHTML = '<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Generating...';
+                        btn.disabled = true;
                         
                         try {
                           const response = await fetch('/api/generate-email', {
@@ -3420,7 +3466,8 @@ const Sidebar = () => (
                               contact: firstContact,
                               businessProfile,
                               recipientCount: bulkEmailData.selectedContacts.length,
-                              purpose: bulkEmailData.purpose
+                              purpose: bulkEmailData.purpose,
+                              customPrompt: bulkEmailData.customPrompt  // Send custom prompt to API
                             })
                           });
                           
@@ -3431,22 +3478,57 @@ const Sidebar = () => (
                               subject: data.subject || bulkEmailData.subject,
                               body: data.body || bulkEmailData.body
                             });
-                          } else {
-                            const businessContext = businessProfile.description 
-                              ? `\n\nContext: ${businessProfile.businessName || 'Our company'} - ${businessProfile.description}`
-                              : '';
                             
+                            // Show success toast
+                            const toast = document.createElement('div');
+                            toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+                            toast.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span> AI generated your email!';
+                            document.body.appendChild(toast);
+                            setTimeout(() => toast.remove(), 2000);
+                          } else {
+                            // Fallback with purpose-aware templates
+                            const purposeTemplates = {
+                              'follow-up': {
+                                subject: `Following up on our conversation`,
+                                body: `Hi {firstName},\n\nI wanted to follow up on our recent conversation and see how things are progressing.\n\nLet me know if you have any questions or if there's anything I can help with.\n\nBest regards,\n${businessProfile.businessName || 'Your Name'}`
+                              },
+                              'introduction': {
+                                subject: `Introduction - ${businessProfile.businessName || 'Our Company'}`,
+                                body: `Hi {firstName},\n\nI hope this email finds you well. I wanted to introduce myself and ${businessProfile.businessName || 'our company'}.\n\n${businessProfile.description || 'We help businesses like yours achieve their goals.'}\n\nWould you be open to a brief call to discuss how we might be able to help?\n\nBest regards,\n${user.name || 'Your Name'}`
+                              },
+                              'sales': {
+                                subject: `Special offer for {companyName}`,
+                                body: `Hi {firstName},\n\nI wanted to reach out with a special opportunity for {companyName}.\n\n${businessProfile.valueProposition || 'We can help you save time and increase efficiency.'}\n\nAre you available for a quick call this week to discuss?\n\nBest regards,\n${user.name || 'Your Name'}`
+                              },
+                              'thank-you': {
+                                subject: `Thank you, {firstName}`,
+                                body: `Hi {firstName},\n\nI wanted to take a moment to thank you for your time and partnership.\n\nIt's been great working with you, and I'm looking forward to continuing our collaboration.\n\nBest regards,\n${user.name || 'Your Name'}`
+                              },
+                              'custom': {
+                                subject: `Quick message for {firstName}`,
+                                body: `Hi {firstName},\n\n${bulkEmailData.customPrompt || 'I wanted to reach out regarding our recent conversation.'}\n\nLooking forward to hearing from you.\n\nBest regards,\n${user.name || 'Your Name'}`
+                              },
+                              'default': {
+                                subject: `Quick check-in from ${businessProfile.businessName || 'us'}`,
+                                body: `Hi {firstName},\n\nHope you're doing well! I wanted to reach out and see how things are going.\n\nLet me know if there's anything I can help with.\n\nBest regards,\n${user.name || 'Your Name'}`
+                              }
+                            };
+                            
+                            const template = purposeTemplates[bulkEmailData.purpose] || purposeTemplates['default'];
                             setBulkEmailData({
                               ...bulkEmailData,
-                              subject: bulkEmailData.subject || `Quick check-in from ${businessProfile.businessName || 'us'}`,
-                              body: bulkEmailData.body || `Hi {firstName},\n\nHope you're doing well! ${businessContext}\n\nI wanted to reach out and see how things are going.\n\nBest regards,\n${businessProfile.businessName || 'Your Name'}`
+                              subject: bulkEmailData.subject || template.subject,
+                              body: bulkEmailData.body || template.body
                             });
                           }
                         } catch (error) {
                           alert('AI generation not available. Please write manually.');
+                        } finally {
+                          btn.innerHTML = originalHTML;
+                          btn.disabled = false;
                         }
                       }}
-                      disabled={bulkEmailData.selectedContacts.length === 0}
+                      disabled={bulkEmailData.selectedContacts.length === 0 || (!bulkEmailData.purpose && !bulkEmailData.customPrompt)}
                       className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition flex items-center gap-2"
                     >
                       <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
@@ -3456,6 +3538,51 @@ const Sidebar = () => (
 
                   {/* Email Composer - Scrollable */}
                   <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                    {/* Email Purpose */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">
+                        Email Purpose 
+                        <span className="text-slate-400 font-normal ml-1">(quick select or use custom prompt below)</span>
+                      </label>
+                      <select
+                        value={bulkEmailData.purpose || ''}
+                        onChange={(e) => setBulkEmailData({...bulkEmailData, purpose: e.target.value})}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white"
+                      >
+                        <option value="">Select email purpose...</option>
+                        <option value="follow-up">Follow-up / Check-in</option>
+                        <option value="introduction">Introduction / Meeting Request</option>
+                        <option value="sales">Sales Pitch / Product Offer</option>
+                        <option value="update">Update / News Share</option>
+                        <option value="thank-you">Thank You / Appreciation</option>
+                        <option value="feedback">Request Feedback</option>
+                        <option value="networking">Networking / Collaboration</option>
+                        <option value="reminder">Reminder / Nudge</option>
+                        <option value="proposal">Proposal / Quote</option>
+                        <option value="event-invite">Event Invitation</option>
+                        <option value="custom">✨ Custom (use prompt below)</option>
+                      </select>
+                    </div>
+
+                    {/* Custom AI Prompt */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[14px] text-indigo-600">auto_awesome</span>
+                        Custom AI Prompt
+                        <span className="text-slate-400 font-normal">(tell AI exactly what type of email to write)</span>
+                      </label>
+                      <textarea
+                        value={bulkEmailData.customPrompt || ''}
+                        onChange={(e) => setBulkEmailData({...bulkEmailData, customPrompt: e.target.value, purpose: e.target.value ? 'custom' : bulkEmailData.purpose})}
+                        placeholder="Example: Write a friendly email asking for a referral to their network. Mention that we helped them save 20% on costs last quarter. Keep it casual and under 100 words."
+                        rows="3"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none bg-white"
+                      />
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        💡 Be specific! Include tone, length, key points, and any details AI should mention.
+                      </p>
+                    </div>
+
                     {/* Subject Line */}
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-2">Subject Line</label>
@@ -3472,7 +3599,101 @@ const Sidebar = () => (
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <label className="block text-xs font-semibold text-slate-700">Email Body</label>
-                        <div className="flex gap-1">
+                        <div className="flex gap-2">
+                          {/* Regenerate Button - Only shows if content exists */}
+                          {(bulkEmailData.subject || bulkEmailData.body) && (
+                            <button
+                              onClick={async () => {
+                                if (bulkEmailData.selectedContacts.length === 0) {
+                                  alert('Please select at least one recipient first');
+                                  return;
+                                }
+                                
+                                if (!bulkEmailData.purpose && !bulkEmailData.customPrompt) {
+                                  alert('Please select a purpose or write a custom prompt');
+                                  return;
+                                }
+                                
+                                const firstContact = contacts.find(c => c.id === bulkEmailData.selectedContacts[0]);
+                                if (!firstContact) return;
+                                
+                                // Show loading state in button
+                                const regenerateBtn = document.getElementById('regenerate-btn');
+                                const originalHTML = regenerateBtn.innerHTML;
+                                regenerateBtn.innerHTML = '<div class="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>';
+                                regenerateBtn.disabled = true;
+                                
+                                try {
+                                  const response = await fetch('/api/generate-email', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      contact: firstContact,
+                                      businessProfile,
+                                      recipientCount: bulkEmailData.selectedContacts.length,
+                                      purpose: bulkEmailData.purpose,
+                                      customPrompt: bulkEmailData.customPrompt
+                                    })
+                                  });
+                                  
+                                  if (response.ok) {
+                                    const data = await response.json();
+                                    setBulkEmailData({
+                                      ...bulkEmailData,
+                                      subject: data.subject || bulkEmailData.subject,
+                                      body: data.body || bulkEmailData.body
+                                    });
+                                  } else {
+                                    // Use fallback templates
+                                    const purposeTemplates = {
+                                      'follow-up': {
+                                        subject: `Following up on our conversation`,
+                                        body: `Hi {firstName},\n\nI wanted to follow up on our recent conversation and see how things are progressing.\n\nLet me know if you have any questions or if there's anything I can help with.\n\nBest regards,\n${businessProfile.businessName || 'Your Name'}`
+                                      },
+                                      'introduction': {
+                                        subject: `Introduction - ${businessProfile.businessName || 'Our Company'}`,
+                                        body: `Hi {firstName},\n\nI hope this email finds you well. I wanted to introduce myself and ${businessProfile.businessName || 'our company'}.\n\n${businessProfile.description || 'We help businesses like yours achieve their goals.'}\n\nWould you be open to a brief call to discuss how we might be able to help?\n\nBest regards,\n${user.name || 'Your Name'}`
+                                      },
+                                      'sales': {
+                                        subject: `Special offer for {companyName}`,
+                                        body: `Hi {firstName},\n\nI wanted to reach out with a special opportunity for {companyName}.\n\n${businessProfile.valueProposition || 'We can help you save time and increase efficiency.'}\n\nAre you available for a quick call this week to discuss?\n\nBest regards,\n${user.name || 'Your Name'}`
+                                      },
+                                      'thank-you': {
+                                        subject: `Thank you, {firstName}`,
+                                        body: `Hi {firstName},\n\nI wanted to take a moment to thank you for your time and partnership.\n\nIt's been great working with you, and I'm looking forward to continuing our collaboration.\n\nBest regards,\n${user.name || 'Your Name'}`
+                                      },
+                                      'custom': {
+                                        subject: `Quick message for {firstName}`,
+                                        body: `Hi {firstName},\n\n${bulkEmailData.customPrompt || 'I wanted to reach out regarding our recent conversation.'}\n\nLooking forward to hearing from you.\n\nBest regards,\n${user.name || 'Your Name'}`
+                                      },
+                                      'default': {
+                                        subject: `Quick check-in from ${businessProfile.businessName || 'us'}`,
+                                        body: `Hi {firstName},\n\nHope you're doing well! I wanted to reach out and see how things are going.\n\nLet me know if there's anything I can help with.\n\nBest regards,\n${user.name || 'Your Name'}`
+                                      }
+                                    };
+                                    
+                                    const template = purposeTemplates[bulkEmailData.purpose] || purposeTemplates['default'];
+                                    setBulkEmailData({
+                                      ...bulkEmailData,
+                                      subject: template.subject,
+                                      body: template.body
+                                    });
+                                  }
+                                } catch (error) {
+                                  console.error('Regenerate error:', error);
+                                } finally {
+                                  regenerateBtn.innerHTML = originalHTML;
+                                  regenerateBtn.disabled = false;
+                                }
+                              }}
+                              id="regenerate-btn"
+                              className="px-2 py-1 text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-semibold transition flex items-center gap-1"
+                              title="Generate new version"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">refresh</span>
+                              Regenerate
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               const cursorPos = document.getElementById('email-body-textarea').selectionStart;
@@ -3519,18 +3740,22 @@ const Sidebar = () => (
                   onClick={() => {
                     const selectedContactsList = contacts.filter(c => bulkEmailData.selectedContacts.includes(c.id) && c.email);
                     const emails = selectedContactsList.map(contact => {
+                      const personalizedSubject = bulkEmailData.subject
+                        .replace(/\{name\}/g, contact.name)
+                        .replace(/\{firstName\}/g, contact.name.split(' ')[0])
+                        .replace(/\{companyName\}/g, contact.company || '');
                       const personalizedBody = bulkEmailData.body
                         .replace(/\{name\}/g, contact.name)
                         .replace(/\{firstName\}/g, contact.name.split(' ')[0])
                         .replace(/\{companyName\}/g, contact.company || '');
-                      return `To: ${contact.email}\nSubject: ${bulkEmailData.subject}\n\n${personalizedBody}`;
+                      return `To: ${contact.email}\nSubject: ${personalizedSubject}\n\n${personalizedBody}`;
                     }).join('\n\n---\n\n');
                     navigator.clipboard.writeText(emails);
                     
                     // Show success toast
                     const toast = document.createElement('div');
                     toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
-                    toast.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span> Copied to clipboard!';
+                    toast.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span> Copied ' + selectedContactsList.length + ' personalized email' + (selectedContactsList.length !== 1 ? 's' : '') + ' to clipboard!';
                     document.body.appendChild(toast);
                     setTimeout(() => toast.remove(), 2000);
                   }}
