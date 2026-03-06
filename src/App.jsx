@@ -3223,242 +3223,347 @@ const Sidebar = () => (
           </div>
         )}
 
-        {/* Bulk Email Modal — upgraded with mailto: support */}
+        {/* Bulk Email Modal — OPTION 2 DESIGN: Two-panel layout with purple theme */}
         {showBulkEmail && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl p-8 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">Bulk Personalized Emails</h2>
-              <p className="text-sm text-gray-500 mb-6">Send emails directly from your mail client or copy them all to clipboard.</p>
-
-              {/* Send method toggle */}
-              <div className="mb-6 flex gap-2 p-1 bg-gray-100 rounded-xl">
-                <button onClick={() => setEmailSendMethod('mailto')}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 ${emailSendMethod === 'mailto' ? 'bg-white shadow-sm text-purple-700' : 'text-gray-500'}`}>
-                  <span className="material-symbols-outlined text-[16px]">send</span> Send via Email Client
-                </button>
-                <button onClick={() => setEmailSendMethod('copy')}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-2 ${emailSendMethod === 'copy' ? 'bg-white shadow-sm text-purple-700' : 'text-gray-500'}`}>
-                  <span className="material-symbols-outlined text-[16px]">description</span> Copy to Clipboard
-                </button>
-              </div>
-
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-3">Select Recipients</label>
-                <div className="border border-gray-200 rounded-xl p-4 max-h-48 overflow-y-auto space-y-2">
-                  {contacts.filter(c => c.email).map(contact => (
-                    <label key={contact.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
-                      <input type="checkbox" checked={bulkEmailData.selectedContacts.includes(contact.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setBulkEmailData({...bulkEmailData, selectedContacts: [...bulkEmailData.selectedContacts, contact.id]});
-                          } else {
-                            setBulkEmailData({...bulkEmailData, selectedContacts: bulkEmailData.selectedContacts.filter(id => id !== contact.id)});
-                          }
-                        }} className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm">{contact.name} ({contact.email})</span>
-                      {/* NEW - Email Purpose Dropdown */}
-<div className="mb-4">
-  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>
-    Email Purpose (helps AI generate better content)
-  </label>
-  <select
-    value={bulkEmailData.purpose || ''}
-    onChange={(e) => setBulkEmailData({...bulkEmailData, purpose: e.target.value})}
-    className={`w-full p-3 rounded-xl border outline-none focus:ring-2 focus:ring-blue-500 ${
-      darkMode 
-        ? 'bg-slate-800 border-slate-600 text-white'
-        : 'bg-gray-50 border-gray-200'
-    }`}
-  >
-    <option value="">Select purpose...</option>
-    <option value="follow-up">Follow-up / Check-in</option>
-    <option value="introduction">Introduction / Meeting Request</option>
-    <option value="sales">Sales Pitch / Product Offer</option>
-    <option value="update">Update / News Share</option>
-    <option value="thank-you">Thank You / Appreciation</option>
-    <option value="feedback">Request Feedback</option>
-    <option value="networking">Networking / Collaboration</option>
-  </select>
-</div>
-
-{/* NEW - Email Scheduling */}
-<div className={`mb-4 p-4 rounded-xl border ${
-  darkMode 
-    ? 'bg-blue-900/20 border-blue-800'
-    : 'bg-blue-50 border-blue-200'
-}`}>
-  <div className="flex items-center gap-2 mb-3">
-    <span className={`material-symbols-outlined ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-      schedule_send
-    </span>
-    <span className={`font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-      Schedule Email (Optional)
-    </span>
-  </div>
-  <div className="grid grid-cols-2 gap-3">
-    <div>
-      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-        Date
-      </label>
-      <input
-        type="date"
-        value={bulkEmailData.scheduleDate || ''}
-        onChange={(e) => setBulkEmailData({...bulkEmailData, scheduleDate: e.target.value})}
-        min={new Date().toISOString().split('T')[0]}
-        className={`w-full px-3 py-2 border rounded-xl ${
-          darkMode 
-            ? 'bg-slate-800 border-slate-600 text-white'
-            : 'bg-white border-slate-300'
-        }`}
-      />
-    </div>
-    <div>
-      <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>
-        Time
-      </label>
-      <input
-        type="time"
-        value={bulkEmailData.scheduleTime || ''}
-        onChange={(e) => setBulkEmailData({...bulkEmailData, scheduleTime: e.target.value})}
-        className={`w-full px-3 py-2 border rounded-xl ${
-          darkMode 
-            ? 'bg-slate-800 border-slate-600 text-white'
-            : 'bg-white border-slate-300'
-        }`}
-      />
-    </div>
-  </div>
-  {bulkEmailData.scheduleDate && (
-    <p className={`text-xs mt-2 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
-      📅 Will send on {new Date(bulkEmailData.scheduleDate).toLocaleDateString()}
-      {bulkEmailData.scheduleTime && ` at ${bulkEmailData.scheduleTime}`}
-    </p>
-  )}
-</div>
-                    </label>
-                  ))}
-                </div>
-              </div>
+            <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
               
-              {/* AI Generate Button */}
-              <div className="mb-6 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-indigo-600">auto_awesome</span>
-                    <span className="text-sm font-semibold text-gray-800">AI Email Generator</span>
+              {/* Header */}
+              <div className="px-6 py-5 border-b border-slate-200 flex-shrink-0">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="material-symbols-outlined text-indigo-600">auto_awesome</span>
+                      <h2 className="text-xl font-bold text-slate-900">Bulk Personalized Emails</h2>
+                    </div>
+                    <p className="text-sm text-slate-500">Compose and send high-conversion emails to your selected contacts.</p>
                   </div>
-                  <button
-                    onClick={async () => {
-                      if (bulkEmailData.selectedContacts.length === 0) {
-                        alert('Please select at least one recipient first');
-                        return;
-                      }
-                      
-                      // Generate AI email content
-                      const firstContact = contacts.find(c => c.id === bulkEmailData.selectedContacts[0]);
-                      if (!firstContact) return;
-                      
-                      try {
-                        const response = await fetch('/api/generate-email', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            contact: firstContact,
-                           businessProfile,
-                           recipientCount: bulkEmailData.selectedContacts.length,
-                          purpose: bulkEmailData.purpose // NEW - Send purpose to API
-                          })
-
-                        });
-                        
-                        if (response.ok) {
-                          const data = await response.json();
-                          setBulkEmailData({
-                            ...bulkEmailData,
-                            subject: data.subject || bulkEmailData.subject,
-                            body: data.body || bulkEmailData.body
-                          });
-                        } else {
-                          // Fallback if API not available yet
-                          const businessContext = businessProfile.description 
-                            ? `\n\nContext: ${businessProfile.businessName || 'Our company'} - ${businessProfile.description}`
-                            : '';
-                          
-                          setBulkEmailData({
-                            ...bulkEmailData,
-                            subject: bulkEmailData.subject || `Quick check-in from ${businessProfile.businessName || 'us'}`,
-                            body: bulkEmailData.body || `Hi {firstName},\n\nHope you're doing well! ${businessContext}\n\nI wanted to reach out and see how things are going.\n\nBest regards,\n${businessProfile.businessName || 'Your Name'}`
-                          });
-                        }
-                      } catch (error) {
-                        alert('AI generation not available. Please write manually.');
-                      }
+                  <button 
+                    onClick={() => { 
+                      setShowBulkEmail(false); 
+                      setBulkEmailData({ subject: '', body: '', selectedContacts: [], purpose: '', scheduleDate: '', scheduleTime: '' }); 
+                      setEmailSendStatus(''); 
                     }}
-                    disabled={bulkEmailData.selectedContacts.length === 0}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white text-sm font-semibold rounded-lg transition flex items-center gap-2"
+                    className="p-2 hover:bg-slate-100 rounded-lg transition"
                   >
-                    <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
-                    Generate with AI
+                    <span className="material-symbols-outlined text-slate-400">close</span>
                   </button>
                 </div>
-                <p className="text-xs text-gray-600">
-                  AI will use your business profile to generate personalized email content
-                </p>
-              </div>
-              
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Subject</label>
-                <input type="text" value={bulkEmailData.subject}
-                  onChange={(e) => setBulkEmailData({...bulkEmailData, subject: e.target.value})}
-                  placeholder="Quick check-in"
-                  className="w-full p-3 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" />
-              </div>
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Body <span className="text-xs text-gray-500">(Use {'{name}'} or {'{firstName}'})</span>
-                </label>
-                <textarea value={bulkEmailData.body}
-                  onChange={(e) => setBulkEmailData({...bulkEmailData, body: e.target.value})}
-                  rows="6" placeholder="Hi {firstName}, Hope you are doing well!"
-                  className="w-full p-4 bg-gray-50 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
 
-              {/* Status message */}
-              {emailSendStatus && (
-                <div className={`mb-4 p-4 rounded-xl flex items-center gap-3 ${emailSendStatus === 'sending' ? 'bg-blue-50 text-blue-700' : 'bg-green-50 text-green-700'}`}>
-                  {emailSendStatus === 'sending' ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                      <span className="text-sm font-medium">Opening emails in your mail client...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined text-[20px]">check_circle</span>
-                      <span className="text-sm font-medium">Done! Check your mail client to send.</span>
-                    </>
-                  )}
+              {/* Two-Panel Layout */}
+              <div className="flex-1 flex overflow-hidden">
+                
+                {/* LEFT PANEL: Recipients */}
+                <div className="w-[380px] border-r border-slate-200 flex flex-col bg-slate-50">
+                  <div className="p-5 border-b border-slate-200">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">
+                        Recipients ({bulkEmailData.selectedContacts.length} selected)
+                      </h3>
+                      <button 
+                        onClick={() => {
+                          const allEmails = contacts.filter(c => c.email).map(c => c.id);
+                          setBulkEmailData({
+                            ...bulkEmailData, 
+                            selectedContacts: bulkEmailData.selectedContacts.length === allEmails.length ? [] : allEmails
+                          });
+                        }}
+                        className="text-xs text-indigo-600 hover:text-indigo-700 font-semibold"
+                      >
+                        {bulkEmailData.selectedContacts.length === contacts.filter(c => c.email).length ? 'Deselect All' : 'Select All'}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Recipients List - Scrollable */}
+                  <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                    {contacts.filter(c => c.email).length === 0 ? (
+                      <div className="text-center py-12 text-slate-400">
+                        <span className="material-symbols-outlined text-4xl opacity-30">mail</span>
+                        <p className="text-sm mt-2">No contacts with email addresses</p>
+                      </div>
+                    ) : (
+                      contacts.filter(c => c.email).map(contact => {
+                        const isSelected = bulkEmailData.selectedContacts.includes(contact.id);
+                        // Get category badge color
+                        const category = contact.category ? categories.find(cat => cat.id === contact.category) : null;
+                        
+                        return (
+                          <label 
+                            key={contact.id}
+                            className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${
+                              isSelected 
+                                ? 'bg-indigo-50 border-2 border-indigo-200' 
+                                : 'bg-white border-2 border-transparent hover:border-slate-200'
+                            }`}
+                          >
+                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition ${
+                              isSelected 
+                                ? 'bg-indigo-600 border-indigo-600' 
+                                : 'border-slate-300'
+                            }`}>
+                              {isSelected && (
+                                <span className="material-symbols-outlined text-white text-[14px]">check</span>
+                              )}
+                            </div>
+                            <input 
+                              type="checkbox" 
+                              checked={isSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setBulkEmailData({...bulkEmailData, selectedContacts: [...bulkEmailData.selectedContacts, contact.id]});
+                                } else {
+                                  setBulkEmailData({...bulkEmailData, selectedContacts: bulkEmailData.selectedContacts.filter(id => id !== contact.id)});
+                                }
+                              }}
+                              className="sr-only"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-slate-900 text-sm truncate">{contact.name}</p>
+                              <p className="text-xs text-slate-500 truncate">{contact.email}</p>
+                            </div>
+                            {category && (
+                              <span 
+                                className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white flex-shrink-0"
+                                style={{ backgroundColor: category.color }}
+                              >
+                                {category.name}
+                              </span>
+                            )}
+                            {!category && contact.vibeLabel && (
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold flex-shrink-0 ${
+                                contact.vibeLabel === 'hot' ? 'bg-red-100 text-red-700' :
+                                contact.vibeLabel === 'warm' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-blue-100 text-blue-700'
+                              }`}>
+                                {contact.vibeLabel === 'hot' ? 'Hot' : contact.vibeLabel === 'warm' ? 'Warm' : 'Cold'}
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  {/* Schedule Send Toggle - Bottom of Left Panel */}
+                  <div className="p-4 border-t border-slate-200 bg-white">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-slate-600 text-[18px]">schedule</span>
+                        <span className="text-sm font-semibold text-slate-700">Schedule Send</span>
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (bulkEmailData.scheduleDate) {
+                            setBulkEmailData({...bulkEmailData, scheduleDate: '', scheduleTime: ''});
+                          } else {
+                            setBulkEmailData({...bulkEmailData, scheduleDate: new Date().toISOString().split('T')[0]});
+                          }
+                        }}
+                        className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none"
+                        style={{ backgroundColor: bulkEmailData.scheduleDate ? '#6366f1' : '#cbd5e1' }}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            bulkEmailData.scheduleDate ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    
+                    {bulkEmailData.scheduleDate && (
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <div>
+                          <label className="text-[10px] font-medium text-slate-600 uppercase tracking-wide">Date</label>
+                          <input
+                            type="date"
+                            value={bulkEmailData.scheduleDate}
+                            onChange={(e) => setBulkEmailData({...bulkEmailData, scheduleDate: e.target.value})}
+                            min={new Date().toISOString().split('T')[0]}
+                            className="w-full mt-1 px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-medium text-slate-600 uppercase tracking-wide">Time</label>
+                          <input
+                            type="time"
+                            value={bulkEmailData.scheduleTime || '09:00'}
+                            onChange={(e) => setBulkEmailData({...bulkEmailData, scheduleTime: e.target.value})}
+                            className="w-full mt-1 px-2 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
 
-              <div className="flex gap-3">
-                <button onClick={generateBulkEmails}
-                  disabled={bulkEmailData.selectedContacts.length === 0 || !bulkEmailData.subject || !bulkEmailData.body || emailSendStatus === 'sending'}
-                  className="flex-1 bg-purple-600 text-white py-3 rounded-xl font-bold disabled:opacity-50 hover:bg-purple-700 transition flex items-center justify-center gap-2">
-                  {emailSendMethod === 'mailto' ? (
-                    <><span className="material-symbols-outlined text-[20px]">send</span> Send {bulkEmailData.selectedContacts.length} Emails</>
-                  ) : (
-                    <><span className="material-symbols-outlined text-[20px]">description</span> Copy {bulkEmailData.selectedContacts.length} Emails</>
-                  )}
-                </button>
-                <button onClick={() => { setShowBulkEmail(false); setBulkEmailData({ subject: '', body: '', selectedContacts: [] }); setEmailSendStatus(''); }}
-                  className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">Cancel</button>
+                {/* RIGHT PANEL: Email Draft */}
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide">Email Draft</h3>
+                    <button
+                      onClick={async () => {
+                        if (bulkEmailData.selectedContacts.length === 0) {
+                          alert('Please select at least one recipient first');
+                          return;
+                        }
+                        
+                        const firstContact = contacts.find(c => c.id === bulkEmailData.selectedContacts[0]);
+                        if (!firstContact) return;
+                        
+                        try {
+                          const response = await fetch('/api/generate-email', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              contact: firstContact,
+                              businessProfile,
+                              recipientCount: bulkEmailData.selectedContacts.length,
+                              purpose: bulkEmailData.purpose
+                            })
+                          });
+                          
+                          if (response.ok) {
+                            const data = await response.json();
+                            setBulkEmailData({
+                              ...bulkEmailData,
+                              subject: data.subject || bulkEmailData.subject,
+                              body: data.body || bulkEmailData.body
+                            });
+                          } else {
+                            const businessContext = businessProfile.description 
+                              ? `\n\nContext: ${businessProfile.businessName || 'Our company'} - ${businessProfile.description}`
+                              : '';
+                            
+                            setBulkEmailData({
+                              ...bulkEmailData,
+                              subject: bulkEmailData.subject || `Quick check-in from ${businessProfile.businessName || 'us'}`,
+                              body: bulkEmailData.body || `Hi {firstName},\n\nHope you're doing well! ${businessContext}\n\nI wanted to reach out and see how things are going.\n\nBest regards,\n${businessProfile.businessName || 'Your Name'}`
+                            });
+                          }
+                        } catch (error) {
+                          alert('AI generation not available. Please write manually.');
+                        }
+                      }}
+                      disabled={bulkEmailData.selectedContacts.length === 0}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-lg transition flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                      Refine with AI
+                    </button>
+                  </div>
+
+                  {/* Email Composer - Scrollable */}
+                  <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                    {/* Subject Line */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-2">Subject Line</label>
+                      <input
+                        type="text"
+                        value={bulkEmailData.subject}
+                        onChange={(e) => setBulkEmailData({...bulkEmailData, subject: e.target.value})}
+                        placeholder="e.g., Quick check-in regarding {companyName}"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm"
+                      />
+                    </div>
+
+                    {/* Email Body */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-xs font-semibold text-slate-700">Email Body</label>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => {
+                              const cursorPos = document.getElementById('email-body-textarea').selectionStart;
+                              const textBefore = bulkEmailData.body.substring(0, cursorPos);
+                              const textAfter = bulkEmailData.body.substring(cursorPos);
+                              setBulkEmailData({...bulkEmailData, body: textBefore + '{firstName}' + textAfter});
+                            }}
+                            className="px-2 py-1 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-mono transition"
+                          >
+                            {'{firstName}'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              const cursorPos = document.getElementById('email-body-textarea').selectionStart;
+                              const textBefore = bulkEmailData.body.substring(0, cursorPos);
+                              const textAfter = bulkEmailData.body.substring(cursorPos);
+                              setBulkEmailData({...bulkEmailData, body: textBefore + '{companyName}' + textAfter});
+                            }}
+                            className="px-2 py-1 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-mono transition"
+                          >
+                            {'{companyName}'}
+                          </button>
+                        </div>
+                      </div>
+                      <textarea
+                        id="email-body-textarea"
+                        value={bulkEmailData.body}
+                        onChange={(e) => setBulkEmailData({...bulkEmailData, body: e.target.value})}
+                        placeholder="Hi {firstName},&#10;&#10;I hope you are doing well! I'm reaching out to..."
+                        rows="12"
+                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none font-sans"
+                      />
+                      <p className="text-[11px] text-slate-500 mt-2">
+                        Pro tip: Use curly braces like <code className="bg-slate-100 px-1 py-0.5 rounded">{'{firstName}'}</code> to insert dynamic CRM data.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              {emailSendMethod === 'mailto' && (
-                <p className="text-xs text-gray-400 mt-3 text-center">
-                  📧 Each email will open in your default mail client. Make sure pop-ups are allowed.
-                </p>
-              )}
+              {/* Footer Actions */}
+              <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50">
+                <button
+                  onClick={() => {
+                    const selectedContactsList = contacts.filter(c => bulkEmailData.selectedContacts.includes(c.id) && c.email);
+                    const emails = selectedContactsList.map(contact => {
+                      const personalizedBody = bulkEmailData.body
+                        .replace(/\{name\}/g, contact.name)
+                        .replace(/\{firstName\}/g, contact.name.split(' ')[0])
+                        .replace(/\{companyName\}/g, contact.company || '');
+                      return `To: ${contact.email}\nSubject: ${bulkEmailData.subject}\n\n${personalizedBody}`;
+                    }).join('\n\n---\n\n');
+                    navigator.clipboard.writeText(emails);
+                    
+                    // Show success toast
+                    const toast = document.createElement('div');
+                    toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+                    toast.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span> Copied to clipboard!';
+                    document.body.appendChild(toast);
+                    setTimeout(() => toast.remove(), 2000);
+                  }}
+                  disabled={bulkEmailData.selectedContacts.length === 0 || !bulkEmailData.subject || !bulkEmailData.body}
+                  className="px-5 py-2.5 border-2 border-slate-300 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 font-semibold rounded-xl transition flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">content_copy</span>
+                  Copy to Clipboard
+                </button>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-slate-500">Total Recipients: <strong className="text-slate-700">{bulkEmailData.selectedContacts.length}</strong></span>
+                  <button
+                    onClick={generateBulkEmails}
+                    disabled={bulkEmailData.selectedContacts.length === 0 || !bulkEmailData.subject || !bulkEmailData.body || emailSendStatus === 'sending'}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl transition flex items-center gap-2 shadow-lg shadow-indigo-200"
+                  >
+                    {emailSendStatus === 'sending' ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[18px]">send</span>
+                        Send Bulk Emails
+                        <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         )}
