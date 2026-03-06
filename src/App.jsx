@@ -742,6 +742,7 @@ const [darkMode, setDarkMode] = useState(() => {
 // NEW - Feature 6: Compact Smart Capture
 const [showMagicPaste, setShowMagicPaste] = useState(false);
 const [showScanCapture, setShowScanCapture] = useState(false);
+const [showSortOptions, setShowSortOptions] = useState(false);
 
   // ===== EMERGENCY MODAL ESCAPE SYSTEM =====
   // Close all modals with ESC key
@@ -2205,15 +2206,15 @@ const Sidebar = () => (
     
     {/* Dark Mode Toggle - Desktop */}
     <button
-      onClick={() => setDarkMode(!darkMode)}
-      className={`hidden lg:block fixed top-4 right-4 z-50 p-3 rounded-xl shadow-lg hover:shadow-xl transition-all ${
-        darkMode 
+       onClick={() => setDarkMode(!darkMode)}
+        className={`hidden lg:block fixed top-4 right-4 z-50 p-2 rounded-lg shadow-lg hover:shadow-xl transition-all ${
+         darkMode 
           ? 'bg-slate-800 border border-slate-700' 
           : 'bg-white border border-slate-200'
       }`}
       title={darkMode ? 'Light mode' : 'Dark mode'}
     >
-      <span className={`material-symbols-outlined ${darkMode ? 'text-yellow-400' : 'text-slate-700'}`}>
+      <span className={`material-symbols-outlined text-[20px] ${darkMode ? 'text-yellow-400' : 'text-slate-700'}`}>
         {darkMode ? 'light_mode' : 'dark_mode'}
       </span>
     </button>
@@ -2337,29 +2338,51 @@ const Sidebar = () => (
 
           {/* Row 2: Sort bar + Filter toggle + Category manager */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-xs font-semibold uppercase tracking-wide mr-1 ${
-              darkMode ? 'text-slate-500' : 'text-gray-400'
-            }`}>Sort:</span>
-            {[
-              { id: 'name',        label: 'Name' },
-              { id: 'lastContact', label: 'Last Contact' },
-              { id: 'vibe',        label: 'Vibe' },
-              { id: 'company',     label: 'Company' },
-              { id: 'dateAdded',   label: 'Date Added' },
-            ].map(s => (
-              <button key={s.id} onClick={() => toggleSort(s.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
-                  sortBy === s.id 
-                    ? darkMode 
-                      ? 'bg-indigo-600 text-white' 
-                      : 'bg-slate-800 text-white'
-                    : darkMode
-                      ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}>
-                {s.label}
-                {sortBy === s.id && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
-              </button>
+  <button
+    onClick={() => setShowSortOptions(!showSortOptions)}
+    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition ${
+      showSortOptions
+        ? darkMode 
+          ? 'bg-indigo-600 text-white border-indigo-600'
+          : 'bg-slate-800 text-white border-slate-800'
+        : darkMode
+          ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'
+          : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
+    }`}
+  >
+    <span className="material-symbols-outlined text-[14px]">sort</span>
+    Sort: {sortBy === 'name' ? 'Name' : sortBy === 'lastContact' ? 'Last Contact' : sortBy === 'vibe' ? 'Vibe' : sortBy === 'company' ? 'Company' : 'Date Added'}
+    {sortDir === 'asc' ? ' ↑' : ' ↓'}
+    <span className="material-symbols-outlined text-[14px]">
+      {showSortOptions ? 'expand_less' : 'expand_more'}
+    </span>
+  </button>
+  
+  {showSortOptions && (
+    <div className="flex items-center gap-2 flex-wrap">
+      {[
+        { id: 'name',        label: 'Name' },
+        { id: 'lastContact', label: 'Last Contact' },
+        { id: 'vibe',        label: 'Vibe' },
+        { id: 'company',     label: 'Company' },
+        { id: 'dateAdded',   label: 'Date Added' },
+      ].map(s => (
+        <button key={s.id} onClick={() => { toggleSort(s.id); setShowSortOptions(false); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+            sortBy === s.id 
+              ? darkMode 
+                ? 'bg-indigo-600 text-white' 
+                : 'bg-slate-800 text-white'
+              : darkMode
+                ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}>
+          {s.label}
+          {sortBy === s.id && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+        </button>
+      ))}
+    </div>
+  )}
             ))}
             <div className="flex-1" />
             <button onClick={() => setShowFilters(f => !f)}
@@ -2400,15 +2423,29 @@ const Sidebar = () => (
 
           {/* Row 3: Filter panel — shown when toggled */}
           {showFilters && (
-            <div className="border border-gray-100 rounded-xl p-4 bg-gray-50 space-y-3">
+           <div className={`border rounded-xl p-4 space-y-3 ${
+             darkMode 
+               ? 'bg-slate-800 border-slate-700' 
+                 : 'bg-gray-50 border-gray-100'
+           }`}>
 
               {/* Category filter */}
               {categories.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Category</p>
+                  <p className={`text-[10px] font-bold uppercase tracking-wide mb-2 ${
+  darkMode ? 'text-slate-400' : 'text-gray-400'
+}`}>Category</p>
                   <div className="flex gap-2 flex-wrap">
                     <button onClick={() => setFilterCategory('all')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${filterCategory === 'all' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${
+  filterCategory === 'all' 
+    ? darkMode 
+      ? 'bg-indigo-600 text-white border-indigo-600'
+      : 'bg-gray-800 text-white border-gray-800'
+    : darkMode
+      ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'
+      : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'
+}`}>
                       All
                     </button>
                     {categories.map(cat => (
@@ -2428,7 +2465,9 @@ const Sidebar = () => (
 
               {/* Vibe filter */}
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Vibe</p>
+                <p className={`text-[10px] font-bold uppercase tracking-wide mb-2 ${
+  darkMode ? 'text-slate-400' : 'text-gray-400'
+}`}>Vibe</p>
                 <div className="flex gap-2 flex-wrap">
                   {[
                     { id: 'all',  label: 'All Vibes' },
@@ -2447,7 +2486,9 @@ const Sidebar = () => (
               {/* Tag filter */}
               {allTags.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Tag</p>
+                  <p className={`text-[10px] font-bold uppercase tracking-wide mb-2 ${
+  darkMode ? 'text-slate-400' : 'text-gray-400'
+}`}>Tag</p>
                   <div className="flex gap-2 flex-wrap">
                     <button onClick={() => setFilterTag('all')}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${filterTag === 'all' ? 'bg-gray-800 text-white border-gray-800' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
@@ -2465,7 +2506,9 @@ const Sidebar = () => (
 
               {/* Quick toggles */}
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide mb-2">Quick Filters</p>
+                <p className={`text-[10px] font-bold uppercase tracking-wide mb-2 ${
+  darkMode ? 'text-slate-400' : 'text-gray-400'
+}`}>Quick Filters</p>
                 <div className="flex gap-2 flex-wrap">
                   <button onClick={() => setFilterFavorites(f => !f)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border flex items-center gap-1 ${filterFavorites ? 'bg-yellow-500 text-white border-yellow-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-100'}`}>
@@ -2497,17 +2540,23 @@ const Sidebar = () => (
 
         {/* Contacts Grid or Board View */}
         {viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${
+  sidebarCollapsed ? 'lg:grid-cols-4' : 'lg:grid-cols-3'
+}`}>
             {filteredContacts.map(contact => {
               const days = daysSinceContact(contact.lastContactDate);
               return (
                 <div key={contact.id}
-                  className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition group cursor-pointer"
+  className={`p-5 rounded-xl shadow-sm border hover:shadow-md transition group cursor-pointer ${
+    darkMode 
+      ? 'bg-slate-800 border-slate-700'
+      : 'bg-white border-gray-100'
+  }`}
                   onClick={() => setSelectedContact(contact)}>
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-bold text-gray-800">{contact.name}</h3>
+                       <h3 className={`font-bold ${darkMode ? 'text-white' : 'text-gray-800'}`}>{contact.name}</h3>
                         {isStale(contact.lastContactDate) && (
                           <span className="px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded text-[9px] font-bold uppercase tracking-wide">Stale</span>
                         )}
@@ -2516,8 +2565,8 @@ const Sidebar = () => (
                           <span className={`material-symbols-outlined text-[16px] ${contact.isFavorite ? 'text-yellow-400' : 'text-gray-300'}`}>star</span>
                         </button>
                       </div>
-                      {contact.email && <p className="text-xs text-gray-400">{contact.email}</p>}
-                      {contact.company && <p className="text-xs text-gray-500">{contact.company}</p>}
+                      {contact.email && <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-400'}`}>{contact.email}</p>}
+                      {contact.company && <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-gray-500'}`}>{contact.company}</p>}
                       {contact.notes && <p className="text-xs text-gray-500 mt-1 line-clamp-1">{contact.notes}</p>}
                       {contact.tags && contact.tags.length > 0 && (
                         <div className="flex gap-1 mt-2 flex-wrap">
