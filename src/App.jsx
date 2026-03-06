@@ -2383,7 +2383,6 @@ const Sidebar = () => (
       ))}
     </div>
   )}
-            ))}
             <div className="flex-1" />
             <button onClick={() => setShowFilters(f => !f)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition ${
