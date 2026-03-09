@@ -667,7 +667,7 @@ export default function App() {
   const [draggingId, setDraggingId] = useState(null);
   const [bulkContactsText, setBulkContactsText] = useState('');
   const [importStatus, setImportStatus] = useState('');
-  const [bulkEmailData, setBulkEmailData] = useState({ subject: '', body: '', selectedContacts: [], purpose: '', customPrompt: '', scheduleDate: '', scheduleTime: '' });
+  const [bulkEmailData, setBulkEmailData] = useState({ subject: '', body: '', selectedContacts: [], purpose: '', customPrompt: '', scheduleDate: '', scheduleTime: '', lastUsedPrompt: '', lastUsedPurpose: '' });
   const [emailSendMethod, setEmailSendMethod] = useState('mailto'); // 'copy' | 'mailto'
   const [emailSendStatus, setEmailSendStatus] = useState(''); // 'sending' | 'done' | ''
   const [showBulkIcebreaker, setShowBulkIcebreaker] = useState(false);
@@ -3459,7 +3459,12 @@ const Sidebar = () => (
                         btn.innerHTML = '<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Generating...';
                         btn.disabled = true;
                         
+                        // SAVE current prompt/purpose before generating (for Regenerate button later)
+                        const currentPrompt = bulkEmailData.customPrompt;
+                        const currentPurpose = bulkEmailData.purpose;
+                        
                         try {
+                          // ALWAYS call API to generate FRESH email (even if prompt unchanged)
                           const response = await fetch('/api/generate-email', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -3467,8 +3472,9 @@ const Sidebar = () => (
                               contact: firstContact,
                               businessProfile,
                               recipientCount: bulkEmailData.selectedContacts.length,
-                              purpose: bulkEmailData.purpose,
-                              customPrompt: bulkEmailData.customPrompt  // Send custom prompt to API
+                              purpose: currentPurpose,
+                              customPrompt: currentPrompt,
+                              forceNew: true  // Flag to ensure fresh generation
                             })
                           });
                           
@@ -3476,25 +3482,29 @@ const Sidebar = () => (
                             const data = await response.json();
                             setBulkEmailData({
                               ...bulkEmailData,
-                              subject: data.subject || bulkEmailData.subject,
-                              body: data.body || bulkEmailData.body
+                              subject: data.subject,  // ALWAYS replace (not ||)
+                              body: data.body,        // ALWAYS replace (not ||)
+                              lastUsedPrompt: currentPrompt,   // Save what was used
+                              lastUsedPurpose: currentPurpose  // Save what was used
                             });
                             
                             // Show success toast
                             const toast = document.createElement('div');
                             toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
-                            toast.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span> AI generated your email!';
+                            toast.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span> Fresh email generated!';
                             document.body.appendChild(toast);
                             setTimeout(() => toast.remove(), 2000);
                           } else {
                             // Fallback with purpose-aware templates
                             // PRIORITIZE CUSTOM PROMPT if it exists
-                            if (bulkEmailData.customPrompt && bulkEmailData.customPrompt.trim()) {
+                            if (currentPrompt && currentPrompt.trim()) {
                               // Use custom prompt as the main content
                               setBulkEmailData({
                                 ...bulkEmailData,
-                                subject: bulkEmailData.subject || `Message for {firstName}`,
-                                body: bulkEmailData.body || `Hi {firstName},\n\n${bulkEmailData.customPrompt.trim()}\n\nBest regards,\n${user.name || businessProfile.businessName || 'Your Name'}`
+                                subject: `Message for {firstName}`,
+                                body: `Hi {firstName},\n\n${currentPrompt.trim()}\n\nBest regards,\n${user.name || businessProfile.businessName || 'Your Name'}`,
+                                lastUsedPrompt: currentPrompt,
+                                lastUsedPurpose: currentPurpose
                               });
                             } else {
                               // Use preset purpose templates
@@ -3521,11 +3531,13 @@ const Sidebar = () => (
                                 }
                               };
                               
-                              const template = purposeTemplates[bulkEmailData.purpose] || purposeTemplates['default'];
+                              const template = purposeTemplates[currentPurpose] || purposeTemplates['default'];
                               setBulkEmailData({
                                 ...bulkEmailData,
-                                subject: bulkEmailData.subject || template.subject,
-                                body: bulkEmailData.body || template.body
+                                subject: template.subject,
+                                body: template.body,
+                                lastUsedPrompt: currentPrompt,
+                                lastUsedPurpose: currentPurpose
                               });
                             }
                           }
@@ -3664,8 +3676,12 @@ const Sidebar = () => (
                                   return;
                                 }
                                 
-                                if (!bulkEmailData.purpose && !bulkEmailData.customPrompt) {
-                                  alert('Please select a purpose or write a custom prompt');
+                                // Use LAST USED prompt/purpose (not current!)
+                                const promptToUse = bulkEmailData.lastUsedPrompt;
+                                const purposeToUse = bulkEmailData.lastUsedPurpose;
+                                
+                                if (!purposeToUse && !promptToUse) {
+                                  alert('No previous generation found. Use "Refine with AI" first.');
                                   return;
                                 }
                                 
@@ -3679,6 +3695,7 @@ const Sidebar = () => (
                                 regenerateBtn.disabled = true;
                                 
                                 try {
+                                  // Use LAST USED settings, not current settings
                                   const response = await fetch('/api/generate-email', {
                                     method: 'POST',
                                     headers: { 'Content-Type': 'application/json' },
@@ -3686,8 +3703,9 @@ const Sidebar = () => (
                                       contact: firstContact,
                                       businessProfile,
                                       recipientCount: bulkEmailData.selectedContacts.length,
-                                      purpose: bulkEmailData.purpose,
-                                      customPrompt: bulkEmailData.customPrompt
+                                      purpose: purposeToUse,           // LAST USED purpose
+                                      customPrompt: promptToUse,       // LAST USED prompt
+                                      forceNew: true
                                     })
                                   });
                                   
@@ -3695,16 +3713,28 @@ const Sidebar = () => (
                                     const data = await response.json();
                                     setBulkEmailData({
                                       ...bulkEmailData,
-                                      subject: data.subject || bulkEmailData.subject,
-                                      body: data.body || bulkEmailData.body
+                                      subject: data.subject,  // ALWAYS replace
+                                      body: data.body,        // ALWAYS replace
+                                      // Keep lastUsed the same (still using same prompt)
+                                      lastUsedPrompt: promptToUse,
+                                      lastUsedPurpose: purposeToUse
                                     });
+                                    
+                                    // Show toast indicating regeneration with same prompt
+                                    const toast = document.createElement('div');
+                                    toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+                                    toast.innerHTML = '<span class="material-symbols-outlined text-[18px]">refresh</span> New version generated with same prompt!';
+                                    document.body.appendChild(toast);
+                                    setTimeout(() => toast.remove(), 2000);
                                   } else {
-                                    // Use fallback templates - PRIORITIZE CUSTOM PROMPT
-                                    if (bulkEmailData.customPrompt && bulkEmailData.customPrompt.trim()) {
+                                    // Use fallback templates with LAST USED settings
+                                    if (promptToUse && promptToUse.trim()) {
                                       setBulkEmailData({
                                         ...bulkEmailData,
                                         subject: `Message for {firstName}`,
-                                        body: `Hi {firstName},\n\n${bulkEmailData.customPrompt.trim()}\n\nBest regards,\n${user.name || businessProfile.businessName || 'Your Name'}`
+                                        body: `Hi {firstName},\n\n${promptToUse.trim()}\n\nBest regards,\n${user.name || businessProfile.businessName || 'Your Name'}`,
+                                        lastUsedPrompt: promptToUse,
+                                        lastUsedPurpose: purposeToUse
                                       });
                                     } else {
                                       const purposeTemplates = {
@@ -3730,11 +3760,13 @@ const Sidebar = () => (
                                         }
                                       };
                                       
-                                      const template = purposeTemplates[bulkEmailData.purpose] || purposeTemplates['default'];
+                                      const template = purposeTemplates[purposeToUse] || purposeTemplates['default'];
                                       setBulkEmailData({
                                         ...bulkEmailData,
                                         subject: template.subject,
-                                        body: template.body
+                                        body: template.body,
+                                        lastUsedPrompt: promptToUse,
+                                        lastUsedPurpose: purposeToUse
                                       });
                                     }
                                   }
