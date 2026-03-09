@@ -743,6 +743,7 @@ const [darkMode, setDarkMode] = useState(() => {
 const [showMagicPaste, setShowMagicPaste] = useState(false);
 const [showScanCapture, setShowScanCapture] = useState(false);
 const [showSortOptions, setShowSortOptions] = useState(false);
+const [showCustomPrompt, setShowCustomPrompt] = useState(false);
 
   // ===== EMERGENCY MODAL ESCAPE SYSTEM =====
   // Close all modals with ESC key
@@ -3487,39 +3488,46 @@ const Sidebar = () => (
                             setTimeout(() => toast.remove(), 2000);
                           } else {
                             // Fallback with purpose-aware templates
-                            const purposeTemplates = {
-                              'follow-up': {
-                                subject: `Following up on our conversation`,
-                                body: `Hi {firstName},\n\nI wanted to follow up on our recent conversation and see how things are progressing.\n\nLet me know if you have any questions or if there's anything I can help with.\n\nBest regards,\n${businessProfile.businessName || 'Your Name'}`
-                              },
-                              'introduction': {
-                                subject: `Introduction - ${businessProfile.businessName || 'Our Company'}`,
-                                body: `Hi {firstName},\n\nI hope this email finds you well. I wanted to introduce myself and ${businessProfile.businessName || 'our company'}.\n\n${businessProfile.description || 'We help businesses like yours achieve their goals.'}\n\nWould you be open to a brief call to discuss how we might be able to help?\n\nBest regards,\n${user.name || 'Your Name'}`
-                              },
-                              'sales': {
-                                subject: `Special offer for {companyName}`,
-                                body: `Hi {firstName},\n\nI wanted to reach out with a special opportunity for {companyName}.\n\n${businessProfile.valueProposition || 'We can help you save time and increase efficiency.'}\n\nAre you available for a quick call this week to discuss?\n\nBest regards,\n${user.name || 'Your Name'}`
-                              },
-                              'thank-you': {
-                                subject: `Thank you, {firstName}`,
-                                body: `Hi {firstName},\n\nI wanted to take a moment to thank you for your time and partnership.\n\nIt's been great working with you, and I'm looking forward to continuing our collaboration.\n\nBest regards,\n${user.name || 'Your Name'}`
-                              },
-                              'custom': {
-                                subject: `Quick message for {firstName}`,
-                                body: `Hi {firstName},\n\n${bulkEmailData.customPrompt || 'I wanted to reach out regarding our recent conversation.'}\n\nLooking forward to hearing from you.\n\nBest regards,\n${user.name || 'Your Name'}`
-                              },
-                              'default': {
-                                subject: `Quick check-in from ${businessProfile.businessName || 'us'}`,
-                                body: `Hi {firstName},\n\nHope you're doing well! I wanted to reach out and see how things are going.\n\nLet me know if there's anything I can help with.\n\nBest regards,\n${user.name || 'Your Name'}`
-                              }
-                            };
-                            
-                            const template = purposeTemplates[bulkEmailData.purpose] || purposeTemplates['default'];
-                            setBulkEmailData({
-                              ...bulkEmailData,
-                              subject: bulkEmailData.subject || template.subject,
-                              body: bulkEmailData.body || template.body
-                            });
+                            // PRIORITIZE CUSTOM PROMPT if it exists
+                            if (bulkEmailData.customPrompt && bulkEmailData.customPrompt.trim()) {
+                              // Use custom prompt as the main content
+                              setBulkEmailData({
+                                ...bulkEmailData,
+                                subject: bulkEmailData.subject || `Message for {firstName}`,
+                                body: bulkEmailData.body || `Hi {firstName},\n\n${bulkEmailData.customPrompt.trim()}\n\nBest regards,\n${user.name || businessProfile.businessName || 'Your Name'}`
+                              });
+                            } else {
+                              // Use preset purpose templates
+                              const purposeTemplates = {
+                                'follow-up': {
+                                  subject: `Following up on our conversation`,
+                                  body: `Hi {firstName},\n\nI wanted to follow up on our recent conversation and see how things are progressing.\n\nLet me know if you have any questions or if there's anything I can help with.\n\nBest regards,\n${businessProfile.businessName || 'Your Name'}`
+                                },
+                                'introduction': {
+                                  subject: `Introduction - ${businessProfile.businessName || 'Our Company'}`,
+                                  body: `Hi {firstName},\n\nI hope this email finds you well. I wanted to introduce myself and ${businessProfile.businessName || 'our company'}.\n\n${businessProfile.description || 'We help businesses like yours achieve their goals.'}\n\nWould you be open to a brief call to discuss how we might be able to help?\n\nBest regards,\n${user.name || 'Your Name'}`
+                                },
+                                'sales': {
+                                  subject: `Special offer for {companyName}`,
+                                  body: `Hi {firstName},\n\nI wanted to reach out with a special opportunity for {companyName}.\n\n${businessProfile.valueProposition || 'We can help you save time and increase efficiency.'}\n\nAre you available for a quick call this week to discuss?\n\nBest regards,\n${user.name || 'Your Name'}`
+                                },
+                                'thank-you': {
+                                  subject: `Thank you, {firstName}`,
+                                  body: `Hi {firstName},\n\nI wanted to take a moment to thank you for your time and partnership.\n\nIt's been great working with you, and I'm looking forward to continuing our collaboration.\n\nBest regards,\n${user.name || 'Your Name'}`
+                                },
+                                'default': {
+                                  subject: `Quick check-in from ${businessProfile.businessName || 'us'}`,
+                                  body: `Hi {firstName},\n\nHope you're doing well! I wanted to reach out and see how things are going.\n\nLet me know if there's anything I can help with.\n\nBest regards,\n${user.name || 'Your Name'}`
+                                }
+                              };
+                              
+                              const template = purposeTemplates[bulkEmailData.purpose] || purposeTemplates['default'];
+                              setBulkEmailData({
+                                ...bulkEmailData,
+                                subject: bulkEmailData.subject || template.subject,
+                                body: bulkEmailData.body || template.body
+                              });
+                            }
                           }
                         } catch (error) {
                           alert('AI generation not available. Please write manually.');
@@ -3538,50 +3546,97 @@ const Sidebar = () => (
 
                   {/* Email Composer - Scrollable */}
                   <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                    {/* Email Purpose */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-2">
-                        Email Purpose 
-                        <span className="text-slate-400 font-normal ml-1">(quick select or use custom prompt below)</span>
-                      </label>
-                      <select
-                        value={bulkEmailData.purpose || ''}
-                        onChange={(e) => setBulkEmailData({...bulkEmailData, purpose: e.target.value})}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white"
-                      >
-                        <option value="">Select email purpose...</option>
-                        <option value="follow-up">Follow-up / Check-in</option>
-                        <option value="introduction">Introduction / Meeting Request</option>
-                        <option value="sales">Sales Pitch / Product Offer</option>
-                        <option value="update">Update / News Share</option>
-                        <option value="thank-you">Thank You / Appreciation</option>
-                        <option value="feedback">Request Feedback</option>
-                        <option value="networking">Networking / Collaboration</option>
-                        <option value="reminder">Reminder / Nudge</option>
-                        <option value="proposal">Proposal / Quote</option>
-                        <option value="event-invite">Event Invitation</option>
-                        <option value="custom">✨ Custom (use prompt below)</option>
-                      </select>
+                    {/* Email Purpose + Custom Prompt Toggle Row */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Email Purpose */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-2">
+                          Email Purpose
+                        </label>
+                        <select
+                          value={bulkEmailData.purpose || ''}
+                          onChange={(e) => {
+                            setBulkEmailData({...bulkEmailData, purpose: e.target.value});
+                            // If selecting "custom", auto-expand the custom prompt box
+                            if (e.target.value === 'custom') {
+                              setShowCustomPrompt(true);
+                            }
+                          }}
+                          className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm bg-white"
+                        >
+                          <option value="">Select purpose...</option>
+                          <option value="follow-up">Follow-up / Check-in</option>
+                          <option value="introduction">Introduction / Meeting Request</option>
+                          <option value="sales">Sales Pitch / Product Offer</option>
+                          <option value="update">Update / News Share</option>
+                          <option value="thank-you">Thank You / Appreciation</option>
+                          <option value="feedback">Request Feedback</option>
+                          <option value="networking">Networking / Collaboration</option>
+                          <option value="reminder">Reminder / Nudge</option>
+                          <option value="proposal">Proposal / Quote</option>
+                          <option value="event-invite">Event Invitation</option>
+                        </select>
+                      </div>
+
+                      {/* Custom Prompt Toggle */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 mb-2">
+                          Custom Instructions
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowCustomPrompt(!showCustomPrompt)}
+                          className={`w-full px-4 py-3 border rounded-xl text-sm font-semibold flex items-center justify-between transition ${
+                            showCustomPrompt || bulkEmailData.customPrompt
+                              ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                              : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                            <span>{bulkEmailData.customPrompt ? 'Custom prompt set' : 'Add custom prompt'}</span>
+                          </div>
+                          <span className="material-symbols-outlined text-[18px]">
+                            {showCustomPrompt ? 'expand_less' : 'expand_more'}
+                          </span>
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Custom AI Prompt */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-2 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[14px] text-indigo-600">auto_awesome</span>
-                        Custom AI Prompt
-                        <span className="text-slate-400 font-normal">(tell AI exactly what type of email to write)</span>
-                      </label>
-                      <textarea
-                        value={bulkEmailData.customPrompt || ''}
-                        onChange={(e) => setBulkEmailData({...bulkEmailData, customPrompt: e.target.value, purpose: e.target.value ? 'custom' : bulkEmailData.purpose})}
-                        placeholder="Example: Write a friendly email asking for a referral to their network. Mention that we helped them save 20% on costs last quarter. Keep it casual and under 100 words."
-                        rows="3"
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none bg-white"
-                      />
-                      <p className="text-[11px] text-slate-500 mt-1">
-                        💡 Be specific! Include tone, length, key points, and any details AI should mention.
-                      </p>
-                    </div>
+                    {/* Custom AI Prompt - Expandable */}
+                    {showCustomPrompt && (
+                      <div className="border-2 border-indigo-200 rounded-xl p-4 bg-indigo-50/50">
+                        <label className="block text-xs font-semibold text-indigo-900 mb-2 flex items-center gap-2">
+                          <span className="material-symbols-outlined text-[14px]">auto_awesome</span>
+                          Write Your Custom Instructions
+                          <span className="text-slate-500 font-normal ml-auto text-[11px]">Tell AI exactly what to write</span>
+                        </label>
+                        <textarea
+                          value={bulkEmailData.customPrompt || ''}
+                          onChange={(e) => setBulkEmailData({...bulkEmailData, customPrompt: e.target.value})}
+                          placeholder="Example: Write a friendly email asking for a referral to their network. Mention that we helped them save 20% on costs last quarter. Keep it casual and under 100 words."
+                          rows="4"
+                          className="w-full px-4 py-3 border border-indigo-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none bg-white"
+                        />
+                        <div className="flex items-center justify-between mt-2">
+                          <p className="text-[11px] text-indigo-700">
+                            💡 Be specific: include tone, length, key points, and details
+                          </p>
+                          {bulkEmailData.customPrompt && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setBulkEmailData({...bulkEmailData, customPrompt: ''});
+                                setShowCustomPrompt(false);
+                              }}
+                              className="text-[11px] text-slate-500 hover:text-red-600 font-semibold"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Subject Line */}
                     <div>
@@ -3644,40 +3699,44 @@ const Sidebar = () => (
                                       body: data.body || bulkEmailData.body
                                     });
                                   } else {
-                                    // Use fallback templates
-                                    const purposeTemplates = {
-                                      'follow-up': {
-                                        subject: `Following up on our conversation`,
-                                        body: `Hi {firstName},\n\nI wanted to follow up on our recent conversation and see how things are progressing.\n\nLet me know if you have any questions or if there's anything I can help with.\n\nBest regards,\n${businessProfile.businessName || 'Your Name'}`
-                                      },
-                                      'introduction': {
-                                        subject: `Introduction - ${businessProfile.businessName || 'Our Company'}`,
-                                        body: `Hi {firstName},\n\nI hope this email finds you well. I wanted to introduce myself and ${businessProfile.businessName || 'our company'}.\n\n${businessProfile.description || 'We help businesses like yours achieve their goals.'}\n\nWould you be open to a brief call to discuss how we might be able to help?\n\nBest regards,\n${user.name || 'Your Name'}`
-                                      },
-                                      'sales': {
-                                        subject: `Special offer for {companyName}`,
-                                        body: `Hi {firstName},\n\nI wanted to reach out with a special opportunity for {companyName}.\n\n${businessProfile.valueProposition || 'We can help you save time and increase efficiency.'}\n\nAre you available for a quick call this week to discuss?\n\nBest regards,\n${user.name || 'Your Name'}`
-                                      },
-                                      'thank-you': {
-                                        subject: `Thank you, {firstName}`,
-                                        body: `Hi {firstName},\n\nI wanted to take a moment to thank you for your time and partnership.\n\nIt's been great working with you, and I'm looking forward to continuing our collaboration.\n\nBest regards,\n${user.name || 'Your Name'}`
-                                      },
-                                      'custom': {
-                                        subject: `Quick message for {firstName}`,
-                                        body: `Hi {firstName},\n\n${bulkEmailData.customPrompt || 'I wanted to reach out regarding our recent conversation.'}\n\nLooking forward to hearing from you.\n\nBest regards,\n${user.name || 'Your Name'}`
-                                      },
-                                      'default': {
-                                        subject: `Quick check-in from ${businessProfile.businessName || 'us'}`,
-                                        body: `Hi {firstName},\n\nHope you're doing well! I wanted to reach out and see how things are going.\n\nLet me know if there's anything I can help with.\n\nBest regards,\n${user.name || 'Your Name'}`
-                                      }
-                                    };
-                                    
-                                    const template = purposeTemplates[bulkEmailData.purpose] || purposeTemplates['default'];
-                                    setBulkEmailData({
-                                      ...bulkEmailData,
-                                      subject: template.subject,
-                                      body: template.body
-                                    });
+                                    // Use fallback templates - PRIORITIZE CUSTOM PROMPT
+                                    if (bulkEmailData.customPrompt && bulkEmailData.customPrompt.trim()) {
+                                      setBulkEmailData({
+                                        ...bulkEmailData,
+                                        subject: `Message for {firstName}`,
+                                        body: `Hi {firstName},\n\n${bulkEmailData.customPrompt.trim()}\n\nBest regards,\n${user.name || businessProfile.businessName || 'Your Name'}`
+                                      });
+                                    } else {
+                                      const purposeTemplates = {
+                                        'follow-up': {
+                                          subject: `Following up on our conversation`,
+                                          body: `Hi {firstName},\n\nI wanted to follow up on our recent conversation and see how things are progressing.\n\nLet me know if you have any questions or if there's anything I can help with.\n\nBest regards,\n${businessProfile.businessName || 'Your Name'}`
+                                        },
+                                        'introduction': {
+                                          subject: `Introduction - ${businessProfile.businessName || 'Our Company'}`,
+                                          body: `Hi {firstName},\n\nI hope this email finds you well. I wanted to introduce myself and ${businessProfile.businessName || 'our company'}.\n\n${businessProfile.description || 'We help businesses like yours achieve their goals.'}\n\nWould you be open to a brief call to discuss how we might be able to help?\n\nBest regards,\n${user.name || 'Your Name'}`
+                                        },
+                                        'sales': {
+                                          subject: `Special offer for {companyName}`,
+                                          body: `Hi {firstName},\n\nI wanted to reach out with a special opportunity for {companyName}.\n\n${businessProfile.valueProposition || 'We can help you save time and increase efficiency.'}\n\nAre you available for a quick call this week to discuss?\n\nBest regards,\n${user.name || 'Your Name'}`
+                                        },
+                                        'thank-you': {
+                                          subject: `Thank you, {firstName}`,
+                                          body: `Hi {firstName},\n\nI wanted to take a moment to thank you for your time and partnership.\n\nIt's been great working with you, and I'm looking forward to continuing our collaboration.\n\nBest regards,\n${user.name || 'Your Name'}`
+                                        },
+                                        'default': {
+                                          subject: `Quick check-in from ${businessProfile.businessName || 'us'}`,
+                                          body: `Hi {firstName},\n\nHope you're doing well! I wanted to reach out and see how things are going.\n\nLet me know if there's anything I can help with.\n\nBest regards,\n${user.name || 'Your Name'}`
+                                        }
+                                      };
+                                      
+                                      const template = purposeTemplates[bulkEmailData.purpose] || purposeTemplates['default'];
+                                      setBulkEmailData({
+                                        ...bulkEmailData,
+                                        subject: template.subject,
+                                        body: template.body
+                                      });
+                                    }
                                   }
                                 } catch (error) {
                                   console.error('Regenerate error:', error);
