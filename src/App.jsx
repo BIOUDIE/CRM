@@ -2349,6 +2349,29 @@ const Sidebar = () => (
       )}
     </nav>
     
+    
+    {/* Email Settings Button */}
+    {!sidebarCollapsed && (
+      <div className="px-6 pb-4">
+        <button
+          onClick={() => setShowEmailSettings(true)}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition ${
+            darkMode
+              ? 'text-slate-400 hover:bg-slate-800 hover:text-indigo-400 border border-slate-700'
+              : 'text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px]">mail</span>
+          <span className="text-sm">Email Settings</span>
+          {!user?.emailConfig?.defaultEmail && (
+            <span className="ml-auto px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded">
+              Setup
+            </span>
+          )}
+        </button>
+      </div>
+    )}
+    
     {/* User Profile */}
     <div className="p-6 mt-auto">
       {sidebarCollapsed ? (
@@ -2359,7 +2382,7 @@ const Sidebar = () => (
               ? 'bg-slate-800 border-slate-700 hover:bg-slate-700'
               : 'bg-slate-50 border-slate-100 hover:bg-slate-100'
           }`}
-          title={user.name || 'User'}
+          title={user?.name || 'User'}
         >
           <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm ${
             darkMode ? 'bg-indigo-900 text-indigo-400' : 'bg-indigo-100 text-indigo-700'
@@ -2513,19 +2536,10 @@ const Sidebar = () => (
     </button>
   );
 
-  if (isLoading) return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">
-      <div className="text-center">
-        <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-        <p>Loading...</p>
-      </div>
-    </div>
-  );
-
   // NO AUTH CHECK NEEDED - Firebase redirects to landing page if not logged in
 
-  // Show loading while checking auth
-  if (isLoading) {
+  // Show loading while checking auth or user not loaded
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="text-center">
@@ -5118,35 +5132,43 @@ const Sidebar = () => (
           </div>
         </div>
       )}
-{/* ===== FIRST-TIME EMAIL SETUP MODAL ===== */}
-{(showEmailSetup || (user && user.emailConfig?.emailPending)) && (
+{/* ===== FIRST-TIME EMAIL SETUP MODAL (OPTIONAL) ===== */}
+{showEmailSetup && (
   <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
     <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl">
       {/* Header */}
       <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-6 rounded-t-2xl">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-            <span className="material-symbols-outlined text-white text-[28px]">mail</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-white text-[28px]">mail</span>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-white">Set Up Your Email Address</h2>
+              <p className="text-sm text-indigo-100">Choose your professional sending email (optional)</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-white">Set Up Your Email Address</h2>
-            <p className="text-sm text-indigo-100">Choose your professional sending email (one-time setup)</p>
-          </div>
+          <button
+            onClick={() => setShowEmailSetup(false)}
+            className="p-2 hover:bg-white/10 rounded-lg transition"
+          >
+            <span className="material-symbols-outlined text-white">close</span>
+          </button>
         </div>
       </div>
 
       {/* Content */}
       <div className="p-6 space-y-6">
         {/* Important Notice */}
-        <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4">
+        <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4">
           <div className="flex gap-3">
-            <span className="material-symbols-outlined text-amber-600 text-[24px]">warning</span>
+            <span className="material-symbols-outlined text-blue-600 text-[24px]">info</span>
             <div className="flex-1">
-              <p className="font-bold text-amber-900 mb-1">Important: One-Time Setup</p>
-              <ul className="text-sm text-amber-800 space-y-1">
-                <li>• Choose carefully - this cannot be changed later</li>
-                <li>• To request a change, you'll need admin approval</li>
-                <li>• This will be your professional email address for sending</li>
+              <p className="font-bold text-blue-900 mb-1">Set Your Professional Email</p>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>• Choose your email address for sending emails from the CRM</li>
+                <li>• You can skip this and set it later in Email Settings</li>
+                <li>• Once set, changes require admin approval for security</li>
               </ul>
             </div>
           </div>
@@ -5270,7 +5292,7 @@ const Sidebar = () => (
       </div>
 
       {/* Footer */}
-      <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 rounded-b-2xl">
+      <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 rounded-b-2xl space-y-3">
         <button
           onClick={async () => {
             if (!emailAvailable) {
@@ -5285,7 +5307,7 @@ const Sidebar = () => (
             
             const fullEmail = `${customEmailPrefix}@mikrocrm.app`;
             
-            if (confirm(`Confirm setting your email to ${fullEmail}?\n\nThis cannot be changed without admin approval.`)) {
+            if (confirm(`Confirm setting your email to ${fullEmail}?\n\nYou can change this later in Email Settings (requires admin approval).`)) {
               try {
                 const updatedEmailConfig = {
                   ...user.emailConfig,
@@ -5326,6 +5348,40 @@ const Sidebar = () => (
           <span className="material-symbols-outlined">check_circle</span>
           Confirm Email Address
         </button>
+        
+        <button
+          onClick={async () => {
+            if (confirm('Skip email setup?\n\nYou can set your email later in Email Settings.')) {
+              try {
+                // Mark as not pending so modal doesn't show again
+                const updatedEmailConfig = {
+                  ...user.emailConfig,
+                  emailPending: false
+                };
+                
+                await window.setDoc(
+                  window.doc(window.firebaseDb, 'users', user.uid),
+                  { emailConfig: updatedEmailConfig },
+                  { merge: true }
+                );
+                
+                setUser({
+                  ...user,
+                  emailConfig: updatedEmailConfig
+                });
+                
+                setShowEmailSetup(false);
+                setCustomEmailPrefix('');
+                setEmailAvailable(null);
+              } catch (err) {
+                console.error('Error skipping setup:', err);
+              }
+            }
+          }}
+          className="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 py-3 rounded-xl font-semibold transition"
+        >
+          Skip for Now
+        </button>
       </div>
     </div>
   </div>
@@ -5355,26 +5411,54 @@ const Sidebar = () => (
 
       {/* Content */}
       <div className="p-6 space-y-6">
-        {/* Current Email Status */}
-        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-5">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-outlined text-white">verified</span>
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-sm font-semibold text-slate-700">Your Sending Email</p>
-                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded">ACTIVE</span>
+        {/* Current Email Status OR Set Email Prompt */}
+        {user?.emailConfig?.defaultEmail ? (
+          // Email is set - show current status
+          <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-5">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-outlined text-white">verified</span>
               </div>
-              <p className="text-2xl font-bold text-slate-900 mb-1">
-                {user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || 'Not set'}
-              </p>
-              <p className="text-sm text-slate-600">
-                From Name: <strong>{user?.emailConfig?.fromName || 'Your Name'}</strong>
-              </p>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-sm font-semibold text-slate-700">Your Sending Email</p>
+                  <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded">ACTIVE</span>
+                </div>
+                <p className="text-2xl font-bold text-slate-900 mb-1">
+                  {user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail}
+                </p>
+                <p className="text-sm text-slate-600">
+                  From Name: <strong>{user?.emailConfig?.fromName || 'Your Name'}</strong>
+                </p>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          // Email not set - show prompt
+          <div className="bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-amber-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-outlined text-white">warning</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-amber-900 mb-1">Email Not Set</p>
+                <p className="text-slate-700 mb-3">
+                  You haven't set up your sending email address yet. Set it now to send emails from the CRM.
+                </p>
+                <button
+                  onClick={() => {
+                    setShowEmailSettings(false);
+                    setShowEmailSetup(true);
+                  }}
+                  className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-semibold transition flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">mail</span>
+                  Set Up Email Now
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* From Name */}
         <div>
