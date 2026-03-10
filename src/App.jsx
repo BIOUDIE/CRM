@@ -627,6 +627,230 @@ function AnalyticsDashboard({ contacts, activities, onClose }) {
 }
 
 // --- MAIN CRM APP ---
+
+// Admin Change Requests Component - Defined before App component
+function AdminChangeRequests() {
+  const [allRequests, setAllRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadAllRequests();
+  }, []);
+
+  const loadAllRequests = async () => {
+    try {
+      const usersRef = window.collection(window.firebaseDb, 'users');
+      const snapshot = await window.getDocs(usersRef);
+      
+      const requests = [];
+      snapshot.forEach((doc) => {
+        const userData = doc.data();
+        if (userData.emailConfig?.changeRequests) {
+          userData.emailConfig.changeRequests.forEach((request) => {
+            requests.push({
+              ...request,
+              userId: doc.id,
+              userName: userData.name
+            });
+          });
+        }
+      });
+      
+      // Sort by date (newest first)
+      requests.sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
+      
+      setAllRequests(requests);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error loading requests:', err);
+      setLoading(false);
+    }
+  };
+
+  const handleApprove = async (request) => {
+    if (!confirm(`Approve email change for ${request.userName}?\n\nFrom: ${request.currentEmail}\nTo: ${request.requestedEmail}`)) {
+      return;
+    }
+
+    try {
+      const userRef = window.doc(window.firebaseDb, 'users', request.userId);
+      const userDoc = await window.getDoc(userRef);
+      const userData = userDoc.data();
+      
+      // Update email config
+      const updatedEmailConfig = {
+        ...userData.emailConfig,
+        defaultEmail: request.requestedEmail,
+        customEmailPrefix: request.requestedPrefix,
+        changeRequests: userData.emailConfig.changeRequests.map(r =>
+          r.id === request.id
+            ? { ...r, status: 'approved', approvedAt: new Date().toISOString() }
+            : r
+        )
+      };
+      
+      await window.setDoc(userRef, { emailConfig: updatedEmailConfig }, { merge: true });
+      
+      alert('✅ Email change approved!');
+      loadAllRequests();
+    } catch (err) {
+      console.error('Error approving request:', err);
+      alert('Error approving request. Please try again.');
+    }
+  };
+
+  const handleReject = async (request) => {
+    const reason = prompt(`Reject email change for ${request.userName}?\n\nProvide a reason (optional):`);
+    
+    if (reason === null) return; // Cancelled
+
+    try {
+      const userRef = window.doc(window.firebaseDb, 'users', request.userId);
+      const userDoc = await window.getDoc(userRef);
+      const userData = userDoc.data();
+      
+      // Update request status
+      const updatedEmailConfig = {
+        ...userData.emailConfig,
+        changeRequests: userData.emailConfig.changeRequests.map(r =>
+          r.id === request.id
+            ? { ...r, status: 'rejected', rejectedAt: new Date().toISOString(), rejectionReason: reason || 'No reason provided' }
+            : r
+        )
+      };
+      
+      await window.setDoc(userRef, { emailConfig: updatedEmailConfig }, { merge: true });
+      
+      alert('❌ Email change rejected');
+      loadAllRequests();
+    } catch (err) {
+      console.error('Error rejecting request:', err);
+      alert('Error rejecting request. Please try again.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  const pendingRequests = allRequests.filter(r => r.status === 'pending');
+  const processedRequests = allRequests.filter(r => r.status !== 'pending');
+
+  return (
+    <div className="space-y-6">
+      {/* Pending Requests */}
+      <div>
+        <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
+          <span className="material-symbols-outlined text-yellow-600">pending</span>
+          Pending Requests ({pendingRequests.length})
+        </h3>
+        
+        {pendingRequests.length === 0 ? (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
+            <span className="material-symbols-outlined text-slate-400 text-[48px] mb-2">done_all</span>
+            <p className="text-slate-500">No pending requests</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {pendingRequests.map((request) => (
+              <div key={request.id} className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-bold text-slate-900">{request.userName}</p>
+                      <span className="px-2 py-0.5 bg-yellow-200 text-yellow-800 text-xs font-bold rounded">PENDING</span>
+                    </div>
+                    <p className="text-xs text-slate-500">Requested: {new Date(request.requestedAt).toLocaleString()}</p>
+                  </div>
+                </div>
+                
+                <div className="bg-white rounded-lg p-3 mb-3">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1">Current Email:</p>
+                      <p className="font-mono font-bold text-red-700">{request.currentEmail}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1">Requested Email:</p>
+                      <p className="font-mono font-bold text-green-700">{request.requestedEmail}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-slate-100 rounded-lg p-3 mb-3">
+                  <p className="text-xs text-slate-600 font-semibold mb-1">Reason:</p>
+                  <p className="text-sm text-slate-800">{request.reason}</p>
+                </div>
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleApprove(request)}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleReject(request)}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">cancel</span>
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Processed Requests */}
+      {processedRequests.length > 0 && (
+        <div>
+          <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
+            <span className="material-symbols-outlined text-slate-600">history</span>
+            Recent History ({processedRequests.slice(0, 10).length})
+          </h3>
+          
+          <div className="space-y-2">
+            {processedRequests.slice(0, 10).map((request) => (
+              <div key={request.id} className={`border rounded-lg p-3 ${
+                request.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-semibold text-sm text-slate-900">{request.userName}</p>
+                      <span className={`px-2 py-0.5 text-xs font-bold rounded ${
+                        request.status === 'approved' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+                      }`}>
+                        {request.status.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-xs font-mono text-slate-600">
+                      {request.currentEmail} → {request.requestedEmail}
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {new Date(request.approvedAt || request.rejectedAt).toLocaleDateString()}
+                  </p>
+                </div>
+                {request.status === 'rejected' && request.rejectionReason && (
+                  <p className="text-xs text-red-700 mt-2">Reason: {request.rejectionReason}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -5422,227 +5646,6 @@ const Sidebar = () => (
 )}
 
 {/* Admin Change Requests Component */}
-const AdminChangeRequests = () => {
-  const [allRequests, setAllRequests] = React.useState([]);
-  const [loading, setLoading] = React.useState(true);
-
-  React.useEffect(() => {
-    loadAllRequests();
-  }, []);
-
-  const loadAllRequests = async () => {
-    try {
-      const usersRef = window.collection(window.firebaseDb, 'users');
-      const snapshot = await window.getDocs(usersRef);
-      
-      const requests = [];
-      snapshot.forEach((doc) => {
-        const userData = doc.data();
-        if (userData.emailConfig?.changeRequests) {
-          userData.emailConfig.changeRequests.forEach((request) => {
-            requests.push({
-              ...request,
-              userId: doc.id,
-              userName: userData.name
-            });
-          });
-        }
-      });
-      
-      // Sort by date (newest first)
-      requests.sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
-      
-      setAllRequests(requests);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error loading requests:', err);
-      setLoading(false);
-    }
-  };
-
-  const handleApprove = async (request) => {
-    if (!confirm(`Approve email change for ${request.userName}?\n\nFrom: ${request.currentEmail}\nTo: ${request.requestedEmail}`)) {
-      return;
-    }
-
-    try {
-      const userRef = window.doc(window.firebaseDb, 'users', request.userId);
-      const userDoc = await window.getDoc(userRef);
-      const userData = userDoc.data();
-      
-      // Update email config
-      const updatedEmailConfig = {
-        ...userData.emailConfig,
-        defaultEmail: request.requestedEmail,
-        customEmailPrefix: request.requestedPrefix,
-        changeRequests: userData.emailConfig.changeRequests.map(r =>
-          r.id === request.id
-            ? { ...r, status: 'approved', approvedAt: new Date().toISOString() }
-            : r
-        )
-      };
-      
-      await window.setDoc(userRef, { emailConfig: updatedEmailConfig }, { merge: true });
-      
-      alert('✅ Email change approved!');
-      loadAllRequests();
-    } catch (err) {
-      console.error('Error approving request:', err);
-      alert('Error approving request. Please try again.');
-    }
-  };
-
-  const handleReject = async (request) => {
-    const reason = prompt(`Reject email change for ${request.userName}?\n\nProvide a reason (optional):`);
-    
-    if (reason === null) return; // Cancelled
-
-    try {
-      const userRef = window.doc(window.firebaseDb, 'users', request.userId);
-      const userDoc = await window.getDoc(userRef);
-      const userData = userDoc.data();
-      
-      // Update request status
-      const updatedEmailConfig = {
-        ...userData.emailConfig,
-        changeRequests: userData.emailConfig.changeRequests.map(r =>
-          r.id === request.id
-            ? { ...r, status: 'rejected', rejectedAt: new Date().toISOString(), rejectionReason: reason || 'No reason provided' }
-            : r
-        )
-      };
-      
-      await window.setDoc(userRef, { emailConfig: updatedEmailConfig }, { merge: true });
-      
-      alert('❌ Email change rejected');
-      loadAllRequests();
-    } catch (err) {
-      console.error('Error rejecting request:', err);
-      alert('Error rejecting request. Please try again.');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
-
-  const pendingRequests = allRequests.filter(r => r.status === 'pending');
-  const processedRequests = allRequests.filter(r => r.status !== 'pending');
-
-  return (
-    <div className="space-y-6">
-      {/* Pending Requests */}
-      <div>
-        <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
-          <span className="material-symbols-outlined text-yellow-600">pending</span>
-          Pending Requests ({pendingRequests.length})
-        </h3>
-        
-        {pendingRequests.length === 0 ? (
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
-            <span className="material-symbols-outlined text-slate-400 text-[48px] mb-2">done_all</span>
-            <p className="text-slate-500">No pending requests</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {pendingRequests.map((request) => (
-              <div key={request.id} className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-bold text-slate-900">{request.userName}</p>
-                      <span className="px-2 py-0.5 bg-yellow-200 text-yellow-800 text-xs font-bold rounded">PENDING</span>
-                    </div>
-                    <p className="text-xs text-slate-500">Requested: {new Date(request.requestedAt).toLocaleString()}</p>
-                  </div>
-                </div>
-                
-                <div className="bg-white rounded-lg p-3 mb-3">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-xs text-slate-500 mb-1">Current Email:</p>
-                      <p className="font-mono font-bold text-red-700">{request.currentEmail}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500 mb-1">Requested Email:</p>
-                      <p className="font-mono font-bold text-green-700">{request.requestedEmail}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-slate-100 rounded-lg p-3 mb-3">
-                  <p className="text-xs text-slate-600 font-semibold mb-1">Reason:</p>
-                  <p className="text-sm text-slate-800">{request.reason}</p>
-                </div>
-                
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleApprove(request)}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg font-semibold transition flex items-center justify-center gap-2"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">check_circle</span>
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => handleReject(request)}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg font-semibold transition flex items-center justify-center gap-2"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">cancel</span>
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Processed Requests */}
-      {processedRequests.length > 0 && (
-        <div>
-          <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
-            <span className="material-symbols-outlined text-slate-600">history</span>
-            Recent History ({processedRequests.slice(0, 10).length})
-          </h3>
-          
-          <div className="space-y-2">
-            {processedRequests.slice(0, 10).map((request) => (
-              <div key={request.id} className={`border rounded-lg p-3 ${
-                request.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-              }`}>
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="font-semibold text-sm text-slate-900">{request.userName}</p>
-                      <span className={`px-2 py-0.5 text-xs font-bold rounded ${
-                        request.status === 'approved' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
-                      }`}>
-                        {request.status.toUpperCase()}
-                      </span>
-                    </div>
-                    <p className="text-xs font-mono text-slate-600">
-                      {request.currentEmail} → {request.requestedEmail}
-                    </p>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    {new Date(request.approvedAt || request.rejectedAt).toLocaleDateString()}
-                  </p>
-                </div>
-                {request.status === 'rejected' && request.rejectionReason && (
-                  <p className="text-xs text-red-700 mt-2">Reason: {request.rejectionReason}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 {/* ===== DOMAIN CONNECTION WIZARD ===== */}
 {showDomainWizard && (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
