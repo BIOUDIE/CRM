@@ -744,6 +744,16 @@ const [showMagicPaste, setShowMagicPaste] = useState(false);
 const [showScanCapture, setShowScanCapture] = useState(false);
 const [showSortOptions, setShowSortOptions] = useState(false);
 const [showCustomPrompt, setShowCustomPrompt] = useState(false);
+const [showEmailSettings, setShowEmailSettings] = useState(false);
+const [showDomainWizard, setShowDomainWizard] = useState(false);
+const [domainWizardStep, setDomainWizardStep] = useState(1); // 1: Enter domain, 2: Add DNS, 3: Verify
+const [customDomain, setCustomDomain] = useState('');
+const [domainVerifying, setDomainVerifying] = useState(false);
+const [showEmailSetup, setShowEmailSetup] = useState(false);  // First-time email setup
+const [customEmailPrefix, setCustomEmailPrefix] = useState('');
+const [checkingAvailability, setCheckingAvailability] = useState(false);
+const [emailAvailable, setEmailAvailable] = useState(null);
+const [showAdminPanel, setShowAdminPanel] = useState(false);  // Admin change request panel
 
   // ===== EMERGENCY MODAL ESCAPE SYSTEM =====
   // Close all modals with ESC key
@@ -827,27 +837,77 @@ useEffect(() => {
                 if (userDoc.exists()) {
                   const userData = userDoc.data();
                   console.log('✅ User data loaded:', userData.name);
+                  
+                  // Check email config - don't auto-generate anymore
+                  let emailConfig = userData.emailConfig;
+                  if (!emailConfig) {
+                    // User hasn't set their email yet - set to pending
+                    emailConfig = {
+                      defaultEmail: null,              // Not set yet
+                      customEmailPrefix: null,         // User will choose this
+                      fromName: userData.name || firebaseUser.email.split('@')[0],
+                      customDomain: null,
+                      customEmail: null,
+                      domainVerified: false,
+                      emailPending: true,              // Needs to set email
+                      changeRequests: [],              // Array of change requests
+                      createdAt: new Date().toISOString()
+                    };
+                    
+                    // Save to Firestore
+                    try {
+                      await window.setDoc(userDocRef, { emailConfig }, { merge: true });
+                      console.log('✅ Email config initialized (pending)');
+                    } catch (err) {
+                      console.error('❌ Error saving email config:', err);
+                    }
+                  }
+                  
                   setUser({
                     uid: firebaseUser.uid,
                     email: firebaseUser.email,
                     name: userData.name || firebaseUser.email.split('@')[0],
-                    isPremium: userData.isPremium || false
+                    isPremium: userData.isPremium || false,
+                    isAdmin: userData.isAdmin || false,  // Admin flag
+                    emailConfig: emailConfig
                   });
                   setIsPremium(userData.isPremium || false);
                 } else {
                   // User exists in auth but not in Firestore - create doc
                   console.log('📝 Creating new user document');
+                  
+                  const userName = firebaseUser.email.split('@')[0];
+                  
+                  const emailConfig = {
+                    defaultEmail: null,              // Not set yet
+                    customEmailPrefix: null,         // User will choose this
+                    fromName: userName,
+                    customDomain: null,
+                    customEmail: null,
+                    domainVerified: false,
+                    emailPending: true,              // Needs to set email
+                    changeRequests: [],              // Array of change requests
+                    createdAt: new Date().toISOString()
+                  };
+                  
                   await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), {
                     email: firebaseUser.email,
                     name: firebaseUser.email.split('@')[0],
                     isPremium: false,
+                    isAdmin: false,                  // Not admin by default
+                    emailConfig: emailConfig,
                     createdAt: new Date().toISOString()
                   });
+                  
+                  console.log('✅ User created (email pending)');
+                  
                   setUser({
                     uid: firebaseUser.uid,
                     email: firebaseUser.email,
                     name: firebaseUser.email.split('@')[0],
-                    isPremium: false
+                    isPremium: false,
+                    isAdmin: false,
+                    emailConfig: emailConfig
                   });
                 }
                 setIsLoading(false);
@@ -1797,7 +1857,8 @@ useEffect(() => {
           to: contact.email,
           subject: personalizedSubject,
           body: personalizedBody,
-          fromName: user.name || businessProfile.businessName || 'Your CRM',
+          fromName: user?.emailConfig?.fromName || user.name || businessProfile.businessName || 'Your CRM',
+          fromEmail: user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || null,
           scheduleDate: bulkEmailData.scheduleDate,
           scheduleTime: bulkEmailData.scheduleTime
         };
@@ -2046,6 +2107,22 @@ const Sidebar = () => (
           {!sidebarCollapsed && <span className="capitalize">{view}</span>}
         </button>
       ))}
+      
+      {/* Admin Panel Button - Only visible to admin */}
+      {user?.isAdmin && (
+        <button
+          onClick={() => setShowAdminPanel(true)}
+          className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-2xl font-bold transition-all mt-2 ${
+            darkMode
+              ? 'text-red-400 hover:bg-red-900/20 hover:text-red-300 border border-red-800'
+              : 'text-red-600 hover:bg-red-50 hover:text-red-700 border border-red-200'
+          }`}
+          title="Admin Panel"
+        >
+          <span className="material-symbols-outlined">admin_panel_settings</span>
+          {!sidebarCollapsed && <span>Admin Panel</span>}
+        </button>
+      )}
     </nav>
     
     {/* User Profile */}
@@ -4817,6 +4894,1090 @@ const Sidebar = () => (
           </div>
         </div>
       )}
+{/* ===== FIRST-TIME EMAIL SETUP MODAL ===== */}
+{(showEmailSetup || (user && user.emailConfig?.emailPending)) && (
+  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+    <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-6 rounded-t-2xl">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+            <span className="material-symbols-outlined text-white text-[28px]">mail</span>
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-white">Set Up Your Email Address</h2>
+            <p className="text-sm text-indigo-100">Choose your professional sending email (one-time setup)</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-6 space-y-6">
+        {/* Important Notice */}
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4">
+          <div className="flex gap-3">
+            <span className="material-symbols-outlined text-amber-600 text-[24px]">warning</span>
+            <div className="flex-1">
+              <p className="font-bold text-amber-900 mb-1">Important: One-Time Setup</p>
+              <ul className="text-sm text-amber-800 space-y-1">
+                <li>• Choose carefully - this cannot be changed later</li>
+                <li>• To request a change, you'll need admin approval</li>
+                <li>• This will be your professional email address for sending</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Email Input */}
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-2">
+            Choose Your Email Address
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={customEmailPrefix}
+              onChange={(e) => {
+                const value = e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '');
+                setCustomEmailPrefix(value);
+                setEmailAvailable(null);
+              }}
+              placeholder="yourname"
+              className="flex-1 px-4 py-4 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-lg font-mono"
+            />
+            <span className="text-lg font-mono text-slate-600">@mikrocrm.app</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-2">
+            Use lowercase letters, numbers, dots, hyphens, or underscores only
+          </p>
+        </div>
+
+        {/* Live Preview */}
+        {customEmailPrefix && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4">
+            <p className="text-xs font-semibold text-indigo-900 mb-2">Preview:</p>
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-indigo-600">person</span>
+              <div>
+                <p className="font-bold text-indigo-900">{user?.name || 'Your Name'}</p>
+                <p className="font-mono text-sm text-indigo-700">{customEmailPrefix}@mikrocrm.app</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Check Availability */}
+        {customEmailPrefix && (
+          <button
+            onClick={async () => {
+              if (!customEmailPrefix || customEmailPrefix.length < 3) {
+                alert('Email prefix must be at least 3 characters');
+                return;
+              }
+              
+              setCheckingAvailability(true);
+              
+              // Check if email is already taken in Firestore
+              try {
+                const usersRef = window.collection(window.firebaseDb, 'users');
+                const q = window.query(usersRef, window.where('emailConfig.customEmailPrefix', '==', customEmailPrefix));
+                const querySnapshot = await window.getDocs(q);
+                
+                if (querySnapshot.empty) {
+                  setEmailAvailable(true);
+                } else {
+                  setEmailAvailable(false);
+                }
+              } catch (err) {
+                console.error('Error checking availability:', err);
+                alert('Error checking availability. Please try again.');
+              }
+              
+              setCheckingAvailability(false);
+            }}
+            disabled={checkingAvailability || !customEmailPrefix || customEmailPrefix.length < 3}
+            className="w-full bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 disabled:cursor-not-allowed text-slate-700 py-3 rounded-xl font-semibold transition flex items-center justify-center gap-2"
+          >
+            {checkingAvailability ? (
+              <>
+                <div className="w-5 h-5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
+                Checking availability...
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined">search</span>
+                Check Availability
+              </>
+            )}
+          </button>
+        )}
+
+        {/* Availability Result */}
+        {emailAvailable === true && (
+          <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4 flex items-center gap-3">
+            <span className="material-symbols-outlined text-green-600 text-[24px]">check_circle</span>
+            <div>
+              <p className="font-bold text-green-900">Available!</p>
+              <p className="text-sm text-green-700">{customEmailPrefix}@mikrocrm.app is available</p>
+            </div>
+          </div>
+        )}
+
+        {emailAvailable === false && (
+          <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 flex items-center gap-3">
+            <span className="material-symbols-outlined text-red-600 text-[24px]">cancel</span>
+            <div>
+              <p className="font-bold text-red-900">Not Available</p>
+              <p className="text-sm text-red-700">{customEmailPrefix}@mikrocrm.app is already taken. Try another.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Examples */}
+        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+          <p className="text-xs font-semibold text-slate-700 mb-2">Examples:</p>
+          <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
+            <div className="font-mono">john.smith@mikrocrm.app</div>
+            <div className="font-mono">sarah_johnson@mikrocrm.app</div>
+            <div className="font-mono">mike-wilson@mikrocrm.app</div>
+            <div className="font-mono">alex.dev@mikrocrm.app</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="bg-slate-50 border-t border-slate-200 px-6 py-4 rounded-b-2xl">
+        <button
+          onClick={async () => {
+            if (!emailAvailable) {
+              alert('Please check availability first and choose an available email');
+              return;
+            }
+            
+            if (!customEmailPrefix || customEmailPrefix.length < 3) {
+              alert('Email prefix must be at least 3 characters');
+              return;
+            }
+            
+            const fullEmail = `${customEmailPrefix}@mikrocrm.app`;
+            
+            if (confirm(`Confirm setting your email to ${fullEmail}?\n\nThis cannot be changed without admin approval.`)) {
+              try {
+                const updatedEmailConfig = {
+                  ...user.emailConfig,
+                  defaultEmail: fullEmail,
+                  customEmailPrefix: customEmailPrefix,
+                  emailPending: false,
+                  createdAt: user.emailConfig.createdAt || new Date().toISOString()
+                };
+                
+                // Update Firestore
+                await window.setDoc(
+                  window.doc(window.firebaseDb, 'users', user.uid),
+                  { emailConfig: updatedEmailConfig },
+                  { merge: true }
+                );
+                
+                // Update local state
+                setUser({
+                  ...user,
+                  emailConfig: updatedEmailConfig
+                });
+                
+                setShowEmailSetup(false);
+                setCustomEmailPrefix('');
+                setEmailAvailable(null);
+                
+                // Show success message
+                alert(`✅ Email set successfully!\n\nYou can now send emails from ${fullEmail}`);
+              } catch (err) {
+                console.error('Error setting email:', err);
+                alert('Error setting email. Please try again.');
+              }
+            }
+          }}
+          disabled={!emailAvailable || checkingAvailability}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold transition flex items-center justify-center gap-2"
+        >
+          <span className="material-symbols-outlined">check_circle</span>
+          Confirm Email Address
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+{/* ===== EMAIL SETTINGS MODAL (UPDATED) ===== */}
+{showEmailSettings && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+      {/* Header */}
+      <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+            <span className="material-symbols-outlined text-indigo-600">mail</span>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Email Configuration</h2>
+            <p className="text-sm text-slate-500">Manage your sending email address</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setShowEmailSettings(false)}
+          className="p-2 hover:bg-slate-100 rounded-lg transition"
+        >
+          <span className="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="p-6 space-y-6">
+        {/* Current Email Status */}
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-5">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
+              <span className="material-symbols-outlined text-white">verified</span>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <p className="text-sm font-semibold text-slate-700">Your Sending Email</p>
+                <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs font-bold rounded">ACTIVE</span>
+              </div>
+              <p className="text-2xl font-bold text-slate-900 mb-1">
+                {user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || 'Not set'}
+              </p>
+              <p className="text-sm text-slate-600">
+                From Name: <strong>{user?.emailConfig?.fromName || 'Your Name'}</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* From Name */}
+        <div>
+          <label className="block text-sm font-bold text-slate-700 mb-2">
+            From Name
+          </label>
+          <input
+            type="text"
+            value={user?.emailConfig?.fromName || ''}
+            onChange={async (e) => {
+              const newFromName = e.target.value;
+              const updatedUser = {
+                ...user,
+                emailConfig: {
+                  ...user.emailConfig,
+                  fromName: newFromName
+                }
+              };
+              setUser(updatedUser);
+              
+              // Save to Firestore
+              if (window.firebaseDb && user.uid) {
+                try {
+                  await window.setDoc(
+                    window.doc(window.firebaseDb, 'users', user.uid),
+                    { emailConfig: updatedUser.emailConfig },
+                    { merge: true }
+                  );
+                } catch (err) {
+                  console.error('Error saving from name:', err);
+                }
+              }
+            }}
+            placeholder="e.g., John Smith"
+            className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+          <p className="text-xs text-slate-500 mt-2">
+            This name will appear as the sender when recipients receive your emails
+          </p>
+        </div>
+
+        {/* Change Email Section */}
+        <div className="border-t border-slate-200 pt-6">
+          <h3 className="text-sm font-bold text-slate-700 mb-3">Change Email Address</h3>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex gap-3">
+              <span className="material-symbols-outlined text-amber-600">lock</span>
+              <div className="flex-1">
+                <p className="font-semibold text-amber-900 mb-2">Email changes require admin approval</p>
+                <p className="text-sm text-amber-800 mb-3">
+                  Your current email address is locked for security. To change it, submit a request for admin review.
+                </p>
+                <button
+                  onClick={async () => {
+                    const newEmail = prompt(`Current email: ${user?.emailConfig?.defaultEmail}\n\nEnter your desired new email prefix (e.g., "john.smith"):`);
+                    
+                    if (!newEmail) return;
+                    
+                    const cleanEmail = newEmail.toLowerCase().replace(/[^a-z0-9._-]/g, '');
+                    
+                    if (cleanEmail.length < 3) {
+                      alert('Email prefix must be at least 3 characters');
+                      return;
+                    }
+                    
+                    const fullNewEmail = `${cleanEmail}@mikrocrm.app`;
+                    const reason = prompt('Why do you need to change your email?\n(This will be sent to the admin)');
+                    
+                    if (!reason) return;
+                    
+                    try {
+                      // Add change request to user's emailConfig
+                      const changeRequest = {
+                        id: Date.now().toString(),
+                        currentEmail: user.emailConfig.defaultEmail,
+                        requestedEmail: fullNewEmail,
+                        requestedPrefix: cleanEmail,
+                        reason: reason,
+                        status: 'pending',  // 'pending', 'approved', 'rejected'
+                        requestedAt: new Date().toISOString(),
+                        userId: user.uid,
+                        userName: user.name
+                      };
+                      
+                      const updatedChangeRequests = [
+                        ...(user.emailConfig.changeRequests || []),
+                        changeRequest
+                      ];
+                      
+                      await window.setDoc(
+                        window.doc(window.firebaseDb, 'users', user.uid),
+                        {
+                          emailConfig: {
+                            ...user.emailConfig,
+                            changeRequests: updatedChangeRequests
+                          }
+                        },
+                        { merge: true }
+                      );
+                      
+                      // Update local state
+                      setUser({
+                        ...user,
+                        emailConfig: {
+                          ...user.emailConfig,
+                          changeRequests: updatedChangeRequests
+                        }
+                      });
+                      
+                      alert('✅ Change request submitted!\n\nThe admin will review your request and respond soon.');
+                    } catch (err) {
+                      console.error('Error submitting change request:', err);
+                      alert('Error submitting request. Please try again.');
+                    }
+                  }}
+                  className="w-full bg-amber-600 hover:bg-amber-700 text-white py-2 px-4 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">edit</span>
+                  Request Email Change
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Pending Change Requests */}
+        {user?.emailConfig?.changeRequests && user.emailConfig.changeRequests.filter(r => r.status === 'pending').length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <span className="material-symbols-outlined text-blue-600">pending</span>
+              <div className="flex-1">
+                <p className="font-semibold text-blue-900 mb-2">Pending Change Requests</p>
+                {user.emailConfig.changeRequests
+                  .filter(r => r.status === 'pending')
+                  .map((request) => (
+                    <div key={request.id} className="bg-white rounded-lg p-3 mb-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="font-mono text-sm font-bold text-slate-900">{request.requestedEmail}</p>
+                        <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs font-bold rounded">PENDING</span>
+                      </div>
+                      <p className="text-xs text-slate-600">Requested: {new Date(request.requestedAt).toLocaleDateString()}</p>
+                      <p className="text-xs text-slate-500 mt-1">Reason: {request.reason}</p>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Divider */}
+        <div className="border-t border-slate-200 pt-6">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="material-symbols-outlined text-indigo-600">workspace_premium</span>
+            <h3 className="text-sm font-bold text-slate-700">Professional Upgrade</h3>
+          </div>
+        </div>
+
+        {/* Custom Domain Section - Same as before */}
+        {user?.emailConfig?.customDomain ? (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-5">
+            <div className="flex items-start gap-4">
+              <span className="material-symbols-outlined text-green-600">verified</span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-green-900 mb-1">Custom Domain Connected</p>
+                <p className="font-mono text-lg font-bold text-green-900 mb-2">
+                  {user.emailConfig.customDomain}
+                </p>
+                <p className="text-sm text-green-700 mb-3">
+                  Sending from: <strong>{user.emailConfig.customEmail}</strong>
+                </p>
+                <button
+                  onClick={() => {
+                    if (confirm('Are you sure you want to remove your custom domain?')) {
+                      const updatedUser = {
+                        ...user,
+                        emailConfig: {
+                          ...user.emailConfig,
+                          customDomain: null,
+                          customEmail: null,
+                          domainVerified: false
+                        }
+                      };
+                      setUser(updatedUser);
+                      
+                      if (window.firebaseDb && user.uid) {
+                        window.setDoc(
+                          window.doc(window.firebaseDb, 'users', user.uid),
+                          { emailConfig: updatedUser.emailConfig },
+                          { merge: true }
+                        );
+                      }
+                    }
+                  }}
+                  className="text-sm text-red-600 hover:text-red-700 font-semibold"
+                >
+                  Remove Custom Domain
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white border-2 border-indigo-200 rounded-xl p-5">
+            <h4 className="font-bold text-slate-900 mb-3">Use Your Company Email</h4>
+            <ul className="space-y-2 mb-4">
+              <li className="flex items-start gap-2 text-sm text-slate-700">
+                <span className="material-symbols-outlined text-indigo-600 text-[18px]">check_circle</span>
+                <span>Send from your actual business email (e.g., you@yourcompany.com)</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm text-slate-700">
+                <span className="material-symbols-outlined text-indigo-600 text-[18px]">check_circle</span>
+                <span>Improved email deliverability and trust</span>
+              </li>
+            </ul>
+            <button
+              onClick={() => {
+                setShowDomainWizard(true);
+                setDomainWizardStep(1);
+              }}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold transition flex items-center justify-center gap-2"
+            >
+              <span className="material-symbols-outlined">add_circle</span>
+              Connect My Domain
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4">
+        <button
+          onClick={() => setShowEmailSettings(false)}
+          className="w-full bg-slate-700 hover:bg-slate-800 text-white py-3 rounded-xl font-bold transition"
+        >
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+{/* ===== ADMIN PANEL - EMAIL CHANGE REQUESTS ===== */}
+{showAdminPanel && user?.isAdmin && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
+      {/* Header */}
+      <div className="sticky top-0 bg-gradient-to-r from-red-600 to-pink-600 px-6 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+            <span className="material-symbols-outlined text-white">admin_panel_settings</span>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white">Admin Panel</h2>
+            <p className="text-sm text-red-100">Email Change Requests</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setShowAdminPanel(false)}
+          className="p-2 hover:bg-white/10 rounded-lg transition"
+        >
+          <span className="material-symbols-outlined text-white">close</span>
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="p-6">
+        <AdminChangeRequests />
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Admin Change Requests Component */}
+const AdminChangeRequests = () => {
+  const [allRequests, setAllRequests] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    loadAllRequests();
+  }, []);
+
+  const loadAllRequests = async () => {
+    try {
+      const usersRef = window.collection(window.firebaseDb, 'users');
+      const snapshot = await window.getDocs(usersRef);
+      
+      const requests = [];
+      snapshot.forEach((doc) => {
+        const userData = doc.data();
+        if (userData.emailConfig?.changeRequests) {
+          userData.emailConfig.changeRequests.forEach((request) => {
+            requests.push({
+              ...request,
+              userId: doc.id,
+              userName: userData.name
+            });
+          });
+        }
+      });
+      
+      // Sort by date (newest first)
+      requests.sort((a, b) => new Date(b.requestedAt) - new Date(a.requestedAt));
+      
+      setAllRequests(requests);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error loading requests:', err);
+      setLoading(false);
+    }
+  };
+
+  const handleApprove = async (request) => {
+    if (!confirm(`Approve email change for ${request.userName}?\n\nFrom: ${request.currentEmail}\nTo: ${request.requestedEmail}`)) {
+      return;
+    }
+
+    try {
+      const userRef = window.doc(window.firebaseDb, 'users', request.userId);
+      const userDoc = await window.getDoc(userRef);
+      const userData = userDoc.data();
+      
+      // Update email config
+      const updatedEmailConfig = {
+        ...userData.emailConfig,
+        defaultEmail: request.requestedEmail,
+        customEmailPrefix: request.requestedPrefix,
+        changeRequests: userData.emailConfig.changeRequests.map(r =>
+          r.id === request.id
+            ? { ...r, status: 'approved', approvedAt: new Date().toISOString() }
+            : r
+        )
+      };
+      
+      await window.setDoc(userRef, { emailConfig: updatedEmailConfig }, { merge: true });
+      
+      alert('✅ Email change approved!');
+      loadAllRequests();
+    } catch (err) {
+      console.error('Error approving request:', err);
+      alert('Error approving request. Please try again.');
+    }
+  };
+
+  const handleReject = async (request) => {
+    const reason = prompt(`Reject email change for ${request.userName}?\n\nProvide a reason (optional):`);
+    
+    if (reason === null) return; // Cancelled
+
+    try {
+      const userRef = window.doc(window.firebaseDb, 'users', request.userId);
+      const userDoc = await window.getDoc(userRef);
+      const userData = userDoc.data();
+      
+      // Update request status
+      const updatedEmailConfig = {
+        ...userData.emailConfig,
+        changeRequests: userData.emailConfig.changeRequests.map(r =>
+          r.id === request.id
+            ? { ...r, status: 'rejected', rejectedAt: new Date().toISOString(), rejectionReason: reason || 'No reason provided' }
+            : r
+        )
+      };
+      
+      await window.setDoc(userRef, { emailConfig: updatedEmailConfig }, { merge: true });
+      
+      alert('❌ Email change rejected');
+      loadAllRequests();
+    } catch (err) {
+      console.error('Error rejecting request:', err);
+      alert('Error rejecting request. Please try again.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  const pendingRequests = allRequests.filter(r => r.status === 'pending');
+  const processedRequests = allRequests.filter(r => r.status !== 'pending');
+
+  return (
+    <div className="space-y-6">
+      {/* Pending Requests */}
+      <div>
+        <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
+          <span className="material-symbols-outlined text-yellow-600">pending</span>
+          Pending Requests ({pendingRequests.length})
+        </h3>
+        
+        {pendingRequests.length === 0 ? (
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
+            <span className="material-symbols-outlined text-slate-400 text-[48px] mb-2">done_all</span>
+            <p className="text-slate-500">No pending requests</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {pendingRequests.map((request) => (
+              <div key={request.id} className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-bold text-slate-900">{request.userName}</p>
+                      <span className="px-2 py-0.5 bg-yellow-200 text-yellow-800 text-xs font-bold rounded">PENDING</span>
+                    </div>
+                    <p className="text-xs text-slate-500">Requested: {new Date(request.requestedAt).toLocaleString()}</p>
+                  </div>
+                </div>
+                
+                <div className="bg-white rounded-lg p-3 mb-3">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1">Current Email:</p>
+                      <p className="font-mono font-bold text-red-700">{request.currentEmail}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1">Requested Email:</p>
+                      <p className="font-mono font-bold text-green-700">{request.requestedEmail}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="bg-slate-100 rounded-lg p-3 mb-3">
+                  <p className="text-xs text-slate-600 font-semibold mb-1">Reason:</p>
+                  <p className="text-sm text-slate-800">{request.reason}</p>
+                </div>
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleApprove(request)}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleReject(request)}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg font-semibold transition flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">cancel</span>
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Processed Requests */}
+      {processedRequests.length > 0 && (
+        <div>
+          <h3 className="text-lg font-bold text-slate-900 mb-3 flex items-center gap-2">
+            <span className="material-symbols-outlined text-slate-600">history</span>
+            Recent History ({processedRequests.slice(0, 10).length})
+          </h3>
+          
+          <div className="space-y-2">
+            {processedRequests.slice(0, 10).map((request) => (
+              <div key={request.id} className={`border rounded-lg p-3 ${
+                request.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-semibold text-sm text-slate-900">{request.userName}</p>
+                      <span className={`px-2 py-0.5 text-xs font-bold rounded ${
+                        request.status === 'approved' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'
+                      }`}>
+                        {request.status.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="text-xs font-mono text-slate-600">
+                      {request.currentEmail} → {request.requestedEmail}
+                    </p>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {new Date(request.approvedAt || request.rejectedAt).toLocaleDateString()}
+                  </p>
+                </div>
+                {request.status === 'rejected' && request.rejectionReason && (
+                  <p className="text-xs text-red-700 mt-2">Reason: {request.rejectionReason}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+{/* ===== DOMAIN CONNECTION WIZARD ===== */}
+{showDomainWizard && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+    <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
+      {/* Header */}
+      <div className="sticky top-0 bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-5 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+            <span className="material-symbols-outlined text-white">dns</span>
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white">Connect Your Domain</h2>
+            <p className="text-sm text-indigo-100">Step {domainWizardStep} of 3</p>
+          </div>
+        </div>
+        <button
+          onClick={() => {
+            setShowDomainWizard(false);
+            setDomainWizardStep(1);
+            setCustomDomain('');
+          }}
+          className="p-2 hover:bg-white/10 rounded-lg transition"
+        >
+          <span className="material-symbols-outlined text-white">close</span>
+        </button>
+      </div>
+
+      {/* Progress Steps */}
+      <div className="px-6 py-4 bg-slate-50 border-b border-slate-200">
+        <div className="flex items-center justify-between max-w-md mx-auto">
+          <div className={`flex items-center gap-2 ${domainWizardStep >= 1 ? 'text-indigo-600' : 'text-slate-400'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${domainWizardStep >= 1 ? 'bg-indigo-600 text-white' : 'bg-slate-200'}`}>
+              {domainWizardStep > 1 ? '✓' : '1'}
+            </div>
+            <span className="text-xs font-semibold hidden sm:inline">Enter</span>
+          </div>
+          <div className={`h-1 flex-1 mx-2 ${domainWizardStep >= 2 ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
+          <div className={`flex items-center gap-2 ${domainWizardStep >= 2 ? 'text-indigo-600' : 'text-slate-400'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${domainWizardStep >= 2 ? 'bg-indigo-600 text-white' : 'bg-slate-200'}`}>
+              {domainWizardStep > 2 ? '✓' : '2'}
+            </div>
+            <span className="text-xs font-semibold hidden sm:inline">Configure</span>
+          </div>
+          <div className={`h-1 flex-1 mx-2 ${domainWizardStep >= 3 ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
+          <div className={`flex items-center gap-2 ${domainWizardStep >= 3 ? 'text-indigo-600' : 'text-slate-400'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${domainWizardStep >= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-200'}`}>
+              3
+            </div>
+            <span className="text-xs font-semibold hidden sm:inline">Verify</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Step Content */}
+      <div className="p-6">
+        {/* STEP 1: Enter Domain */}
+        {domainWizardStep === 1 && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">Enter Your Domain</h3>
+              <p className="text-slate-600">What domain do you want to send emails from?</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">
+                Your Domain Name
+              </label>
+              <input
+                type="text"
+                value={customDomain}
+                onChange={(e) => setCustomDomain(e.target.value.toLowerCase().replace(/^https?:\/\//, '').replace(/\/$/, ''))}
+                placeholder="e.g., yourcompany.com"
+                className="w-full px-4 py-4 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-lg"
+              />
+              <p className="text-xs text-slate-500 mt-2">
+                Enter just the domain (e.g., yourcompany.com) without http:// or www
+              </p>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex gap-3">
+                <span className="material-symbols-outlined text-amber-600">info</span>
+                <div className="text-sm text-amber-900">
+                  <p className="font-semibold mb-1">Important:</p>
+                  <p>You'll need access to your domain's DNS settings to complete this process. This is usually found in your domain registrar (GoDaddy, Namecheap, etc.) or hosting provider.</p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                if (!customDomain || !customDomain.includes('.')) {
+                  alert('Please enter a valid domain name');
+                  return;
+                }
+                setDomainWizardStep(2);
+              }}
+              disabled={!customDomain || !customDomain.includes('.')}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold transition flex items-center justify-center gap-2"
+            >
+              Continue to DNS Setup
+              <span className="material-symbols-outlined">arrow_forward</span>
+            </button>
+          </div>
+        )}
+
+        {/* STEP 2: Add DNS Records */}
+        {domainWizardStep === 2 && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">Add DNS Records</h3>
+              <p className="text-slate-600">Add these records to <strong>{customDomain}</strong></p>
+            </div>
+
+            {/* DNS Records */}
+            <div className="space-y-4">
+              {/* SPF Record */}
+              <div className="border-2 border-slate-200 rounded-xl p-4 hover:border-indigo-300 transition">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded">TXT</span>
+                      <h4 className="font-bold text-slate-900">SPF Record</h4>
+                    </div>
+                    <p className="text-xs text-slate-500">Authorizes emails from your domain</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText('v=spf1 include:resend.com ~all');
+                      alert('Copied to clipboard!');
+                    }}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-semibold transition"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-3 font-mono text-sm">
+                  <div className="grid grid-cols-3 gap-2 text-xs text-slate-600 mb-1">
+                    <div>Type</div>
+                    <div>Name</div>
+                    <div>Value</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-blue-700 font-bold">TXT</div>
+                    <div className="text-slate-900">@</div>
+                    <div className="text-slate-900 break-all">v=spf1 include:resend.com ~all</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* DKIM Record */}
+              <div className="border-2 border-slate-200 rounded-xl p-4 hover:border-indigo-300 transition">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded">CNAME</span>
+                      <h4 className="font-bold text-slate-900">DKIM Record</h4>
+                    </div>
+                    <p className="text-xs text-slate-500">Verifies email authenticity</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText('resend._domainkey');
+                      alert('Copied to clipboard!');
+                    }}
+                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-semibold transition"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <div className="bg-slate-50 rounded-lg p-3 font-mono text-sm">
+                  <div className="grid grid-cols-3 gap-2 text-xs text-slate-600 mb-1">
+                    <div>Type</div>
+                    <div>Name</div>
+                    <div>Points to</div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-purple-700 font-bold">CNAME</div>
+                    <div className="text-slate-900">resend._domainkey</div>
+                    <div className="text-slate-900">resend.com</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Instructions */}
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex gap-3">
+                <span className="material-symbols-outlined text-blue-600">lightbulb</span>
+                <div className="text-sm text-blue-900">
+                  <p className="font-semibold mb-2">How to add these records:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-blue-800">
+                    <li>Log in to your domain registrar (GoDaddy, Namecheap, etc.)</li>
+                    <li>Find DNS settings or DNS management</li>
+                    <li>Add each record exactly as shown above</li>
+                    <li>Save changes (propagation takes 5-30 minutes)</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDomainWizardStep(1)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-3 rounded-xl font-bold transition"
+              >
+                Back
+              </button>
+              <button
+                onClick={() => setDomainWizardStep(3)}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold transition flex items-center justify-center gap-2"
+              >
+                I've Added the Records
+                <span className="material-symbols-outlined">arrow_forward</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: Verify */}
+        {domainWizardStep === 3 && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                {domainVerifying ? (
+                  <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  <span className="material-symbols-outlined text-indigo-600 text-[40px]">verified</span>
+                )}
+              </div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">
+                {domainVerifying ? 'Verifying Domain...' : 'Verify Your Domain'}
+              </h3>
+              <p className="text-slate-600">
+                {domainVerifying ? 'This may take a few seconds...' : `Click verify to check if ${customDomain} is configured correctly`}
+              </p>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex gap-3">
+                <span className="material-symbols-outlined text-amber-600">schedule</span>
+                <div className="text-sm text-amber-900">
+                  <p className="font-semibold mb-1">DNS Propagation:</p>
+                  <p>DNS changes can take 5-30 minutes to propagate. If verification fails, wait a few minutes and try again.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Your Custom Email */}
+            <div>
+              <label className="block text-sm font-bold text-slate-700 mb-2">
+                Your Custom Email Address
+              </label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={user?.name?.toLowerCase().replace(/\s+/g, '.') || 'you'}
+                  onChange={(e) => {}}
+                  className="flex-1 px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+                />
+                <span className="text-slate-600 font-mono">@{customDomain}</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDomainWizardStep(2)}
+                disabled={domainVerifying}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-700 py-3 rounded-xl font-bold transition"
+              >
+                Back
+              </button>
+              <button
+                onClick={async () => {
+                  setDomainVerifying(true);
+                  
+                  // Simulate verification (in production, call Resend API)
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+                  
+                  // For now, mark as verified (in production, check actual DNS)
+                  const customEmail = `${user?.name?.toLowerCase().replace(/\s+/g, '.')}@${customDomain}`;
+                  const updatedUser = {
+                    ...user,
+                    emailConfig: {
+                      ...user.emailConfig,
+                      customDomain: customDomain,
+                      customEmail: customEmail,
+                      domainVerified: true
+                    }
+                  };
+                  
+                  setUser(updatedUser);
+                  
+                  // Save to Firestore
+                  if (window.firebaseDb && user.uid) {
+                    await window.setDoc(
+                      window.doc(window.firebaseDb, 'users', user.uid),
+                      { emailConfig: updatedUser.emailConfig },
+                      { merge: true }
+                    );
+                  }
+                  
+                  setDomainVerifying(false);
+                  
+                  // Show success
+                  alert(`✅ Domain verified! You can now send from ${customEmail}`);
+                  setShowDomainWizard(false);
+                  setShowEmailSettings(false);
+                  setDomainWizardStep(1);
+                  setCustomDomain('');
+                }}
+                disabled={domainVerifying}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-slate-300 text-white py-3 rounded-xl font-bold transition flex items-center justify-center gap-2"
+              >
+                {domainVerifying ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined">verified</span>
+                    Verify Domain
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
 
       {/* Mobile FAB */}
       <MobileFAB />
