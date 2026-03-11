@@ -40,9 +40,6 @@ export default async function handler(req, res) {
     }
 
     // ─── STEP 1: Build image URL map ──────────────────────────────────────────
-    // Images are now uploaded client-side to imgbb before this function is called.
-    // Each image in the array has { id, url } — a real hosted URL, not base64.
-    // No server-side upload needed — just map id -> url directly.
     const imageUrlMap = {};
     if (images && Array.isArray(images) && images.length > 0) {
       images.forEach(img => {
@@ -61,48 +58,67 @@ export default async function handler(req, res) {
       });
     }
 
-    // ─── STEP 3: Process body — replace markers with real HTML ────────────────
-    let htmlBody = body;
+    // ─── STEP 3: Convert plain text lines to HTML paragraphs FIRST ───────────
+    // Do this before marker replacement so multi-line HTML tags aren't split up.
+    // Lines that are blank become <br>, lines with text become <p>.
+    // We use placeholder tokens to protect markers during line processing.
+    const IMAGE_PLACEHOLDER = '___IMAGE_PLACEHOLDER___';
+    const LINK_PLACEHOLDER = '___LINK_PLACEHOLDER___';
 
-    // Replace [IMAGE:img_id] with <img> pointing to hosted URL
-    htmlBody = htmlBody.replace(/\[IMAGE:([^\]]+)\]/g, (match, imgId) => {
-      const url = imageUrlMap[imgId];
-      if (url) {
-        return `
-          <div style="margin: 16px 0; text-align: left;">
-            <img
-              src="${url}"
-              alt="Image"
-              style="max-width: 100%; height: auto; border-radius: 8px; display: block; border: 0;"
-            />
-          </div>
-        `;
-      }
-      return '';
-    });
+    // Temporarily replace markers with single-line placeholders so they
+    // survive the line-by-line paragraph wrapping without getting wrapped in <p>
+    const imageMarkers = [];
+    const linkMarkers = [];
 
-    // Replace [LINK:link_id] with a real <a> hyperlink
-    htmlBody = htmlBody.replace(/\[LINK:([^\]]+)\]/g, (match, linkId) => {
-      const linkData = linkMap[linkId];
-      if (linkData) {
-        return `<a href="${linkData.url}" style="color: #4F46E5; text-decoration: underline; font-weight: 600;" target="_blank" rel="noopener noreferrer">${linkData.text}</a>`;
-      }
-      return match;
-    });
+    let processedBody = body
+      .replace(/\[IMAGE:([^\]]+)\]/g, (match, imgId) => {
+        imageMarkers.push(imgId);
+        return `${IMAGE_PLACEHOLDER}${imageMarkers.length - 1}`;
+      })
+      .replace(/\[LINK:([^\]]+)\]/g, (match, linkId) => {
+        linkMarkers.push(linkId);
+        return `${LINK_PLACEHOLDER}${linkMarkers.length - 1}`;
+      });
 
-    // Convert plain-text line breaks to paragraphs, preserving existing HTML tags
-    const lines = htmlBody.split('\n');
+    // Convert lines to paragraphs
+    const lines = processedBody.split('\n');
     const processedLines = lines.map(line => {
       const trimmed = line.trim();
       if (!trimmed) return '<br style="line-height: 1.6;">';
-      if (trimmed.startsWith('<div') || trimmed.startsWith('<p') || trimmed.startsWith('<img') || trimmed.startsWith('<a') || trimmed.startsWith('<br')) {
-        return trimmed;
-      }
+      // Image placeholder lines become block-level divs (not wrapped in <p>)
+      if (trimmed.startsWith(IMAGE_PLACEHOLDER)) return trimmed;
       return `<p style="margin: 0 0 12px 0; line-height: 1.6;">${trimmed}</p>`;
     });
-    htmlBody = processedLines.join('\n');
+    let htmlBody = processedLines.join('\n');
 
-    // ─── STEP 4: Build plain-text fallback ────────────────────────────────────
+    // ─── STEP 4: Now restore image/link markers as real HTML ─────────────────
+    // Images: replace placeholder with single-line <img> tag
+    htmlBody = htmlBody.replace(
+      new RegExp(`${IMAGE_PLACEHOLDER}(\\d+)`, 'g'),
+      (match, idx) => {
+        const imgId = imageMarkers[parseInt(idx)];
+        const url = imageUrlMap[imgId];
+        if (url) {
+          return `<div style="margin: 16px 0; text-align: left;"><img src="${url}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px; display: block; border: 0;" /></div>`;
+        }
+        return '';
+      }
+    );
+
+    // Links: replace placeholder with <a> tag (inline, safe inside <p>)
+    htmlBody = htmlBody.replace(
+      new RegExp(`${LINK_PLACEHOLDER}(\\d+)`, 'g'),
+      (match, idx) => {
+        const linkId = linkMarkers[parseInt(idx)];
+        const linkData = linkMap[linkId];
+        if (linkData) {
+          return `<a href="${linkData.url}" style="color: #4F46E5; text-decoration: underline; font-weight: 600;" target="_blank" rel="noopener noreferrer">${linkData.text}</a>`;
+        }
+        return '';
+      }
+    );
+
+    // ─── STEP 5: Build plain-text fallback ────────────────────────────────────
     let plainText = body
       .replace(/\[IMAGE:[^\]]+\]/g, '[Image]')
       .replace(/\[LINK:([^\]]+)\]/g, (match, linkId) => {
@@ -110,7 +126,7 @@ export default async function handler(req, res) {
         return linkData ? `${linkData.text} (${linkData.url})` : match;
       });
 
-    // ─── STEP 5: Determine sender ─────────────────────────────────────────────
+    // ─── STEP 6: Determine sender ─────────────────────────────────────────────
     let senderEmail = 'onboarding@resend.dev';
     if (fromEmail && fromEmail.includes('@') && !fromEmail.includes('@mikrocrm.app')) {
       senderEmail = fromEmail;
@@ -120,7 +136,7 @@ export default async function handler(req, res) {
 
     console.log('Email config:', { from: `${senderName} <${senderEmail}>`, replyTo, to });
 
-    // ─── STEP 6: Build final HTML email ───────────────────────────────────────
+    // ─── STEP 7: Build final HTML email ───────────────────────────────────────
     const fullHtml = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -183,7 +199,7 @@ export default async function handler(req, res) {
   </body>
 </html>`;
 
-    // ─── STEP 7: Send via Resend ───────────────────────────────────────────────
+    // ─── STEP 8: Send via Resend ───────────────────────────────────────────────
     const emailPayload = {
       from: `${senderName} <${senderEmail}>`,
       to: [to],
