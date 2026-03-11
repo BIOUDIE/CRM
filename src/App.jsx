@@ -4170,7 +4170,7 @@ const Sidebar = () => (
 
                   // Upload directly to imgbb from the browser
                   const formData = new URLSearchParams();
-                  formData.append('key', IMGBB_API_KEY);
+                  formData.append('key', '45e4867978578c60e64cd227d710e1db');
                   formData.append('image', base64);
                   formData.append('name', file.name);
 
