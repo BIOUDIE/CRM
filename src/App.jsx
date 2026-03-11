@@ -57,10 +57,11 @@ const storage = {
   }
 };
 
+const IMGBB_API_KEY = '45e4867978578c60e64cd227d710e1db';
+
 // Make it available globally for compatibility
 if (typeof window !== 'undefined') {
   window.storage = storage;
-  const IMGBB_API_KEY = '45e4867978578c60e64cd227d710e1db';
 }
 // ===== END CRITICAL FIX =====
 
