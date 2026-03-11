@@ -4125,17 +4125,158 @@ const Sidebar = () => (
                           </button>
                         </div>
                       </div>
+                      
+                      {/* Rich Text Toolbar - NEW */}
+                      <div className="border border-slate-300 rounded-t-xl bg-slate-50 px-3 py-2 flex items-center gap-2 flex-wrap">
+                        {/* Image Upload */}
+                        <div>
+                          <input
+                            type="file"
+                            id="email-image-upload"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={async (e) => {
+                              const files = Array.from(e.target.files);
+                              if (files.length === 0) return;
+                              
+                              for (const file of files) {
+                                if (file.size > 5 * 1024 * 1024) {
+                                  alert(`Image ${file.name} is too large. Max size: 5MB`);
+                                  continue;
+                                }
+                                
+                                // Convert to base64
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const base64 = event.target.result;
+                                  const imageTag = `\n[IMAGE: ${file.name}]\n${base64}\n[/IMAGE]\n`;
+                                  
+                                  // Insert at cursor position
+                                  const textarea = document.getElementById('email-body-textarea');
+                                  const cursorPos = textarea.selectionStart;
+                                  const textBefore = bulkEmailData.body.substring(0, cursorPos);
+                                  const textAfter = bulkEmailData.body.substring(cursorPos);
+                                  
+                                  setBulkEmailData({
+                                    ...bulkEmailData,
+                                    body: textBefore + imageTag + textAfter
+                                  });
+                                  
+                                  // Show toast
+                                  const toast = document.createElement('div');
+                                  toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+                                  toast.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> Image "${file.name}" added!`;
+                                  document.body.appendChild(toast);
+                                  setTimeout(() => toast.remove(), 2000);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                              
+                              // Reset input
+                              e.target.value = '';
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => document.getElementById('email-image-upload').click()}
+                            className="px-3 py-1.5 bg-white hover:bg-indigo-50 border border-slate-300 rounded-lg text-sm font-semibold transition flex items-center gap-2 text-slate-700 hover:text-indigo-700"
+                            title="Upload images"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">image</span>
+                            Add Image
+                          </button>
+                        </div>
+                        
+                        {/* Add Link */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const linkText = prompt('Enter link text (what people will see):');
+                            if (!linkText) return;
+                            
+                            const linkUrl = prompt('Enter URL (e.g., https://example.com):');
+                            if (!linkUrl) return;
+                            
+                            // Validate URL
+                            let finalUrl = linkUrl;
+                            if (!linkUrl.startsWith('http://') && !linkUrl.startsWith('https://')) {
+                              finalUrl = 'https://' + linkUrl;
+                            }
+                            
+                            const linkTag = `[LINK: ${linkText}](${finalUrl})`;
+                            
+                            // Insert at cursor position
+                            const textarea = document.getElementById('email-body-textarea');
+                            const cursorPos = textarea.selectionStart;
+                            const textBefore = bulkEmailData.body.substring(0, cursorPos);
+                            const textAfter = bulkEmailData.body.substring(cursorPos);
+                            
+                            setBulkEmailData({
+                              ...bulkEmailData,
+                              body: textBefore + linkTag + textAfter
+                            });
+                            
+                            // Show toast
+                            const toast = document.createElement('div');
+                            toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+                            toast.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> Link added!`;
+                            document.body.appendChild(toast);
+                            setTimeout(() => toast.remove(), 2000);
+                          }}
+                          className="px-3 py-1.5 bg-white hover:bg-indigo-50 border border-slate-300 rounded-lg text-sm font-semibold transition flex items-center gap-2 text-slate-700 hover:text-indigo-700"
+                          title="Insert link"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">link</span>
+                          Add Link
+                        </button>
+                        
+                        <div className="h-6 w-px bg-slate-300 mx-1"></div>
+                        
+                        {/* Existing variable buttons */}
+                        <button
+                          onClick={() => {
+                            const cursorPos = document.getElementById('email-body-textarea').selectionStart;
+                            const textBefore = bulkEmailData.body.substring(0, cursorPos);
+                            const textAfter = bulkEmailData.body.substring(cursorPos);
+                            setBulkEmailData({...bulkEmailData, body: textBefore + '{firstName}' + textAfter});
+                          }}
+                          className="px-2 py-1 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-mono transition"
+                        >
+                          {'{firstName}'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            const cursorPos = document.getElementById('email-body-textarea').selectionStart;
+                            const textBefore = bulkEmailData.body.substring(0, cursorPos);
+                            const textAfter = bulkEmailData.body.substring(cursorPos);
+                            setBulkEmailData({...bulkEmailData, body: textBefore + '{companyName}' + textAfter});
+                          }}
+                          className="px-2 py-1 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-mono transition"
+                        >
+                          {'{companyName}'}
+                        </button>
+                      </div>
+                      
                       <textarea
                         id="email-body-textarea"
                         value={bulkEmailData.body}
                         onChange={(e) => setBulkEmailData({...bulkEmailData, body: e.target.value})}
-                        placeholder="Hi {firstName},&#10;&#10;I hope you are doing well! I'm reaching out to..."
+                        placeholder="Hi {firstName},&#10;&#10;I hope you are doing well! I'm reaching out to...&#10;&#10;Click 'Add Image' or 'Add Link' above to insert media."
                         rows="12"
-                        className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none font-sans"
+                        className="w-full px-4 py-3 border-x border-b border-slate-300 rounded-b-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm resize-none font-sans"
                       />
-                      <p className="text-[11px] text-slate-500 mt-2">
-                        Pro tip: Use curly braces like <code className="bg-slate-100 px-1 py-0.5 rounded">{'{firstName}'}</code> to insert dynamic CRM data.
-                      </p>
+                      <div className="mt-2 space-y-1">
+                        <p className="text-[11px] text-slate-500">
+                          <strong>📎 Images:</strong> Click "Add Image" to upload. Images appear inline where you place them.
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          <strong>🔗 Links:</strong> Click "Add Link" to create clickable links in your email.
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          <strong>💡 Variables:</strong> Use <code className="bg-slate-100 px-1 py-0.5 rounded">{'{firstName}'}</code> or <code className="bg-slate-100 px-1 py-0.5 rounded">{'{companyName}'}</code> for personalization.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>

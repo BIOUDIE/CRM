@@ -75,10 +75,23 @@ export default async function handler(req, res) {
       originalFromEmail: fromEmail // What was requested
     });
 
-    // Convert plain text body to HTML (preserve line breaks)
-    const htmlBody = body
+    // Convert plain text body to HTML with image and link support
+    let htmlBody = body;
+    
+    // Process images: [IMAGE: filename]base64data[/IMAGE]
+    htmlBody = htmlBody.replace(/\[IMAGE: ([^\]]+)\]\s*(data:image\/[^;]+;base64,[^\[]+)\s*\[\/IMAGE\]/g, (match, filename, base64) => {
+      return `<img src="${base64.trim()}" alt="${filename}" style="max-width: 100%; height: auto; margin: 10px 0; border-radius: 8px;" />`;
+    });
+    
+    // Process links: [LINK: text](url)
+    htmlBody = htmlBody.replace(/\[LINK: ([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
+      return `<a href="${url}" style="color: #4F46E5; text-decoration: none; font-weight: 500;">${text}</a>`;
+    });
+    
+    // Convert line breaks to paragraphs
+    htmlBody = htmlBody
       .split('\n')
-      .map(line => line.trim() ? `<p>${line}</p>` : '<br>')
+      .map(line => line.trim() ? `<p style="margin: 0 0 10px 0;">${line}</p>` : '<br>')
       .join('');
 
     // Prepare email payload for Resend
