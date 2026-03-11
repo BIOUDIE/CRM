@@ -29,7 +29,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { to, subject, body, fromName, fromEmail, scheduleDate, scheduleTime } = req.body;
+    const { to, subject, body, fromName, fromEmail, replyToEmail, scheduleDate, scheduleTime } = req.body;
 
     // Validate required fields
     if (!to || !subject || !body) {
@@ -52,6 +52,9 @@ export default async function handler(req, res) {
     // Priority: fromEmail (custom domain) > default mikrocrm.app email
     const senderEmail = fromEmail || 'noreply@mikrocrm.app';
     const senderName = fromName || 'Micro CRM';
+    
+    // Determine reply-to email
+    const replyTo = replyToEmail || senderEmail;
 
     // Convert plain text body to HTML (preserve line breaks)
     const htmlBody = body
@@ -94,7 +97,7 @@ export default async function handler(req, res) {
         </html>
       `,
       text: body, // Plain text fallback
-      reply_to: senderEmail // Reply goes back to sender
+      reply_to: replyTo // Reply goes to user's preferred email
     };
 
     console.log('Sending email to:', to);

@@ -2083,6 +2083,7 @@ useEffect(() => {
           body: personalizedBody,
           fromName: user?.emailConfig?.fromName || user.name || businessProfile.businessName || 'Your CRM',
           fromEmail: user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || null,
+          replyToEmail: user?.emailConfig?.replyToEmail || user?.email || null,
           scheduleDate: bulkEmailData.scheduleDate,
           scheduleTime: bulkEmailData.scheduleTime
         };
@@ -2538,7 +2539,7 @@ const Sidebar = () => (
 
   // NO AUTH CHECK NEEDED - Firebase redirects to landing page if not logged in
 
-  // Show loading while checking auth or user not loaded
+  // Show loading while checking auth - removed email check, users can login without email
   if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center">
@@ -5022,6 +5023,55 @@ const Sidebar = () => (
                 />
               </div>
 
+              {/* Username for Email - NEW */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Username (Optional)
+                </label>
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="text"
+                    value={user?.emailConfig?.customEmailPrefix || ''}
+                    onChange={async (e) => {
+                      const value = e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '');
+                      const updatedUser = {
+                        ...user,
+                        emailConfig: {
+                          ...user.emailConfig,
+                          customEmailPrefix: value,
+                          defaultEmail: value ? `${value}@mikrocrm.app` : null
+                        }
+                      };
+                      setUser(updatedUser);
+                      
+                      // Save to Firestore
+                      if (window.firebaseDb && user.uid && value) {
+                        try {
+                          await window.setDoc(
+                            window.doc(window.firebaseDb, 'users', user.uid),
+                            { emailConfig: updatedUser.emailConfig },
+                            { merge: true }
+                          );
+                        } catch (err) {
+                          console.error('Error saving username:', err);
+                        }
+                      }
+                    }}
+                    placeholder="e.g., john.smith"
+                    className="flex-1 px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-mono"
+                  />
+                  <span className="text-slate-600 font-mono">@mikrocrm.app</span>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <p className="text-xs text-blue-800 flex items-start gap-2">
+                    <span className="material-symbols-outlined text-blue-600 text-[16px] mt-0.5">info</span>
+                    <span>
+                      This username will be used as your custom email address for sending emails from the CRM. You can set or change it anytime.
+                    </span>
+                  </p>
+                </div>
+              </div>
+
               {/* Business Name */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
@@ -5498,6 +5548,62 @@ const Sidebar = () => (
           <p className="text-xs text-slate-500 mt-2">
             This name will appear as the sender when recipients receive your emails
           </p>
+        </div>
+
+        {/* Use Existing Email as Reply-To - NEW */}
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-5">
+          <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+            <span className="material-symbols-outlined text-blue-600">forward_to_inbox</span>
+            Use Your Existing Email for Replies
+          </h3>
+          <p className="text-sm text-slate-700 mb-3">
+            Set your personal email (e.g., Gmail) as the reply-to address. Recipients will reply to this email instead of your CRM email.
+          </p>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Your Personal Email (Reply-To)
+              </label>
+              <input
+                type="email"
+                value={user?.emailConfig?.replyToEmail || user?.email || ''}
+                onChange={async (e) => {
+                  const newReplyTo = e.target.value;
+                  const updatedUser = {
+                    ...user,
+                    emailConfig: {
+                      ...user.emailConfig,
+                      replyToEmail: newReplyTo
+                    }
+                  };
+                  setUser(updatedUser);
+                  
+                  // Save to Firestore
+                  if (window.firebaseDb && user.uid) {
+                    try {
+                      await window.setDoc(
+                        window.doc(window.firebaseDb, 'users', user.uid),
+                        { emailConfig: updatedUser.emailConfig },
+                        { merge: true }
+                      );
+                    } catch (err) {
+                      console.error('Error saving reply-to:', err);
+                    }
+                  }
+                }}
+                placeholder="your.email@gmail.com"
+                className="w-full px-4 py-3 border border-blue-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div className="bg-white border border-blue-200 rounded-lg p-3">
+              <p className="text-xs text-blue-800 flex items-start gap-2">
+                <span className="material-symbols-outlined text-blue-600 text-[14px] mt-0.5">info</span>
+                <span>
+                  Emails will be sent from <strong>{user?.emailConfig?.defaultEmail || 'your-username@mikrocrm.app'}</strong> but replies will go to the email you specify above.
+                </span>
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Change Email Section */}
