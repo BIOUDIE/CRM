@@ -49,12 +49,31 @@ export default async function handler(req, res) {
     }
 
     // Determine sender email and name
-    // Priority: fromEmail (custom domain) > default mikrocrm.app email
-    const senderEmail = fromEmail || 'noreply@mikrocrm.app';
+    // IMPORTANT: Always use Resend's verified default domain
+    // Custom domains require verification in Resend dashboard first
+    
+    let senderEmail = 'onboarding@resend.dev'; // Resend's verified sending domain
+    
+    // Check if user has a verified custom domain (not mikrocrm.app)
+    if (fromEmail && fromEmail.includes('@') && !fromEmail.includes('@mikrocrm.app')) {
+      // Only use custom email if it's NOT mikrocrm.app (which is unverified)
+      // User must verify their own domain in Resend first
+      senderEmail = fromEmail;
+    }
+    
     const senderName = fromName || 'Micro CRM';
     
     // Determine reply-to email
+    // This is where replies will actually go (user's personal email)
     const replyTo = replyToEmail || senderEmail;
+    
+    // Log what we're using (helps debug)
+    console.log('Email sending config:', {
+      from: `${senderName} <${senderEmail}>`,
+      replyTo: replyTo,
+      to: to,
+      originalFromEmail: fromEmail // What was requested
+    });
 
     // Convert plain text body to HTML (preserve line breaks)
     const htmlBody = body
@@ -115,10 +134,19 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Resend API error:', data);
+      console.error('Resend API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: data
+      });
+      
+      // Return detailed error for debugging
       return res.status(response.status).json({ 
         error: 'Failed to send email',
-        details: data
+        details: data,
+        message: data.message || 'Email service error',
+        fromEmail: senderEmail,
+        toEmail: to
       });
     }
 
