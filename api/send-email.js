@@ -29,7 +29,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { to, subject, body, fromName, fromEmail, replyToEmail, images, scheduleDate, scheduleTime } = req.body;
+    const { to, subject, body, fromName, fromEmail, replyToEmail, images, links, scheduleDate, scheduleTime } = req.body;
 
     // Validate required fields
     if (!to || !subject || !body) {
@@ -86,18 +86,30 @@ export default async function handler(req, res) {
       });
     }
     
-    // Process image tags: <img src="img_id" alt="name" />
-    htmlBody = htmlBody.replace(/<img src="([^"]+)" alt="([^"]*)" \/>/g, (match, imgId, altText) => {
+    // Create link lookup map
+    const linkMap = {};
+    if (links && Array.isArray(links)) {
+      links.forEach(link => {
+        linkMap[link.id] = link;
+      });
+    }
+    
+    // Process image markers: [IMAGE:img_id]
+    htmlBody = htmlBody.replace(/\[IMAGE:([^\]]+)\]/g, (match, imgId) => {
       const imageData = imageMap[imgId];
       if (imageData) {
-        return `<img src="${imageData}" alt="${altText}" style="max-width: 100%; height: auto; margin: 15px 0; border-radius: 8px; display: block;" />`;
+        return `<div style="margin: 15px 0;"><img src="${imageData}" alt="Image" style="max-width: 100%; height: auto; border-radius: 8px; display: block;" /></div>`;
       }
       return ''; // Remove if image not found
     });
     
-    // Process HTML links: <a href="url">text</a> - add styling
-    htmlBody = htmlBody.replace(/<a href="([^"]+)">([^<]+)<\/a>/g, (match, url, text) => {
-      return `<a href="${url}" style="color: #4F46E5; text-decoration: none; font-weight: 500; border-bottom: 1px solid #4F46E5;">${text}</a>`;
+    // Process link markers: [LINK:link_id]
+    htmlBody = htmlBody.replace(/\[LINK:([^\]]+)\]/g, (match, linkId) => {
+      const linkData = linkMap[linkId];
+      if (linkData) {
+        return `<a href="${linkData.url}" style="color: #4F46E5; text-decoration: underline; font-weight: 500;">${linkData.text}</a>`;
+      }
+      return match; // Keep original if link not found
     });
     
     // Convert line breaks to paragraphs (preserve existing HTML)
