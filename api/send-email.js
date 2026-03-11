@@ -29,7 +29,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { to, subject, body, fromName, fromEmail, replyToEmail, scheduleDate, scheduleTime } = req.body;
+    const { to, subject, body, fromName, fromEmail, replyToEmail, images, scheduleDate, scheduleTime } = req.body;
 
     // Validate required fields
     if (!to || !subject || !body) {
@@ -75,24 +75,40 @@ export default async function handler(req, res) {
       originalFromEmail: fromEmail // What was requested
     });
 
-    // Convert plain text body to HTML with image and link support
+    // Convert email body with images and links to HTML
     let htmlBody = body;
     
-    // Process images: [IMAGE: filename]base64data[/IMAGE]
-    htmlBody = htmlBody.replace(/\[IMAGE: ([^\]]+)\]\s*(data:image\/[^;]+;base64,[^\[]+)\s*\[\/IMAGE\]/g, (match, filename, base64) => {
-      return `<img src="${base64.trim()}" alt="${filename}" style="max-width: 100%; height: auto; margin: 10px 0; border-radius: 8px;" />`;
+    // Create image lookup map
+    const imageMap = {};
+    if (images && Array.isArray(images)) {
+      images.forEach(img => {
+        imageMap[img.id] = img.data;
+      });
+    }
+    
+    // Process image tags: <img src="img_id" alt="name" />
+    htmlBody = htmlBody.replace(/<img src="([^"]+)" alt="([^"]*)" \/>/g, (match, imgId, altText) => {
+      const imageData = imageMap[imgId];
+      if (imageData) {
+        return `<img src="${imageData}" alt="${altText}" style="max-width: 100%; height: auto; margin: 15px 0; border-radius: 8px; display: block;" />`;
+      }
+      return ''; // Remove if image not found
     });
     
-    // Process links: [LINK: text](url)
-    htmlBody = htmlBody.replace(/\[LINK: ([^\]]+)\]\(([^)]+)\)/g, (match, text, url) => {
-      return `<a href="${url}" style="color: #4F46E5; text-decoration: none; font-weight: 500;">${text}</a>`;
+    // Process HTML links: <a href="url">text</a> - add styling
+    htmlBody = htmlBody.replace(/<a href="([^"]+)">([^<]+)<\/a>/g, (match, url, text) => {
+      return `<a href="${url}" style="color: #4F46E5; text-decoration: none; font-weight: 500; border-bottom: 1px solid #4F46E5;">${text}</a>`;
     });
     
-    // Convert line breaks to paragraphs
-    htmlBody = htmlBody
-      .split('\n')
-      .map(line => line.trim() ? `<p style="margin: 0 0 10px 0;">${line}</p>` : '<br>')
-      .join('');
+    // Convert line breaks to paragraphs (preserve existing HTML)
+    const lines = htmlBody.split('\n');
+    htmlBody = lines.map(line => {
+      line = line.trim();
+      if (!line) return '<br>';
+      // Don't wrap if already HTML tag
+      if (line.startsWith('<')) return line;
+      return `<p style="margin: 0 0 10px 0;">${line}</p>`;
+    }).join('');
 
     // Prepare email payload for Resend
     const emailPayload = {
