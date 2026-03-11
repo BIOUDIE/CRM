@@ -60,6 +60,7 @@ const storage = {
 // Make it available globally for compatibility
 if (typeof window !== 'undefined') {
   window.storage = storage;
+  const IMGBB_API_KEY = '45e4867978578c60e64cd227d710e1db';
 }
 // ===== END CRITICAL FIX =====
 
@@ -4138,50 +4139,82 @@ const Sidebar = () => (
                             accept="image/*"
                             multiple
                             className="hidden"
-                            onChange={async (e) => {
-                              const files = Array.from(e.target.files);
-                              if (files.length === 0) return;
-                              
-                              const newImages = [];
-                              
-                              for (const file of files) {
-                                if (file.size > 5 * 1024 * 1024) {
-                                  alert(`Image ${file.name} is too large. Max size: 5MB`);
-                                  continue;
-                                }
-                                
-                                const reader = new FileReader();
-                                await new Promise((resolve) => {
-                                  reader.onload = (event) => {
-                                    const base64 = event.target.result;
-                                    const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-                                    
-                                    newImages.push({
-                                      id: imageId,
-                                      name: file.name,
-                                      data: base64,
-                                      size: file.size
-                                    });
-                                    resolve();
-                                  };
-                                  reader.readAsDataURL(file);
-                                });
-                              }
-                              
-                              const currentImages = bulkEmailData.images || [];
-                              setBulkEmailData({
-                                ...bulkEmailData,
-                                images: [...currentImages, ...newImages]
-                              });
-                              
-                              const toast = document.createElement('div');
-                              toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
-                              toast.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> ${newImages.length} image(s) uploaded! Click thumbnails to insert.`;
-                              document.body.appendChild(toast);
-                              setTimeout(() => toast.remove(), 3000);
-                              
-                              e.target.value = '';
-                            }}
+                              onChange={async (e) => {
+              const files = Array.from(e.target.files);
+              if (files.length === 0) return;
+
+              // Show uploading indicator
+              const uploadingToast = document.createElement('div');
+              uploadingToast.id = 'uploading-toast';
+              uploadingToast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+              uploadingToast.innerHTML = '<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Uploading image to CDN...';
+              document.body.appendChild(uploadingToast);
+
+              const newImages = [];
+
+              for (const file of files) {
+                if (file.size > 10 * 1024 * 1024) {
+                  alert(`${file.name} is too large. Max size: 10MB`);
+                  continue;
+                }
+
+                try {
+                  // Read file as base64
+                  const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => resolve(ev.target.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                  });
+
+                  // Upload directly to imgbb from the browser
+                  const formData = new URLSearchParams();
+                  formData.append('key', IMGBB_API_KEY);
+                  formData.append('image', base64);
+                  formData.append('name', file.name);
+
+                  const uploadRes = await fetch('https://api.imgbb.com/1/upload', {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                  });
+
+                  const uploadData = await uploadRes.json();
+
+                  if (uploadData.success && uploadData.data?.url) {
+                    const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                    newImages.push({
+                      id: imageId,
+                      name: file.name,
+                      url: uploadData.data.url,           // real hosted URL sent to server
+                      data: uploadData.data.display_url   // preview shown in thumbnail
+                    });
+                  } else {
+                    console.error('imgbb upload failed:', uploadData);
+                    alert(`Failed to upload ${file.name}. Please try again.`);
+                  }
+                } catch (err) {
+                  console.error('Upload error:', err);
+                  alert(`Error uploading ${file.name}. Check your connection.`);
+                }
+              }
+
+              // Remove uploading toast
+              document.getElementById('uploading-toast')?.remove();
+
+              if (newImages.length > 0) {
+                const currentImages = bulkEmailData.images || [];
+                setBulkEmailData({ ...bulkEmailData, images: [...currentImages, ...newImages] });
+
+                const toast = document.createElement('div');
+                toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+                toast.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> ${newImages.length} image(s) uploaded! Click thumbnails to insert.`;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
+              }
+
+              e.target.value = '';
+            }}
                           />
                           <button
                             type="button"

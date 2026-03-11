@@ -1,6 +1,6 @@
 // api/send-email.js
 // Sends individual personalized emails via Resend
-// Images are uploaded to imgbb (free CDN) so email clients can display them
+// Images arrive as hosted imgbb URLs (uploaded client-side) — fixes 413 error
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -19,7 +19,6 @@ export default async function handler(req, res) {
   }
 
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
-  const IMGBB_API_KEY = process.env.IMGBB_API_KEY; // Add this to Vercel env vars
 
   if (!RESEND_API_KEY) {
     return res.status(500).json({
@@ -40,57 +39,22 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid email address', email: to });
     }
 
-    // ─── STEP 1: Upload base64 images to imgbb and build a URL map ───────────
-    const imageUrlMap = {}; // { img_id: "https://i.ibb.co/..." }
-
+    // ─── STEP 1: Build image URL map ──────────────────────────────────────────
+    // Images are now uploaded client-side to imgbb before this function is called.
+    // Each image in the array has { id, url } — a real hosted URL, not base64.
+    // No server-side upload needed — just map id -> url directly.
+    const imageUrlMap = {};
     if (images && Array.isArray(images) && images.length > 0) {
-      for (const img of images) {
-        try {
-          // img.data is a full data URL like "data:image/jpeg;base64,/9j/..."
-          // imgbb expects just the base64 part (after the comma)
-          const base64Data = img.data.includes(',') ? img.data.split(',')[1] : img.data;
-
-          if (IMGBB_API_KEY) {
-            // Upload to imgbb
-            const formData = new URLSearchParams();
-            formData.append('key', IMGBB_API_KEY);
-            formData.append('image', base64Data);
-            formData.append('name', img.name || `email_image_${img.id}`);
-
-            const uploadRes = await fetch('https://api.imgbb.com/1/upload', {
-              method: 'POST',
-              body: formData,
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-            });
-
-            if (uploadRes.ok) {
-              const uploadData = await uploadRes.json();
-              if (uploadData.success && uploadData.data?.url) {
-                imageUrlMap[img.id] = uploadData.data.url;
-                console.log(`✅ Image ${img.id} uploaded: ${uploadData.data.url}`);
-              } else {
-                console.error(`imgbb upload failed for ${img.id}:`, uploadData);
-                // Fallback: embed as base64 (may be blocked by some clients but works in others)
-                imageUrlMap[img.id] = img.data;
-              }
-            } else {
-              console.error(`imgbb HTTP error for ${img.id}:`, uploadRes.status);
-              imageUrlMap[img.id] = img.data; // fallback
-            }
-          } else {
-            // No imgbb key — embed base64 directly (works in some clients like Apple Mail)
-            console.warn('No IMGBB_API_KEY set — embedding base64 image directly');
-            imageUrlMap[img.id] = img.data;
-          }
-        } catch (imgErr) {
-          console.error(`Error uploading image ${img.id}:`, imgErr);
-          imageUrlMap[img.id] = img.data; // fallback to base64
+      images.forEach(img => {
+        if (img.url) {
+          imageUrlMap[img.id] = img.url;
+          console.log(`Image ${img.id} -> ${img.url}`);
         }
-      }
+      });
     }
 
     // ─── STEP 2: Build link map ────────────────────────────────────────────────
-    const linkMap = {}; // { link_id: { text, url } }
+    const linkMap = {};
     if (links && Array.isArray(links)) {
       links.forEach(link => {
         linkMap[link.id] = link;
@@ -100,7 +64,7 @@ export default async function handler(req, res) {
     // ─── STEP 3: Process body — replace markers with real HTML ────────────────
     let htmlBody = body;
 
-    // Replace [IMAGE:img_id] with <img> pointing to uploaded URL
+    // Replace [IMAGE:img_id] with <img> pointing to hosted URL
     htmlBody = htmlBody.replace(/\[IMAGE:([^\]]+)\]/g, (match, imgId) => {
       const url = imageUrlMap[imgId];
       if (url) {
@@ -114,7 +78,7 @@ export default async function handler(req, res) {
           </div>
         `;
       }
-      return ''; // remove marker if no image found
+      return '';
     });
 
     // Replace [LINK:link_id] with a real <a> hyperlink
@@ -123,7 +87,7 @@ export default async function handler(req, res) {
       if (linkData) {
         return `<a href="${linkData.url}" style="color: #4F46E5; text-decoration: underline; font-weight: 600;" target="_blank" rel="noopener noreferrer">${linkData.text}</a>`;
       }
-      return match; // keep marker text if link data missing
+      return match;
     });
 
     // Convert plain-text line breaks to paragraphs, preserving existing HTML tags
@@ -131,7 +95,6 @@ export default async function handler(req, res) {
     const processedLines = lines.map(line => {
       const trimmed = line.trim();
       if (!trimmed) return '<br style="line-height: 1.6;">';
-      // Don't wrap lines that are already HTML block elements
       if (trimmed.startsWith('<div') || trimmed.startsWith('<p') || trimmed.startsWith('<img') || trimmed.startsWith('<a') || trimmed.startsWith('<br')) {
         return trimmed;
       }
@@ -139,7 +102,7 @@ export default async function handler(req, res) {
     });
     htmlBody = processedLines.join('\n');
 
-    // ─── STEP 4: Build plain-text fallback (strip HTML, remove markers) ───────
+    // ─── STEP 4: Build plain-text fallback ────────────────────────────────────
     let plainText = body
       .replace(/\[IMAGE:[^\]]+\]/g, '[Image]')
       .replace(/\[LINK:([^\]]+)\]/g, (match, linkId) => {
