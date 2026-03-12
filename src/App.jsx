@@ -2057,8 +2057,10 @@ useEffect(() => {
     
     setEmailSendStatus('sending');
     
+    const successList = [];
+    const failList = [];
+
     try {
-      // Send emails via in-platform API endpoint (you'll create this)
       for (let i = 0; i < selectedContactsList.length; i++) {
         const contact = selectedContactsList[i];
         
@@ -2079,7 +2081,6 @@ useEffect(() => {
           .replace(/\{email\}/g, contact.email)
           .replace(/\{phone\}/g, contact.phone || '');
         
-        // Call your email API endpoint (you'll need to create this)
         const emailData = {
           to: contact.email,
           subject: personalizedSubject,
@@ -2093,7 +2094,6 @@ useEffect(() => {
           scheduleTime: bulkEmailData.scheduleTime
         };
         
-        // Send via API (implement this endpoint later)
         try {
           const response = await fetch('/api/send-email', {
             method: 'POST',
@@ -2101,43 +2101,46 @@ useEffect(() => {
             body: JSON.stringify(emailData)
           });
           
-          if (!response.ok) {
-            console.error(`Failed to send email to ${contact.email}`);
-            // Fallback to mailto if API fails
-            const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(personalizedSubject)}&body=${encodeURIComponent(personalizedBody)}`;
-            window.open(mailtoLink, '_blank');
+          if (response.ok) {
+            successList.push(contact.email);
+            // Log activity only on success
+            addActivity({
+              contactId: contact.id,
+              type: 'email',
+              content: `Sent: ${personalizedSubject}`,
+              date: new Date().toISOString().split('T')[0],
+              id: Date.now() + '_' + contact.id,
+              timestamp: new Date().toISOString()
+            });
+          } else {
+            const errData = await response.json().catch(() => ({}));
+            console.error(`Failed to send to ${contact.email}:`, response.status, errData);
+            failList.push(`${contact.name} (${contact.email}): ${errData.message || response.status}`);
           }
         } catch (apiError) {
-          console.error('Email API error:', apiError);
-          // Fallback to mailto
-          const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(personalizedSubject)}&body=${encodeURIComponent(personalizedBody)}`;
-          window.open(mailtoLink, '_blank');
+          console.error('Network error sending to', contact.email, apiError);
+          failList.push(`${contact.name} (${contact.email}): network error`);
         }
         
-        // Log activity for each contact
-        addActivity({
-          contactId: contact.id,
-          type: 'email',
-          content: `Sent: ${personalizedSubject}`,
-          date: new Date().toISOString().split('T')[0],
-          id: Date.now() + '_' + contact.id,
-          timestamp: new Date().toISOString()
-        });
-        
-        // Small delay between sends to prevent rate limiting
+        // Small delay between sends to avoid rate limiting
         if (i < selectedContactsList.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise(resolve => setTimeout(resolve, 400));
         }
       }
       
       setEmailSendStatus('done');
       
-      // Show success message
+      // Show success/failure summary
       const toast = document.createElement('div');
-      toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
-      toast.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> Successfully sent ${selectedContactsList.length} personalized email${selectedContactsList.length !== 1 ? 's' : ''}!`;
+      const allOk = failList.length === 0;
+      toast.className = `fixed top-4 left-1/2 -translate-x-1/2 ${allOk ? 'bg-green-600' : 'bg-yellow-600'} text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2 max-w-lg text-center`;
+      if (allOk) {
+        toast.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> Sent ${successList.length} email${successList.length !== 1 ? 's' : ''} successfully!`;
+      } else {
+        toast.innerHTML = `<span class="material-symbols-outlined text-[18px]">warning</span> ${successList.length} sent, ${failList.length} failed: ${failList.join('; ')}`;
+      }
       document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
+      setTimeout(() => toast.remove(), allOk ? 3000 : 7000);
       
       setTimeout(() => {
         setShowBulkEmail(false);
