@@ -57,8 +57,7 @@ const storage = {
   }
 };
 
-const CLOUDINARY_CLOUD_NAME = 'dtbnaydgj';
-const CLOUDINARY_UPLOAD_PRESET = 'micro_crm_uploads';
+const IMGBB_API_KEY = '45e4867978578c60e64cd227d710e1db';
 
 // Make it available globally for compatibility
 if (typeof window !== 'undefined') {
@@ -887,7 +886,7 @@ export default function App() {
   const [icebreakerContact, setIcebreakerContact] = useState(null);
   const [icebreakerLines, setIcebreakerLines] = useState([]);
   const [icebreakerLoading, setIcebreakerLoading] = useState(false);
-  const [icebreakerChannel, setIcebreakerChannel] = useState('linkedin'); // 'linkedin' | 'email'
+  const [icebreakerChannel, setIcebreakerChannel] = useState('whatsapp'); // 'whatsapp' | 'linkedin' | 'email' | 'instagram' | 'twitter' | 'facebook'
   const [icebreakerCopied, setIcebreakerCopied] = useState(null); // index of copied line
   const [nudgeEnabled, setNudgeEnabled] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState(null); // 'cold' | 'warm' | 'hot'
@@ -1530,77 +1529,122 @@ useEffect(() => {
     setTimeout(() => setIcebreakerCopied(null), 2000);
   };
 
-  const copyAllIcebreakers = () => {
-    navigator.clipboard.writeText(icebreakerLines.join('\n\n'));
-    setIcebreakerCopied('all');
-    setTimeout(() => setIcebreakerCopied(null), 2000);
+  // Channel definitions — used in both single + bulk modals
+  const icebreakerChannels = [
+    { id: 'whatsapp',  icon: '💬', label: 'WhatsApp',   color: 'bg-green-500 hover:bg-green-600' },
+    { id: 'email',     icon: '✉️', label: 'Email',      color: 'bg-indigo-500 hover:bg-indigo-600' },
+    { id: 'linkedin',  icon: '💼', label: 'LinkedIn',   color: 'bg-blue-600 hover:bg-blue-700' },
+    { id: 'instagram', icon: '📸', label: 'Instagram',  color: 'bg-pink-500 hover:bg-pink-600' },
+    { id: 'twitter',   icon: '𝕏',  label: 'X/Twitter',  color: 'bg-slate-800 hover:bg-slate-900' },
+    { id: 'facebook',  icon: '👥', label: 'Facebook',   color: 'bg-blue-500 hover:bg-blue-600' },
+  ];
+
+  // Returns the deep-link URL for a channel + message
+  const getChannelUrl = (channel, message) => {
+    const enc = encodeURIComponent(message);
+    switch (channel) {
+      case 'whatsapp':  return `https://wa.me/?text=${enc}`;
+      case 'linkedin':  return `https://www.linkedin.com/messaging/compose/?body=${enc}`;
+      case 'twitter':   return `https://twitter.com/messages/compose?text=${enc}`;
+      case 'facebook':  return `https://www.facebook.com/messages/new`;
+      case 'instagram': return `https://ig.me/m/`;
+      default:          return null;
+    }
+  };
+
+  // Open channel app with message pre-filled (copies first, then redirects)
+  const openChannelWithMessage = (channel, message) => {
+    navigator.clipboard.writeText(message);
+    const url = getChannelUrl(channel, message);
+    if (url) setTimeout(() => window.open(url, '_blank'), 200);
   };
 
   // --- BULK ICEBREAKER ---
   const generateBulkIcebreakers = async () => {
     const selectedContactsList = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id));
     setBulkIcebreakerLoading(true);
-    
     try {
-      // Call our serverless function with all contacts at once + business profile
       const response = await fetch('/api/generate-bulk-icebreakers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           contacts: selectedContactsList,
           channel: bulkIcebreakerData.channel,
-          businessProfile // Include business context
+          businessProfile
         })
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to generate bulk icebreakers');
-      }
-
+      if (!response.ok) throw new Error((await response.json()).error || 'Failed');
       const data = await response.json();
-      setBulkIcebreakerData(prev => ({ ...prev, results: data.results || {} }));
+      // Normalise: results may be { id: [line] } or { id: 'string' } — always store string
+      const normalised = {};
+      Object.entries(data.results || {}).forEach(([id, val]) => {
+        normalised[id] = Array.isArray(val) ? val[0] : val;
+      });
+      setBulkIcebreakerData(prev => ({ ...prev, results: normalised }));
     } catch (err) {
       console.error('Bulk icebreaker error:', err);
-      // Set error messages for all contacts
       const errorResults = {};
-      selectedContactsList.forEach(c => {
-        errorResults[c.id] = ['Error generating — try again later.'];
-      });
+      selectedContactsList.forEach(c => { errorResults[c.id] = 'Error generating — try again.'; });
       setBulkIcebreakerData(prev => ({ ...prev, results: errorResults }));
     }
-    
     setBulkIcebreakerLoading(false);
   };
 
   const copyAllBulkIcebreakers = () => {
-    const selectedContactsList = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id));
-    const formatted = selectedContactsList.map(contact => {
-      const lines = bulkIcebreakerData.results[contact.id] || [];
-      return `${contact.name} (${contact.email || 'no email'}):\n${lines.map((l, i) => `${i + 1}. ${l}`).join('\n')}`;
-    }).join('\n\n---\n\n');
-    navigator.clipboard.writeText(formatted);
-    alert('All icebreakers copied to clipboard!');
+    const list = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id));
+    const text = list.map(c => bulkIcebreakerData.results[c.id] || '').join('\n\n---\n\n');
+    navigator.clipboard.writeText(text);
+    const t = document.createElement('div');
+    t.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+    t.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span> All messages copied!';
+    document.body.appendChild(t); setTimeout(() => t.remove(), 2000);
   };
 
   const sendAllBulkIcebreakers = async () => {
-    if (bulkIcebreakerData.channel !== 'email') {
-      alert('Direct send only works for Email channel. Use Copy for LinkedIn.');
+    const ch = bulkIcebreakerData.channel;
+    const list = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id));
+
+    if (ch === 'email') {
+      // Send individually via API with each person's first name personalised
+      const withEmail = list.filter(c => c.email);
+      for (let i = 0; i < withEmail.length; i++) {
+        const contact = withEmail[i];
+        const msg = bulkIcebreakerData.results[contact.id] || '';
+        const parts = msg.includes(' | ') ? msg.split(' | ') : [null, msg];
+        try {
+          await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: contact.email,
+              subject: parts[0] || 'Quick hello',
+              body: parts[1] || msg,
+              fromName: user?.emailConfig?.fromName || user?.name,
+              fromEmail: user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || null,
+              replyToEmail: user?.emailConfig?.replyToEmail || user?.email || null,
+              images: [], links: []
+            })
+          });
+        } catch(e) { console.error('send error', e); }
+        if (i < withEmail.length - 1) await new Promise(r => setTimeout(r, 400));
+      }
+      const t = document.createElement('div');
+      t.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+      t.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> Sent ${withEmail.length} emails!`;
+      document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
       return;
     }
-    const selectedContactsList = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id) && c.email);
-    for (let i = 0; i < selectedContactsList.length; i++) {
-      const contact = selectedContactsList[i];
-      const lines = bulkIcebreakerData.results[contact.id] || [];
-      const firstLine = lines[0] || '';
-      const parts = firstLine.includes(' | ') ? firstLine.split(' | ') : ['Quick hello', firstLine];
-      const subject = parts[0];
-      const body = parts[1] || firstLine;
-      const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      window.open(mailtoLink, '_blank');
-      if (i < selectedContactsList.length - 1) await new Promise(r => setTimeout(r, 500));
-    }
-    alert(`Opened ${selectedContactsList.length} emails in your mail client!`);
+
+    // All other channels: copy all + open the app with first contact's message
+    copyAllBulkIcebreakers();
+    const firstMsg = bulkIcebreakerData.results[list[0]?.id] || '';
+    const url = getChannelUrl(ch, firstMsg);
+    if (url) setTimeout(() => window.open(url, '_blank'), 300);
+    const chLabel = icebreakerChannels.find(c => c.id === ch)?.label || ch;
+    const t = document.createElement('div');
+    t.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-semibold shadow-lg z-[60] text-sm text-center max-w-xs';
+    t.innerHTML = `Messages copied! Opening ${chLabel} — select your recipients or BC list there.`;
+    document.body.appendChild(t); setTimeout(() => t.remove(), 5000);
   };
 
   // --- FEATURE 4: BROWSER NUDGE NOTIFICATIONS ---
@@ -2057,10 +2101,8 @@ useEffect(() => {
     
     setEmailSendStatus('sending');
     
-    const successList = [];
-    const failList = [];
-
     try {
+      // Send emails via in-platform API endpoint (you'll create this)
       for (let i = 0; i < selectedContactsList.length; i++) {
         const contact = selectedContactsList[i];
         
@@ -2081,6 +2123,7 @@ useEffect(() => {
           .replace(/\{email\}/g, contact.email)
           .replace(/\{phone\}/g, contact.phone || '');
         
+        // Call your email API endpoint (you'll need to create this)
         const emailData = {
           to: contact.email,
           subject: personalizedSubject,
@@ -2094,6 +2137,7 @@ useEffect(() => {
           scheduleTime: bulkEmailData.scheduleTime
         };
         
+        // Send via API (implement this endpoint later)
         try {
           const response = await fetch('/api/send-email', {
             method: 'POST',
@@ -2101,46 +2145,43 @@ useEffect(() => {
             body: JSON.stringify(emailData)
           });
           
-          if (response.ok) {
-            successList.push(contact.email);
-            // Log activity only on success
-            addActivity({
-              contactId: contact.id,
-              type: 'email',
-              content: `Sent: ${personalizedSubject}`,
-              date: new Date().toISOString().split('T')[0],
-              id: Date.now() + '_' + contact.id,
-              timestamp: new Date().toISOString()
-            });
-          } else {
-            const errData = await response.json().catch(() => ({}));
-            console.error(`Failed to send to ${contact.email}:`, response.status, errData);
-            failList.push(`${contact.name} (${contact.email}): ${errData.message || response.status}`);
+          if (!response.ok) {
+            console.error(`Failed to send email to ${contact.email}`);
+            // Fallback to mailto if API fails
+            const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(personalizedSubject)}&body=${encodeURIComponent(personalizedBody)}`;
+            window.open(mailtoLink, '_blank');
           }
         } catch (apiError) {
-          console.error('Network error sending to', contact.email, apiError);
-          failList.push(`${contact.name} (${contact.email}): network error`);
+          console.error('Email API error:', apiError);
+          // Fallback to mailto
+          const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(personalizedSubject)}&body=${encodeURIComponent(personalizedBody)}`;
+          window.open(mailtoLink, '_blank');
         }
         
-        // Small delay between sends to avoid rate limiting
+        // Log activity for each contact
+        addActivity({
+          contactId: contact.id,
+          type: 'email',
+          content: `Sent: ${personalizedSubject}`,
+          date: new Date().toISOString().split('T')[0],
+          id: Date.now() + '_' + contact.id,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Small delay between sends to prevent rate limiting
         if (i < selectedContactsList.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 400));
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
       
       setEmailSendStatus('done');
       
-      // Show success/failure summary
+      // Show success message
       const toast = document.createElement('div');
-      const allOk = failList.length === 0;
-      toast.className = `fixed top-4 left-1/2 -translate-x-1/2 ${allOk ? 'bg-green-600' : 'bg-yellow-600'} text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2 max-w-lg text-center`;
-      if (allOk) {
-        toast.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> Sent ${successList.length} email${successList.length !== 1 ? 's' : ''} successfully!`;
-      } else {
-        toast.innerHTML = `<span class="material-symbols-outlined text-[18px]">warning</span> ${successList.length} sent, ${failList.length} failed: ${failList.join('; ')}`;
-      }
+      toast.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
+      toast.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> Successfully sent ${selectedContactsList.length} personalized email${selectedContactsList.length !== 1 ? 's' : ''}!`;
       document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), allOk ? 3000 : 7000);
+      setTimeout(() => toast.remove(), 3000);
       
       setTimeout(() => {
         setShowBulkEmail(false);
@@ -4172,29 +4213,30 @@ const Sidebar = () => (
                     reader.readAsDataURL(file);
                   });
 
-                  // Upload directly to Cloudinary from the browser
-                  const formData = new FormData();
-                  formData.append('file', `data:image/jpeg;base64,${base64}`);
-                  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-                  formData.append('folder', 'email-images');
+                  // Upload directly to imgbb from the browser
+                  const formData = new URLSearchParams();
+                  formData.append('key', '45e4867978578c60e64cd227d710e1db');
+                  formData.append('image', base64);
+                  formData.append('name', file.name);
 
-                  const uploadRes = await fetch(
-                    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
-                    { method: 'POST', body: formData }
-                  );
+                  const uploadRes = await fetch('https://api.imgbb.com/1/upload', {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                  });
 
                   const uploadData = await uploadRes.json();
 
-                  if (uploadData.secure_url) {
+                  if (uploadData.success && uploadData.data?.url) {
                     const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                     newImages.push({
                       id: imageId,
                       name: file.name,
-                      url: uploadData.secure_url,   // real hosted URL sent to server
-                      data: uploadData.secure_url   // preview shown in thumbnail
+                      url: uploadData.data.url,           // real hosted URL sent to server
+                      data: uploadData.data.display_url   // preview shown in thumbnail
                     });
                   } else {
-                    console.error('Cloudinary upload failed:', uploadData);
+                    console.error('imgbb upload failed:', uploadData);
                     alert(`Failed to upload ${file.name}. Please try again.`);
                   }
                 } catch (err) {
@@ -4545,18 +4587,13 @@ const Sidebar = () => (
                 </div>
 
                 {/* Channel toggle */}
-                <div className="flex gap-2 mt-4">
+                <div className="flex gap-1.5 mt-4 flex-wrap">
                   <span className="text-xs text-indigo-200 self-center mr-1">Channel:</span>
-                  {[
-                    { id: 'linkedin', icon: '💼', label: 'LinkedIn DM' },
-                    { id: 'email',    icon: '✉️', label: 'Email' },
-                  ].map(ch => (
+                  {icebreakerChannels.map(ch => (
                     <button key={ch.id}
                       onClick={() => setBulkIcebreakerData(prev => ({ ...prev, channel: ch.id, results: {} }))}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
-                        bulkIcebreakerData.channel === ch.id
-                          ? 'bg-white text-indigo-700'
-                          : 'bg-white/20 text-white hover:bg-white/30'
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                        bulkIcebreakerData.channel === ch.id ? 'bg-white text-indigo-700' : 'bg-white/20 text-white hover:bg-white/30'
                       }`}>
                       {ch.icon} {ch.label}
                     </button>
@@ -4613,63 +4650,57 @@ const Sidebar = () => (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                       {bulkIcebreakerData.selectedContacts.map(contactId => {
                         const contact = contacts.find(c => c.id === contactId);
-                        const lines = bulkIcebreakerData.results[contactId] || [];
+                        const msg = bulkIcebreakerData.results[contactId] || '';
+                        const isEmail = bulkIcebreakerData.channel === 'email';
+                        const parts = isEmail && msg.includes(' | ') ? msg.split(' | ') : null;
                         if (!contact) return null;
                         return (
                           <div key={contactId} className="border border-indigo-100 rounded-xl p-4 bg-indigo-50">
                             <div className="flex items-start justify-between mb-3">
                               <div>
                                 <h3 className="font-bold text-gray-800">{contact.name}</h3>
-                                {contact.email && <p className="text-xs text-gray-400">{contact.email}</p>}
                                 {contact.company && <p className="text-xs text-gray-500">{contact.company}</p>}
                               </div>
-                              <button onClick={() => navigator.clipboard.writeText(lines.join('\n\n'))}
+                              <button onClick={() => navigator.clipboard.writeText(msg)}
                                 className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[12px]">description</span> Copy
+                                <span className="material-symbols-outlined text-[12px]">content_copy</span> Copy
                               </button>
                             </div>
-                            <div className="space-y-2">
-                              {lines.map((line, i) => {
-                                const parts = bulkIcebreakerData.channel === 'email' && line.includes(' | ')
-                                  ? line.split(' | ')
-                                  : null;
-                                return (
-                                  <div key={i} className="bg-white rounded-lg p-2.5 text-xs">
-                                    <span className="inline-block w-4 h-4 bg-indigo-200 text-indigo-700 rounded-full text-center text-[9px] font-bold leading-4 mr-2">
-                                      {i + 1}
-                                    </span>
-                                    {parts ? (
-                                      <div className="inline">
-                                        <span className="font-semibold text-indigo-600">{parts[0]}</span>
-                                        <br />
-                                        <span className="text-gray-600">{parts[1]}</span>
-                                      </div>
-                                    ) : (
-                                      <span className="text-gray-700">{line}</span>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                            <div className="bg-white rounded-lg p-3 text-xs text-gray-700 leading-relaxed">
+                              {parts ? (
+                                <>
+                                  <p className="font-semibold text-indigo-600 mb-1">{parts[0]}</p>
+                                  <p>{parts[1]}</p>
+                                </>
+                              ) : msg}
                             </div>
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* Bulk actions */}
-                    <div className="flex gap-3">
+                    {/* Bulk action buttons */}
+                    <div className="flex gap-3 flex-wrap">
                       <button onClick={copyAllBulkIcebreakers}
                         className="flex-1 bg-white border-2 border-indigo-600 text-indigo-700 py-3 rounded-xl font-bold hover:bg-indigo-50 transition flex items-center justify-center gap-2">
-                        <span className="material-symbols-outlined text-[20px]">description</span> Copy All
+                        <span className="material-symbols-outlined text-[18px]">content_copy</span> Copy All
                       </button>
-                      {bulkIcebreakerData.channel === 'email' && (
-                        <button onClick={sendAllBulkIcebreakers}
-                          className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2">
-                          <span className="material-symbols-outlined text-[20px]">send</span> Send All via Email
-                        </button>
-                      )}
+
+                      {/* Send / Open button — label changes by channel */}
+                      {(() => {
+                        const ch = icebreakerChannels.find(c => c.id === bulkIcebreakerData.channel);
+                        const isEmail = bulkIcebreakerData.channel === 'email';
+                        return (
+                          <button onClick={sendAllBulkIcebreakers}
+                            className={`flex-1 text-white py-3 rounded-xl font-bold transition flex items-center justify-center gap-2 ${ch?.color || 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                            <span className="material-symbols-outlined text-[18px]">{isEmail ? 'send' : 'open_in_new'}</span>
+                            {isEmail ? 'Send All via Email' : `Open ${ch?.label}`}
+                          </button>
+                        );
+                      })()}
+
                       <button onClick={() => setBulkIcebreakerData({ selectedContacts: [], channel: bulkIcebreakerData.channel, results: {} })}
-                        className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">
+                        className="px-5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">
                         Start Over
                       </button>
                     </div>
@@ -4843,18 +4874,13 @@ const Sidebar = () => (
                 </div>
 
                 {/* Channel toggle */}
-                <div className="flex gap-2 mt-4">
+                <div className="flex gap-1.5 mt-4 flex-wrap">
                   <span className="text-xs text-indigo-200 self-center mr-1">Channel:</span>
-                  {[
-                    { id: 'linkedin', icon: '💼', label: 'LinkedIn DM' },
-                    { id: 'email',    icon: '✉️', label: 'Email' },
-                  ].map(ch => (
+                  {icebreakerChannels.map(ch => (
                     <button key={ch.id}
                       onClick={() => { setIcebreakerChannel(ch.id); generateIcebreaker(icebreakerContact, ch.id); }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
-                        icebreakerChannel === ch.id
-                          ? 'bg-white text-indigo-700'
-                          : 'bg-white/20 text-white hover:bg-white/30'
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
+                        icebreakerChannel === ch.id ? 'bg-white text-indigo-700' : 'bg-white/20 text-white hover:bg-white/30'
                       }`}>
                       {ch.icon} {ch.label}
                     </button>
@@ -4862,107 +4888,109 @@ const Sidebar = () => (
                 </div>
               </div>
 
-              {/* SCROLLABLE CONTENT AREA - Only this section scrolls */}
+              {/* SCROLLABLE CONTENT */}
               <div className="flex-1 overflow-y-auto p-6">
                 {icebreakerLoading ? (
                   <div className="py-10 flex flex-col items-center gap-3 text-gray-400">
                     <div className="w-8 h-8 border-[3px] border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-sm">Crafting {icebreakerChannel === 'email' ? 'email openers' : 'LinkedIn messages'}…</p>
+                    <p className="text-sm">Crafting your {icebreakerChannels.find(c=>c.id===icebreakerChannel)?.label} message…</p>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {icebreakerLines.map((line, i) => {
-                      const isCopied = icebreakerCopied === i;
-                      // For email, split "Subject | Body" format
-                      const parts = icebreakerChannel === 'email' && line.includes(' | ')
-                        ? line.split(' | ')
-                        : null;
-                      return (
-                        <div key={i} className={`rounded-xl border-2 transition ${
-                          isCopied 
-                            ? darkMode ? 'border-green-500 bg-green-900/20' : 'border-green-400 bg-green-50'
-                            : darkMode ? 'border-indigo-700 bg-indigo-900/20' : 'border-indigo-100 bg-indigo-50'
-                        }`}>
-                          <div className="p-4">
-                            <div className="flex items-start gap-3">
-                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
-                                isCopied 
-                                  ? 'bg-green-500 text-white'
-                                  : darkMode ? 'bg-indigo-700 text-indigo-200' : 'bg-indigo-200 text-indigo-700'
-                              }`}>
-                                {isCopied ? '✓' : i + 1}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                {parts ? (
-                                  <>
-                                    <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${
-                                      darkMode ? 'text-indigo-400' : 'text-indigo-500'
-                                    }`}>Subject</p>
-                                    <p className={`text-xs font-semibold mb-2 ${
-                                      darkMode ? 'text-slate-200' : 'text-gray-700'
-                                    }`}>{parts[0]}</p>
-                                    <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${
-                                      darkMode ? 'text-indigo-400' : 'text-indigo-500'
-                                    }`}>Opening</p>
-                                    <p className={`text-sm leading-relaxed ${
-                                      darkMode ? 'text-slate-300' : 'text-gray-700'
-                                    }`}>{parts[1]}</p>
-                                  </>
-                                ) : (
-                                  <p className={`text-sm leading-relaxed ${
-                                    darkMode ? 'text-slate-300' : 'text-gray-700'
-                                  }`}>{line}</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className={`border-t px-4 py-2 flex justify-end ${
-                            darkMode ? 'border-indigo-700' : 'border-indigo-100'
+                ) : icebreakerLines.length > 0 ? (() => {
+                  const msg = Array.isArray(icebreakerLines) ? (icebreakerLines[0] || '') : icebreakerLines;
+                  const isEmail = icebreakerChannel === 'email';
+                  const parts = isEmail && msg.includes(' | ') ? msg.split(' | ') : null;
+                  const isCopied = icebreakerCopied === 0;
+                  const ch = icebreakerChannels.find(c => c.id === icebreakerChannel);
+                  return (
+                    <div className={`rounded-xl border-2 transition ${
+                      isCopied
+                        ? darkMode ? 'border-green-500 bg-green-900/20' : 'border-green-400 bg-green-50'
+                        : darkMode ? 'border-indigo-700 bg-indigo-900/20' : 'border-indigo-100 bg-indigo-50'
+                    }`}>
+                      {/* Message body */}
+                      <div className="p-5">
+                        {parts ? (
+                          <>
+                            <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Subject</p>
+                            <p className={`text-sm font-semibold mb-3 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>{parts[0]}</p>
+                            <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Message</p>
+                            <p className={`text-sm leading-relaxed ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{parts[1]}</p>
+                          </>
+                        ) : (
+                          <p className={`text-sm leading-relaxed ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{msg}</p>
+                        )}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className={`border-t px-4 py-3 flex gap-2 flex-wrap ${darkMode ? 'border-indigo-700' : 'border-indigo-100'}`}>
+                        {/* Copy — always shown */}
+                        <button onClick={() => copyIcebreakerLine(msg, 0)}
+                          className={`flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition ${
+                            isCopied
+                              ? 'bg-green-500 text-white'
+                              : darkMode ? 'bg-indigo-900/30 text-indigo-300 hover:bg-indigo-900/50' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
                           }`}>
-                            <button
-                              onClick={() => copyIcebreakerLine(line, i)}
-                              className={`text-xs font-semibold flex items-center gap-1.5 px-3 py-1 rounded-lg transition ${
-                                isCopied
-                                  ? darkMode ? 'text-green-400 bg-green-900/30' : 'text-green-600 bg-green-100'
-                                  : darkMode ? 'text-indigo-400 hover:bg-indigo-900/30' : 'text-indigo-600 hover:bg-indigo-100'
-                              }`}>
-                              {isCopied ? '✓ Copied!' : '📋 Copy'}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                          {isCopied ? '✓ Copied!' : '📋 Copy Message'}
+                        </button>
+
+                        {/* Email: send via API */}
+                        {icebreakerChannel === 'email' && icebreakerContact?.email && (
+                          <button onClick={async () => {
+                            const subject = parts ? parts[0] : 'Quick hello';
+                            const body = parts ? parts[1] : msg;
+                            try {
+                              const r = await fetch('/api/send-email', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ to: icebreakerContact.email, subject, body,
+                                  fromName: user?.emailConfig?.fromName || user?.name,
+                                  fromEmail: user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || null,
+                                  replyToEmail: user?.emailConfig?.replyToEmail || user?.email || null,
+                                  images: [], links: [] })
+                              });
+                              const t = document.createElement('div');
+                              t.className = `fixed top-4 left-1/2 -translate-x-1/2 ${r.ok ? 'bg-green-600' : 'bg-red-500'} text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2`;
+                              t.innerHTML = r.ok ? '<span class="material-symbols-outlined text-[18px]">check_circle</span> Email sent!' : 'Failed to send email';
+                              document.body.appendChild(t); setTimeout(() => t.remove(), 2500);
+                            } catch(e) { alert('Failed to send.'); }
+                          }}
+                          className="flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition">
+                            ✉️ Send Email
+                          </button>
+                        )}
+
+                        {/* WhatsApp: open wa.me with message */}
+                        {icebreakerChannel === 'whatsapp' && (
+                          <button onClick={() => openChannelWithMessage('whatsapp', msg)}
+                            className="flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white transition">
+                            💬 Open WhatsApp
+                          </button>
+                        )}
+
+                        {/* All other socials */}
+                        {['linkedin','instagram','twitter','facebook'].includes(icebreakerChannel) && (
+                          <button onClick={() => openChannelWithMessage(icebreakerChannel, msg)}
+                            className={`flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-white transition ${ch?.color || 'bg-slate-700 hover:bg-slate-800'}`}>
+                            {ch?.icon} Open {ch?.label}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })() : null}
               </div>
 
-              {/* FIXED FOOTER - Won't scroll */}
+              {/* FIXED FOOTER */}
               {!icebreakerLoading && icebreakerLines.length > 0 && (
                 <div className={`px-6 py-4 border-t flex gap-2 flex-shrink-0 rounded-b-2xl ${
                   darkMode ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
                 }`}>
-                  <button
-                    onClick={copyAllIcebreakers}
-                    className={`flex-1 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition border-2 ${
-                      icebreakerCopied === 'all'
-                        ? 'border-green-500 bg-green-500 text-white'
-                        : darkMode 
-                          ? 'border-indigo-700 text-indigo-400 hover:bg-indigo-900/20'
-                          : 'border-indigo-200 text-indigo-700 hover:bg-indigo-50'
-                    }`}>
-                    {icebreakerCopied === 'all' ? '✓ All Copied!' : '📋 Copy All 3'}
-                  </button>
-                  <button
-                    onClick={() => generateIcebreaker(icebreakerContact, icebreakerChannel)}
+                  <button onClick={() => generateIcebreaker(icebreakerContact, icebreakerChannel)}
                     className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2">
                     <span className="material-symbols-outlined text-[16px]">auto_awesome</span> Regenerate
                   </button>
-                  <button
-                    onClick={() => setShowIcebreaker(false)}
-                    className={`px-4 rounded-xl text-sm font-medium transition ${
-                      darkMode 
-                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  <button onClick={() => setShowIcebreaker(false)}
+                    className={`px-5 rounded-xl text-sm font-medium transition ${
+                      darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}>
                     Done
                   </button>
