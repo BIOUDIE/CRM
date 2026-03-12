@@ -127,16 +127,9 @@ export default async function handler(req, res) {
       });
 
     // ─── STEP 6: Determine sender ─────────────────────────────────────────────
-    // Fall back to onboarding@resend.dev (Resend's verified test domain) for any
-    // unverified domain (@mikrocrm.app etc). Only use a custom fromEmail if it's
-    // an externally verified domain the user has connected via the domain wizard.
-    const UNVERIFIED_DOMAINS = ['@mikrocrm.app'];
-    const isUnverified = !fromEmail ||
-      UNVERIFIED_DOMAINS.some(d => fromEmail.includes(d));
-    let senderEmail = isUnverified ? 'onboarding@resend.dev' : fromEmail;
+    const senderEmail = process.env.VERIFIED_FROM_EMAIL || 'send@mikrocrm.site';
     const senderName = fromName || 'Micro CRM';
-    const replyTo = replyToEmail || senderEmail;
-
+    const replyTo = replyToEmail || fromEmail || senderEmail;
     console.log('Email config:', { from: `${senderName} <${senderEmail}>`, replyTo, to });
 
     // ─── STEP 7: Build final HTML email ───────────────────────────────────────
