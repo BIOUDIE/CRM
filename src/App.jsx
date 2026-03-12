@@ -1562,12 +1562,11 @@ useEffect(() => {
   // --- BULK ICEBREAKER ---
   const generateBulkIcebreakers = async () => {
     const selectedContactsList = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id));
-    if (!selectedContactsList.length) return;
+    // Allow generating even with no contacts — prompt-only mode
     setBulkIcebreakerLoading(true);
     setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: '' }));
 
     const ch = bulkIcebreakerData.channel === 'email' ? 'email' : bulkIcebreakerData.social;
-    const names = selectedContactsList.map(c => c.name.split(' ')[0]);
 
     try {
       const response = await fetch('/api/generate-bulk-icebreakers', {
@@ -1578,9 +1577,8 @@ useEffect(() => {
           channel: ch,
           businessProfile,
           customPrompt: bulkIcebreakerData.customPrompt || '',
-          // Signal: generate ONE message for ALL contacts (names will be listed)
           singleMessage: true,
-          recipientNames: names
+          // No recipientNames — message must be name-free so it works for any recipient
         })
       });
       if (!response.ok) throw new Error((await response.json()).error || 'Failed');
@@ -4631,46 +4629,7 @@ const Sidebar = () => (
               {/* Body */}
               <div className="flex-1 overflow-y-auto p-6 space-y-5">
 
-                {/* Contact selection */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-semibold text-gray-700">Tagged Contacts</label>
-                    <div className="flex gap-2">
-                      <button onClick={() => setBulkIcebreakerData(prev => ({ ...prev, selectedContacts: contacts.map(c => c.id) }))}
-                        className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Select all</button>
-                      <span className="text-gray-300">|</span>
-                      <button onClick={() => setBulkIcebreakerData(prev => ({ ...prev, selectedContacts: [] }))}
-                        className="text-xs text-gray-500 hover:text-gray-700 font-medium">Clear</button>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2 p-3 border border-gray-200 rounded-xl min-h-[52px] bg-gray-50">
-                    {contacts.map(contact => {
-                      const selected = bulkIcebreakerData.selectedContacts.includes(contact.id);
-                      return (
-                        <button key={contact.id}
-                          onClick={() => setBulkIcebreakerData(prev => ({
-                            ...prev,
-                            selectedContacts: selected
-                              ? prev.selectedContacts.filter(id => id !== contact.id)
-                              : [...prev.selectedContacts, contact.id]
-                          }))}
-                          className={`px-3 py-1 rounded-full text-xs font-semibold transition border ${
-                            selected
-                              ? 'bg-indigo-600 text-white border-indigo-600'
-                              : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
-                          }`}>
-                          {contact.name.split(' ')[0]}
-                        </button>
-                      );
-                    })}
-                    {contacts.length === 0 && <p className="text-xs text-gray-400 self-center">No contacts yet</p>}
-                  </div>
-                  {bulkIcebreakerData.selectedContacts.length > 0 && (
-                    <p className="text-xs text-gray-400 mt-1">{bulkIcebreakerData.selectedContacts.length} contact{bulkIcebreakerData.selectedContacts.length !== 1 ? 's' : ''} tagged</p>
-                  )}
-                </div>
-
-                {/* Custom prompt */}
+                {/* Custom prompt — shown first so message can be generated before tagging */}
                 <div>
                   <label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5 mb-2">
                     <span className="material-symbols-outlined text-[16px] text-indigo-500">edit_note</span>
@@ -4678,17 +4637,17 @@ const Sidebar = () => (
                   </label>
                   <textarea
                     value={bulkIcebreakerData.customPrompt}
-                    onChange={e => setBulkIcebreakerData(prev => ({ ...prev, customPrompt: e.target.value }))}
+                    onChange={e => setBulkIcebreakerData(prev => ({ ...prev, customPrompt: e.target.value, generatedMessage: '' }))}
                     placeholder="e.g. Mention our upcoming product launch, keep it under 3 sentences, casual tone..."
                     rows={2}
                     className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
                   />
                 </div>
 
-                {/* Generate button */}
+                {/* Generate button — enabled even with no contacts selected */}
                 {!bulkIcebreakerData.generatedMessage && (
                   <button onClick={generateBulkIcebreakers}
-                    disabled={bulkIcebreakerData.selectedContacts.length === 0 || bulkIcebreakerLoading}
+                    disabled={bulkIcebreakerLoading}
                     className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 hover:bg-indigo-700 transition flex items-center justify-center gap-2">
                     {bulkIcebreakerLoading ? (
                       <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Generating…</>
@@ -4697,6 +4656,55 @@ const Sidebar = () => (
                     )}
                   </button>
                 )}
+
+                {/* Contact selection — only never-contacted, full names, shown after message */}
+                {(() => {
+                  const neverContacted = contacts.filter(c => !c.lastContactDate);
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-semibold text-gray-700">
+                          Recipients
+                          <span className="ml-1.5 text-xs font-normal text-gray-400">(never contacted · {neverContacted.length})</span>
+                        </label>
+                        <div className="flex gap-2">
+                          <button onClick={() => setBulkIcebreakerData(prev => ({ ...prev, selectedContacts: neverContacted.map(c => c.id) }))}
+                            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Select all</button>
+                          <span className="text-gray-300">|</span>
+                          <button onClick={() => setBulkIcebreakerData(prev => ({ ...prev, selectedContacts: [] }))}
+                            className="text-xs text-gray-500 hover:text-gray-700 font-medium">Clear</button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 p-3 border border-gray-200 rounded-xl min-h-[52px] bg-gray-50">
+                        {neverContacted.map(contact => {
+                          const selected = bulkIcebreakerData.selectedContacts.includes(contact.id);
+                          return (
+                            <button key={contact.id}
+                              onClick={() => setBulkIcebreakerData(prev => ({
+                                ...prev,
+                                selectedContacts: selected
+                                  ? prev.selectedContacts.filter(id => id !== contact.id)
+                                  : [...prev.selectedContacts, contact.id]
+                              }))}
+                              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border ${
+                                selected
+                                  ? 'bg-indigo-600 text-white border-indigo-600'
+                                  : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
+                              }`}>
+                              {contact.name}
+                            </button>
+                          );
+                        })}
+                        {neverContacted.length === 0 && (
+                          <p className="text-xs text-gray-400 self-center">All contacts have been contacted before</p>
+                        )}
+                      </div>
+                      {bulkIcebreakerData.selectedContacts.length > 0 && (
+                        <p className="text-xs text-gray-400 mt-1">{bulkIcebreakerData.selectedContacts.length} recipient{bulkIcebreakerData.selectedContacts.length !== 1 ? 's' : ''} selected</p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Generated message */}
                 {bulkIcebreakerData.generatedMessage && (
