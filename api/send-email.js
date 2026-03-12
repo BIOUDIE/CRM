@@ -127,10 +127,13 @@ export default async function handler(req, res) {
       });
 
     // ─── STEP 6: Determine sender ─────────────────────────────────────────────
-    let senderEmail = 'onboarding@resend.dev';
-    if (fromEmail && fromEmail.includes('@') && !fromEmail.includes('@mikrocrm.app')) {
-      senderEmail = fromEmail;
-    }
+    // Fall back to onboarding@resend.dev (Resend's verified test domain) for any
+    // unverified domain (@mikrocrm.app etc). Only use a custom fromEmail if it's
+    // an externally verified domain the user has connected via the domain wizard.
+    const UNVERIFIED_DOMAINS = ['@mikrocrm.app'];
+    const isUnverified = !fromEmail ||
+      UNVERIFIED_DOMAINS.some(d => fromEmail.includes(d));
+    let senderEmail = isUnverified ? 'onboarding@resend.dev' : fromEmail;
     const senderName = fromName || 'Micro CRM';
     const replyTo = replyToEmail || senderEmail;
 
