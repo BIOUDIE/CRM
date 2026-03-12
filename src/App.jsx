@@ -57,7 +57,8 @@ const storage = {
   }
 };
 
-const IMGBB_API_KEY = '45e4867978578c60e64cd227d710e1db';
+const CLOUDINARY_CLOUD_NAME = 'dtbnaydgj';
+const CLOUDINARY_UPLOAD_PRESET = 'micro_crm_uploads';
 
 // Make it available globally for compatibility
 if (typeof window !== 'undefined') {
@@ -4168,30 +4169,29 @@ const Sidebar = () => (
                     reader.readAsDataURL(file);
                   });
 
-                  // Upload directly to imgbb from the browser
-                  const formData = new URLSearchParams();
-                  formData.append('key', '45e4867978578c60e64cd227d710e1db');
-                  formData.append('image', base64);
-                  formData.append('name', file.name);
+                  // Upload directly to Cloudinary from the browser
+                  const formData = new FormData();
+                  formData.append('file', `data:image/jpeg;base64,${base64}`);
+                  formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+                  formData.append('folder', 'email-images');
 
-                  const uploadRes = await fetch('https://api.imgbb.com/1/upload', {
-                    method: 'POST',
-                    body: formData,
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-                  });
+                  const uploadRes = await fetch(
+                    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+                    { method: 'POST', body: formData }
+                  );
 
                   const uploadData = await uploadRes.json();
 
-                  if (uploadData.success && uploadData.data?.url) {
+                  if (uploadData.secure_url) {
                     const imageId = `img_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                     newImages.push({
                       id: imageId,
                       name: file.name,
-                      url: uploadData.data.url,           // real hosted URL sent to server
-                      data: uploadData.data.display_url   // preview shown in thumbnail
+                      url: uploadData.secure_url,   // real hosted URL sent to server
+                      data: uploadData.secure_url   // preview shown in thumbnail
                     });
                   } else {
-                    console.error('imgbb upload failed:', uploadData);
+                    console.error('Cloudinary upload failed:', uploadData);
                     alert(`Failed to upload ${file.name}. Please try again.`);
                   }
                 } catch (err) {
