@@ -1,139 +1,111 @@
 // api/generate-bulk-icebreakers.js
-// Serverless function to generate icebreakers for multiple contacts
+// Generates ONE generic broadcast message for social channels.
+// Called in social mode only — message must be name-free so it works as a BC.
+// For email mode, the frontend calls generate-icebreaker.js per contact instead.
 
 export default async function handler(req, res) {
-  // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  // Handle OPTIONS request
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // Get the API key from environment variables
   const API_KEY = process.env.CLAUDE_API_KEY;
-  
-  if (!API_KEY) {
-    console.error('Missing CLAUDE_API_KEY environment variable');
-    return res.status(500).json({ error: 'Server configuration error: Missing API key' });
-  }
+  if (!API_KEY) return res.status(500).json({ error: 'Missing CLAUDE_API_KEY' });
 
   try {
-    // Get data from request - INCLUDING businessProfile
-    const { contacts, channel, businessProfile } = req.body;
+    const { channel, businessProfile, customPrompt, broadcastMode } = req.body;
 
-    if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
-      return res.status(400).json({ error: 'Missing required field: contacts (array)' });
-    }
+    const channelLabel = {
+      whatsapp: 'WhatsApp broadcast',
+      instagram: 'Instagram DM broadcast',
+      twitter: 'X/Twitter DM broadcast',
+      facebook: 'Facebook message broadcast',
+      linkedin: 'LinkedIn DM broadcast',
+    }[channel] || 'social media broadcast';
 
-    // Limit to 20 contacts max to prevent abuse
-    if (contacts.length > 20) {
-      return res.status(400).json({ error: 'Maximum 20 contacts allowed per request' });
-    }
-
-    console.log(`Generating icebreakers for ${contacts.length} contacts...`);
-
-    const channelLabel = channel === 'linkedin' ? 'LinkedIn DM' : 'email opener';
-    const results = {};
-
-    // BUILD BUSINESS CONTEXT - This is the key addition!
+    // ── Business context ──────────────────────────────────────────────────────
     let businessContext = '';
-    if (businessProfile && businessProfile.description) {
+    if (businessProfile?.description) {
       businessContext = `
-
-YOUR BUSINESS CONTEXT (use this to make messages relevant):
+YOUR BUSINESS CONTEXT:
 - Business Name: ${businessProfile.businessName || 'Not specified'}
 - Industry: ${businessProfile.industry || 'Not specified'}
 - What You Do: ${businessProfile.description}
 - Target Audience: ${businessProfile.targetAudience || 'Not specified'}
-- Value Proposition: ${businessProfile.valueProposition || 'Not specified'}
-
-Make the icebreakers mention how YOUR business can help THEIR business.`;
+- Value Proposition: ${businessProfile.valueProposition || 'Not specified'}`;
     }
 
-    // Process each contact sequentially
-    for (const contact of contacts) {
-      if (!contact.id || !contact.name) {
-        results[contact.id || 'unknown'] = ['Error: Missing contact name'];
-        continue;
-      }
+    // ── Build prompt ──────────────────────────────────────────────────────────
+    let prompt;
 
-      // CREATE PROMPT FOR THIS CONTACT - Now includes business context
-      const prompt = `You are a warm, natural-sounding sales coach helping a solopreneur reconnect with a contact.
+    if (customPrompt && customPrompt.trim()) {
+      // Custom prompt takes full control
+      prompt = `You are writing a ${channelLabel} message on behalf of a business owner.
 ${businessContext}
 
-CONTACT DETAILS:
-- Name: ${contact.name}
-- Company: ${contact.company || 'not specified'}
-- Job Title: ${contact.jobTitle || 'not specified'}
-- Tags: ${(contact.tags || []).join(', ') || 'none'}
-- Notes: ${contact.notes || 'none'}
-- Last contacted: ${contact.lastContactDate ? new Date(contact.lastContactDate).toLocaleDateString() : 'never'}
+INSTRUCTION FROM THE SENDER:
+"${customPrompt.trim()}"
 
-Write exactly 3 distinct personalized opening lines for a ${channelLabel}. 
+CRITICAL RULES — broadcast message:
+- Do NOT address anyone by name — this goes to many people at once
+- Do NOT use "Hi [name]", "Dear [name]" or any placeholder
+- Write as if speaking to a group: "Hi everyone", "Hey folks", or jump straight in
+- Keep it concise and natural — suitable for ${channelLabel}
+- Sound human, not like a marketing email
 
-RULES:
-- Each line must feel human, warm, and specific — not generic or salesy
-- Each must reference something concrete from their details above
-${businessContext ? '- Each should mention how YOUR business can help THEIR business' : ''}
-- Each must be 1–2 sentences, ready to send as-is
-- Vary the tone: one casual, one professional, one curious/question-based
-- ${channel === 'email' ? 'Include a natural subject line before each message, separated by " | "' : 'No subject line needed — just the opening message'}
+Respond ONLY with a valid JSON array containing exactly 1 string. No preamble, no markdown.
+Example: ["Your broadcast message here."]`;
+    } else {
+      // Default: business context driven, no names
+      prompt = `You are a warm, natural-sounding business owner writing a ${channelLabel} to a group of new potential clients.
+${businessContext}
 
-Respond ONLY with a valid JSON array of exactly 3 strings. No preamble, no markdown, no explanation.`;
+Write ONE short broadcast outreach message.
 
-      try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': API_KEY,
-            'anthropic-version': '2023-06-01'
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 600,
-            messages: [{ role: 'user', content: prompt }]
-          })
-        });
+CRITICAL RULES:
+- Do NOT use anyone's name — this is a broadcast to multiple people
+- Do NOT use placeholders like "[Name]" or "{name}"
+- Address the audience generally: "Hey everyone", "Hi there", or open without greeting
+- Reference what your business does and why you're reaching out
+- Keep it under 4 sentences — short and punchy works best for ${channelLabel}
+- Sound genuine and human, not like a template
 
-        if (!response.ok) {
-          console.error(`Error for contact ${contact.id}:`, response.status);
-          results[contact.id] = ['Error generating icebreaker - try again'];
-          continue;
-        }
-
-        const data = await response.json();
-        const raw = data.content?.[0]?.text || '[]';
-        const clean = raw.replace(/```json|```/g, '').trim();
-        const parsed = JSON.parse(clean);
-        results[contact.id] = Array.isArray(parsed) ? parsed.slice(0, 3) : ['Error: Invalid response'];
-
-      } catch (error) {
-        console.error(`Error generating for contact ${contact.id}:`, error);
-        results[contact.id] = ['Error generating icebreaker'];
-      }
+Respond ONLY with a valid JSON array containing exactly 1 string. No preamble, no markdown.
+Example: ["Your broadcast message here."]`;
     }
 
-    console.log(`Successfully generated icebreakers for ${Object.keys(results).length} contacts`);
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 400,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
 
-    // Return all results
-    return res.status(200).json({ results });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      return res.status(response.status).json({ error: 'Claude API error', details: err });
+    }
+
+    const data = await response.json();
+    const raw = data.content?.[0]?.text || '[]';
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    const message = Array.isArray(parsed) ? parsed[0] : parsed;
+
+    return res.status(200).json({ message, results: { broadcast: message } });
 
   } catch (error) {
     console.error('Error in generate-bulk-icebreakers:', error);
-    return res.status(500).json({ 
-      error: 'Internal server error', 
-      message: error.message 
-    });
+    return res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 }

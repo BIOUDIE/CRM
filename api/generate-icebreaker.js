@@ -1,85 +1,90 @@
 // api/generate-icebreaker.js
-// Serverless function to generate personalized icebreaker lines
+// Generates ONE personalised icebreaker for a single contact.
+// Used by: single contact modal + bulk email mode (called per contact).
 
 export default async function handler(req, res) {
-  // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  // Handle OPTIONS request
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
+  if (req.method === 'OPTIONS') { res.status(200).end(); return; }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  // Get the API key from environment variables
   const API_KEY = process.env.CLAUDE_API_KEY;
-  
-  if (!API_KEY) {
-    console.error('Missing CLAUDE_API_KEY environment variable');
-    return res.status(500).json({ error: 'Server configuration error: Missing API key' });
-  }
+  if (!API_KEY) return res.status(500).json({ error: 'Missing CLAUDE_API_KEY' });
 
   try {
-    // Get data from request - INCLUDING businessProfile
-    const { contact, channel, businessProfile } = req.body;
+    const { contact, channel, businessProfile, customPrompt } = req.body;
 
     if (!contact || !contact.name) {
       return res.status(400).json({ error: 'Missing required field: contact.name' });
     }
 
-    const channelLabel = channel === 'linkedin' ? 'LinkedIn DM' : 'email opener';
+    const isEmail = channel === 'email';
 
-    // BUILD BUSINESS CONTEXT - This is the key addition!
+    // ── Business context ──────────────────────────────────────────────────────
     let businessContext = '';
-    if (businessProfile && businessProfile.description) {
+    if (businessProfile?.description) {
       businessContext = `
-
-YOUR BUSINESS CONTEXT (use this to make messages relevant):
+YOUR BUSINESS CONTEXT:
 - Business Name: ${businessProfile.businessName || 'Not specified'}
 - Industry: ${businessProfile.industry || 'Not specified'}
 - What You Do: ${businessProfile.description}
 - Target Audience: ${businessProfile.targetAudience || 'Not specified'}
-- Value Proposition: ${businessProfile.valueProposition || 'Not specified'}
-
-Make the icebreakers mention how YOUR business can help THEIR business.`;
+- Value Proposition: ${businessProfile.valueProposition || 'Not specified'}`;
     }
 
-    // CREATE PROMPT - Now includes business context
-    const prompt = `You are a warm, natural-sounding sales coach helping a solopreneur reconnect with a contact.
-${businessContext}
-
+    // ── Contact context ───────────────────────────────────────────────────────
+    const contactContext = `
 CONTACT DETAILS:
 - Name: ${contact.name}
 - Company: ${contact.company || 'not specified'}
 - Job Title: ${contact.jobTitle || 'not specified'}
-- Tags: ${(contact.tags || []).join(', ') || 'none'}
-- Notes: ${contact.notes || 'none'}
-- Last contacted: ${contact.lastContactDate ? new Date(contact.lastContactDate).toLocaleDateString() : 'never'}
+- Industry/Tags: ${(contact.tags || []).join(', ') || 'none'}
+- Notes: ${contact.notes || 'none'}`;
 
-Write exactly 3 distinct personalized opening lines for a ${channelLabel}. 
+    // ── Build prompt ──────────────────────────────────────────────────────────
+    let prompt;
+
+    if (customPrompt && customPrompt.trim()) {
+      // Custom prompt always takes full control
+      prompt = `You are writing a personalised ${isEmail ? 'email' : 'outreach message'} on behalf of a business owner.
+${businessContext}
+${contactContext}
+
+INSTRUCTION FROM THE SENDER:
+"${customPrompt.trim()}"
+
+Follow the instruction above closely. Write exactly ONE message for ${contact.name}.
+${isEmail
+  ? 'Format: "Subject line | Email body". Keep the body natural and concise.'
+  : 'Write just the message body — no subject line needed.'}
+
+Respond ONLY with a valid JSON array containing exactly 1 string. No preamble, no markdown.
+Example: ["Your message here."]`;
+    } else {
+      // Default: use business + contact context to craft personalised outreach
+      prompt = `You are a warm, natural-sounding sales coach writing on behalf of a business owner reaching out to a new contact for the first time.
+${businessContext}
+${contactContext}
+
+Write exactly ONE personalised opening message for a ${isEmail ? 'cold email' : `${channel} DM`} to ${contact.name}.
 
 RULES:
-- Each line must feel human, warm, and specific — not generic or salesy
-- Each must reference something concrete from their details above
-${businessContext ? '- Each should mention how YOUR business can help THEIR business' : ''}
-- Each must be 1–2 sentences, ready to send as-is
-- Vary the tone: one casual, one professional, one curious/question-based
-- ${channel === 'email' ? 'Include a natural subject line before each message, separated by " | "' : 'No subject line needed — just the opening message'}
+- Sound human and warm — not generic or salesy
+- Reference something specific about their company or role
+${businessContext ? '- Connect how YOUR business can genuinely help THEIR business' : ''}
+- Keep it concise: 2–4 sentences max
+- Do NOT use the recipient's name more than once
+${isEmail
+  ? '- Format: "Subject line | Email body" (separated by " | ")'
+  : '- No subject line — just the message body'}
 
-Respond ONLY with a valid JSON array of exactly 3 strings. No preamble, no markdown, no explanation.
-Example format: ["Opening line 1.", "Opening line 2.", "Opening line 3."]`;
+Respond ONLY with a valid JSON array containing exactly 1 string. No preamble, no markdown.
+Example: ${isEmail ? '["Great subject line | Hi, your message body here."]' : '["Your message here."]'}`;
+    }
 
-    console.log('Calling Claude API for icebreaker generation...');
-
-    // Call Claude API server-side
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -89,37 +94,26 @@ Example format: ["Opening line 1.", "Opening line 2.", "Opening line 3."]`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 600,
+        max_tokens: 500,
         messages: [{ role: 'user', content: prompt }]
       })
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('Claude API error:', response.status, errorData);
-      return res.status(response.status).json({ 
-        error: 'Claude API error', 
-        details: errorData 
-      });
+      const err = await response.json().catch(() => ({}));
+      return res.status(response.status).json({ error: 'Claude API error', details: err });
     }
 
     const data = await response.json();
     const raw = data.content?.[0]?.text || '[]';
     const clean = raw.replace(/```json|```/g, '').trim();
-    const lines = JSON.parse(clean);
+    const parsed = JSON.parse(clean);
+    const lines = Array.isArray(parsed) ? parsed.slice(0, 3) : [parsed];
 
-    console.log('Generated icebreaker lines:', lines.length);
-
-    // Return the icebreaker lines
-    return res.status(200).json({ 
-      lines: Array.isArray(lines) ? lines.slice(0, 3) : [] 
-    });
+    return res.status(200).json({ lines });
 
   } catch (error) {
     console.error('Error in generate-icebreaker:', error);
-    return res.status(500).json({ 
-      error: 'Internal server error', 
-      message: error.message 
-    });
+    return res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 }

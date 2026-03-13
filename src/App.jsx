@@ -897,7 +897,7 @@ export default function App() {
   const [emailSendMethod, setEmailSendMethod] = useState('mailto'); // 'copy' | 'mailto'
   const [emailSendStatus, setEmailSendStatus] = useState(''); // 'sending' | 'done' | ''
   const [showBulkIcebreaker, setShowBulkIcebreaker] = useState(false);
-  const [bulkIcebreakerData, setBulkIcebreakerData] = useState({ selectedContacts: [], channel: 'email', social: 'whatsapp', customPrompt: '', generatedMessage: '', showSocialDropdown: false });
+  const [bulkIcebreakerData, setBulkIcebreakerData] = useState({ selectedContacts: [], channel: 'email', social: 'whatsapp', customPrompt: '', generatedMessage: '', emailResults: {}, showSocialDropdown: false, sending: false });
   const [bulkIcebreakerLoading, setBulkIcebreakerLoading] = useState(false);
   const [newContact, setNewContact] = useState({
     name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '',
@@ -1562,36 +1562,66 @@ useEffect(() => {
   // --- BULK ICEBREAKER ---
   const generateBulkIcebreakers = async () => {
     const selectedContactsList = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id));
-    // Allow generating even with no contacts — prompt-only mode
+    const isEmail = bulkIcebreakerData.channel === 'email';
+    const ch = isEmail ? 'email' : bulkIcebreakerData.social;
+
     setBulkIcebreakerLoading(true);
-    setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: '' }));
+    setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: '', emailResults: {} }));
 
-    const ch = bulkIcebreakerData.channel === 'email' ? 'email' : bulkIcebreakerData.social;
-
-    try {
-      const response = await fetch('/api/generate-bulk-icebreakers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contacts: selectedContactsList,
-          channel: ch,
-          businessProfile,
-          customPrompt: bulkIcebreakerData.customPrompt || '',
-          singleMessage: true,
-          // No recipientNames — message must be name-free so it works for any recipient
-        })
-      });
-      if (!response.ok) throw new Error((await response.json()).error || 'Failed');
-      const data = await response.json();
-      // Accept either a single string or results map — take first value
-      let msg = '';
-      if (typeof data.message === 'string') msg = data.message;
-      else if (data.results) msg = Object.values(data.results)[0] || '';
-      else if (Array.isArray(data.lines)) msg = data.lines[0] || '';
-      setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: msg }));
-    } catch (err) {
-      console.error('Bulk icebreaker error:', err);
-      setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: 'Error generating — please try again.' }));
+    if (isEmail) {
+      // ── EMAIL MODE: one personalised message per contact ──────────────────
+      // Requires at least one contact selected
+      if (!selectedContactsList.length) {
+        setBulkIcebreakerLoading(false);
+        return;
+      }
+      const results = {};
+      for (const contact of selectedContactsList) {
+        try {
+          const response = await fetch('/api/generate-icebreaker', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contact,
+              channel: 'email',
+              businessProfile,
+              customPrompt: bulkIcebreakerData.customPrompt || '',
+            })
+          });
+          if (!response.ok) throw new Error('Failed');
+          const data = await response.json();
+          const msg = Array.isArray(data.lines) ? data.lines[0] : (data.message || '');
+          results[contact.id] = msg;
+        } catch(e) {
+          results[contact.id] = 'Error generating — try again.';
+        }
+      }
+      setBulkIcebreakerData(prev => ({ ...prev, emailResults: results }));
+    } else {
+      // ── SOCIAL MODE: one generic broadcast message, no names ──────────────
+      try {
+        const response = await fetch('/api/generate-bulk-icebreakers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contacts: [],           // no contact data — message must be name-free
+            channel: ch,
+            businessProfile,
+            customPrompt: bulkIcebreakerData.customPrompt || '',
+            singleMessage: true,
+            broadcastMode: true,    // signal: generic, no names
+          })
+        });
+        if (!response.ok) throw new Error((await response.json()).error || 'Failed');
+        const data = await response.json();
+        let msg = '';
+        if (typeof data.message === 'string') msg = data.message;
+        else if (data.results) msg = Object.values(data.results)[0] || '';
+        else if (Array.isArray(data.lines)) msg = data.lines[0] || '';
+        setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: msg }));
+      } catch(err) {
+        setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: 'Error generating — please try again.' }));
+      }
     }
     setBulkIcebreakerLoading(false);
   };
@@ -1608,44 +1638,52 @@ useEffect(() => {
 
   const sendAllBulkIcebreakers = async () => {
     const ch = bulkIcebreakerData.channel;
-    const msg = bulkIcebreakerData.generatedMessage;
-    if (!msg) return;
+    const isEmail = ch === 'email';
 
-    if (ch === 'email') {
+    if (isEmail) {
       const list = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id) && c.email);
-      const parts = msg.includes(' | ') ? msg.split(' | ') : [null, msg];
+      if (!list.length) { alert('No contacts with email addresses selected.'); return; }
+      setBulkIcebreakerData(prev => ({ ...prev, sending: true }));
+      let sent = 0, failed = 0;
       for (let i = 0; i < list.length; i++) {
+        const contact = list[i];
+        const msg = bulkIcebreakerData.emailResults[contact.id] || '';
+        const parts = msg.includes(' | ') ? msg.split(' | ') : [null, msg];
         try {
-          await fetch('/api/send-email', {
+          const r = await fetch('/api/send-email', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              to: list[i].email,
+              to: contact.email,
               subject: parts[0] || 'Quick hello',
-              body: (parts[1] || msg).replace(/\{firstName\}/g, list[i].name.split(' ')[0]).replace(/\{name\}/g, list[i].name),
+              body: parts[1] || msg,
               fromName: user?.emailConfig?.fromName || user?.name,
               fromEmail: user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || null,
               replyToEmail: user?.emailConfig?.replyToEmail || user?.email || null,
               images: [], links: []
             })
           });
-        } catch(e) { console.error(e); }
+          r.ok ? sent++ : failed++;
+        } catch(e) { failed++; }
         if (i < list.length - 1) await new Promise(r => setTimeout(r, 400));
       }
+      setBulkIcebreakerData(prev => ({ ...prev, sending: false }));
       const t = document.createElement('div');
-      t.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
-      t.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> Sent to ${list.length} contact${list.length !== 1 ? 's' : ''}!`;
-      document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
+      t.className = `fixed top-4 left-1/2 -translate-x-1/2 ${failed ? 'bg-yellow-600' : 'bg-green-600'} text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2`;
+      t.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> ${sent} sent${failed ? `, ${failed} failed` : ''}`;
+      document.body.appendChild(t); setTimeout(() => t.remove(), 4000);
       return;
     }
 
-    // Social: copy then open
+    // Social broadcast: copy then open platform
+    const msg = bulkIcebreakerData.generatedMessage;
+    if (!msg) return;
     navigator.clipboard.writeText(msg);
-    const url = getChannelUrl(ch, msg);
+    const url = getChannelUrl(bulkIcebreakerData.social, msg);
     if (url) setTimeout(() => window.open(url, '_blank'), 200);
-    const chLabel = icebreakerChannels.find(c => c.id === ch)?.label || ch;
+    const chLabel = icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.label || '';
     const t = document.createElement('div');
     t.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-semibold shadow-lg z-[60] text-sm text-center max-w-xs';
-    t.innerHTML = `Message copied! Opening ${chLabel} — select recipients there.`;
+    t.innerHTML = `Message copied! Opening ${chLabel} — select your BC list or recipients there.`;
     document.body.appendChild(t); setTimeout(() => t.remove(), 5000);
   };
   // --- FEATURE 4: BROWSER NUDGE NOTIFICATIONS ---
@@ -4644,28 +4682,19 @@ const Sidebar = () => (
                   />
                 </div>
 
-                {/* Generate button — enabled even with no contacts selected */}
-                {!bulkIcebreakerData.generatedMessage && (
-                  <button onClick={generateBulkIcebreakers}
-                    disabled={bulkIcebreakerLoading}
-                    className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 hover:bg-indigo-700 transition flex items-center justify-center gap-2">
-                    {bulkIcebreakerLoading ? (
-                      <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Generating…</>
-                    ) : (
-                      <><span className="material-symbols-outlined text-[20px]">auto_awesome</span> Generate Message</>
-                    )}
-                  </button>
-                )}
-
-                {/* Contact selection — only never-contacted, full names, shown after message */}
+                {/* Contact selection — only never-contacted, full names */}
                 {(() => {
                   const neverContacted = contacts.filter(c => !c.lastContactDate);
+                  const isEmail = bulkIcebreakerData.channel === 'email';
                   return (
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <label className="text-sm font-semibold text-gray-700">
                           Recipients
-                          <span className="ml-1.5 text-xs font-normal text-gray-400">(never contacted · {neverContacted.length})</span>
+                          <span className="ml-1.5 text-xs font-normal text-gray-400">
+                            ({isEmail ? 'email · ' : ''}never contacted · {neverContacted.length})
+                          </span>
+                          {!isEmail && <span className="ml-1.5 text-xs font-normal text-gray-400">— optional for social</span>}
                         </label>
                         <div className="flex gap-2">
                           <button onClick={() => setBulkIcebreakerData(prev => ({ ...prev, selectedContacts: neverContacted.map(c => c.id) }))}
@@ -4684,7 +4713,9 @@ const Sidebar = () => (
                                 ...prev,
                                 selectedContacts: selected
                                   ? prev.selectedContacts.filter(id => id !== contact.id)
-                                  : [...prev.selectedContacts, contact.id]
+                                  : [...prev.selectedContacts, contact.id],
+                                // Clear results when contacts change
+                                generatedMessage: '', emailResults: {}
                               }))}
                               className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border ${
                                 selected
@@ -4696,7 +4727,7 @@ const Sidebar = () => (
                           );
                         })}
                         {neverContacted.length === 0 && (
-                          <p className="text-xs text-gray-400 self-center">All contacts have been contacted before</p>
+                          <p className="text-xs text-gray-400 self-center">All contacts have been previously contacted</p>
                         )}
                       </div>
                       {bulkIcebreakerData.selectedContacts.length > 0 && (
@@ -4706,47 +4737,92 @@ const Sidebar = () => (
                   );
                 })()}
 
-                {/* Generated message */}
-                {bulkIcebreakerData.generatedMessage && (
-                  <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50 overflow-hidden">
-                    <div className="p-4">
-                      {(() => {
-                        const msg = bulkIcebreakerData.generatedMessage;
-                        const isEmail = bulkIcebreakerData.channel === 'email';
-                        const parts = isEmail && msg.includes(' | ') ? msg.split(' | ') : null;
-                        return parts ? (
-                          <>
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-500 mb-1">Subject</p>
-                            <p className="text-sm font-semibold text-gray-800 mb-3">{parts[0]}</p>
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-500 mb-1">Message</p>
-                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{parts[1]}</p>
-                          </>
-                        ) : (
-                          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{msg}</p>
-                        );
-                      })()}
+                {/* Generate button */}
+                {(() => {
+                  const isEmail = bulkIcebreakerData.channel === 'email';
+                  const hasResults = isEmail
+                    ? Object.keys(bulkIcebreakerData.emailResults).length > 0
+                    : !!bulkIcebreakerData.generatedMessage;
+                  const disabled = bulkIcebreakerLoading || (isEmail && bulkIcebreakerData.selectedContacts.length === 0);
+                  return (
+                    <button onClick={generateBulkIcebreakers} disabled={disabled}
+                      className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 hover:bg-indigo-700 transition flex items-center justify-center gap-2">
+                      {bulkIcebreakerLoading ? (
+                        <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          {isEmail ? `Generating ${bulkIcebreakerData.selectedContacts.length} emails…` : 'Generating…'}</>
+                      ) : (
+                        <><span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+                          {hasResults
+                            ? (isEmail ? 'Regenerate All Emails' : 'Regenerate Message')
+                            : (isEmail ? `Generate ${bulkIcebreakerData.selectedContacts.length || ''} Email${bulkIcebreakerData.selectedContacts.length !== 1 ? 's' : ''}` : 'Generate Message')
+                          }</>
+                      )}
+                    </button>
+                  );
+                })()}
+
+                {/* EMAIL RESULTS — one card per contact */}
+                {bulkIcebreakerData.channel === 'email' && Object.keys(bulkIcebreakerData.emailResults).length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-gray-700">Generated Emails ({Object.keys(bulkIcebreakerData.emailResults).length})</p>
+                      <button onClick={sendAllBulkIcebreakers} disabled={bulkIcebreakerData.sending}
+                        className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition">
+                        {bulkIcebreakerData.sending
+                          ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Sending…</>
+                          : <><span className="material-symbols-outlined text-[14px]">send</span> Send All</>
+                        }
+                      </button>
                     </div>
-                    <div className="border-t border-indigo-200 px-4 py-3 flex gap-2 flex-wrap bg-white">
+                    {bulkIcebreakerData.selectedContacts.map(contactId => {
+                      const contact = contacts.find(c => c.id === contactId);
+                      const msg = bulkIcebreakerData.emailResults[contactId] || '';
+                      const parts = msg.includes(' | ') ? msg.split(' | ') : [null, msg];
+                      if (!contact) return null;
+                      return (
+                        <div key={contactId} className="rounded-xl border border-indigo-200 bg-indigo-50 overflow-hidden">
+                          <div className="flex items-center justify-between px-4 py-2 bg-indigo-100">
+                            <div>
+                              <span className="text-xs font-bold text-indigo-800">{contact.name}</span>
+                              {contact.email && <span className="text-xs text-indigo-500 ml-2">{contact.email}</span>}
+                            </div>
+                            <button onClick={() => navigator.clipboard.writeText(msg)}
+                              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[12px]">content_copy</span> Copy
+                            </button>
+                          </div>
+                          <div className="p-3">
+                            {parts[0] && <p className="text-xs font-semibold text-indigo-700 mb-1">Subject: {parts[0]}</p>}
+                            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{parts[1] || msg}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* SOCIAL RESULT — one broadcast message */}
+                {bulkIcebreakerData.channel === 'social' && bulkIcebreakerData.generatedMessage && (
+                  <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50 overflow-hidden">
+                    <div className="px-4 py-2 bg-indigo-100 flex items-center justify-between">
+                      <p className="text-xs font-bold text-indigo-800">
+                        Broadcast message · {icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.label}
+                      </p>
+                    </div>
+                    <div className="p-4">
+                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{bulkIcebreakerData.generatedMessage}</p>
+                    </div>
+                    <div className="border-t border-indigo-200 px-4 py-3 flex gap-2 bg-white">
                       <button onClick={copyAllBulkIcebreakers}
                         className="flex-1 text-xs font-semibold px-3 py-2 rounded-lg border-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition flex items-center justify-center gap-1.5">
                         📋 Copy
                       </button>
                       <button onClick={sendAllBulkIcebreakers}
                         className={`flex-1 text-xs font-semibold px-3 py-2 rounded-lg text-white transition flex items-center justify-center gap-1.5 ${
-                          bulkIcebreakerData.channel === 'email'
-                            ? 'bg-indigo-600 hover:bg-indigo-700'
-                            : (icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.color || 'bg-slate-700 hover:bg-slate-800')
+                          icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.color || 'bg-slate-700 hover:bg-slate-800'
                         }`}>
-                        {bulkIcebreakerData.channel === 'email' ? (
-                          <><span className="material-symbols-outlined text-[14px]">send</span> Send to All</>
-                        ) : (
-                          <><span className="material-symbols-outlined text-[14px]">open_in_new</span>
-                            Open {icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.label}</>
-                        )}
-                      </button>
-                      <button onClick={generateBulkIcebreakers}
-                        className="px-3 py-2 rounded-lg text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[14px]">refresh</span> Regenerate
+                        <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                        Open {icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.label}
                       </button>
                     </div>
                   </div>
