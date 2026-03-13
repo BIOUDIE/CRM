@@ -1962,9 +1962,16 @@ useEffect(() => {
                     );
                     const loadedContacts = [];
                     contactsSnap.forEach(doc => { const d = doc.data(); if (!d._deleted) loadedContacts.push(d); });
-                    if (loadedContacts.length > 0)
+                    if (loadedContacts.length > 0) {
                       setContacts(loadedContacts.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0)));
-                  } catch (e) { console.error('Error loading contacts:', e); }
+                    } else if (userData.contacts && Array.isArray(userData.contacts)) {
+                      // Fallback: subcollection empty, use array on user doc
+                      setContacts(userData.contacts);
+                    }
+                  } catch (e) {
+                    console.warn('Subcollection load failed, using user doc fallback:', e.message);
+                    if (userData.contacts && Array.isArray(userData.contacts)) setContacts(userData.contacts);
+                  }
 
                   // Load activities from subcollection
                   try {
@@ -1973,9 +1980,15 @@ useEffect(() => {
                     );
                     const loadedActivities = [];
                     activitiesSnap.forEach(doc => loadedActivities.push(doc.data()));
-                    if (loadedActivities.length > 0)
+                    if (loadedActivities.length > 0) {
                       setActivities(loadedActivities.sort((a,b) => new Date(b.timestamp||b.date||0) - new Date(a.timestamp||a.date||0)));
-                  } catch (e) { console.error('Error loading activities:', e); }
+                    } else if (userData.activities && Array.isArray(userData.activities)) {
+                      setActivities(userData.activities);
+                    }
+                  } catch (e) {
+                    console.warn('Activities subcollection load failed:', e.message);
+                    if (userData.activities && Array.isArray(userData.activities)) setActivities(userData.activities);
+                  }
 
                   // One-time migration: old array fields + localStorage -> subcollections
                   try {
@@ -2338,72 +2351,127 @@ useEffect(() => {
     initApp();
   }, []);
 
+  // Use a ref so save functions always get the latest uid even in stale closures
+  const userUidRef = React.useRef(null);
+  React.useEffect(() => { userUidRef.current = user?.uid || null; }, [user]);
+
+  const _getUid = () => userUidRef.current || user?.uid;
+
   const saveContacts = async (contactsList) => {
-    if (!user?.uid || !window.firebaseDb) return;
+    const uid = _getUid();
+    if (!uid || !window.firebaseDb) return;
     try {
-      // Write each contact as its own doc in subcollection
+      // Try subcollection first, fall back to user doc array
       for (const contact of contactsList) {
-        await window.setDoc(
-          window.doc(window.firebaseDb, 'users', user.uid, 'contacts', contact.id),
-          contact
-        );
+        if (!contact.id) continue;
+        try {
+          await window.setDoc(
+            window.doc(window.firebaseDb, 'users', uid, 'contacts', contact.id),
+            contact
+          );
+        } catch (subErr) {
+          // Subcollection failed — fall back to storing on user doc
+          console.warn('Subcollection write failed, using user doc fallback:', subErr.message);
+          await window.setDoc(window.doc(window.firebaseDb, 'users', uid), { contacts: contactsList }, { merge: true });
+          return;
+        }
       }
     } catch (e) { console.error('Error saving contacts:', e); }
   };
 
-  // Save a single contact (preferred — only touches one doc)
   const saveContact = async (contact) => {
-    if (!user?.uid || !window.firebaseDb) return;
+    const uid = _getUid();
+    if (!uid || !window.firebaseDb || !contact?.id) return;
     try {
-      await window.setDoc(
-        window.doc(window.firebaseDb, 'users', user.uid, 'contacts', contact.id),
-        contact
-      );
+      try {
+        await window.setDoc(
+          window.doc(window.firebaseDb, 'users', uid, 'contacts', contact.id),
+          contact
+        );
+      } catch (subErr) {
+        // Fall back to reading current contacts array and updating it on user doc
+        console.warn('Subcollection write failed, falling back:', subErr.message);
+        const userDoc = await window.getDoc(window.doc(window.firebaseDb, 'users', uid));
+        const existing = userDoc.exists() ? (userDoc.data().contacts || []) : [];
+        const updated = existing.some(c => c.id === contact.id)
+          ? existing.map(c => c.id === contact.id ? contact : c)
+          : [...existing, contact];
+        await window.setDoc(window.doc(window.firebaseDb, 'users', uid), { contacts: updated }, { merge: true });
+      }
     } catch (e) { console.error('Error saving contact:', e); }
   };
 
-  // Delete a single contact doc
   const deleteContactDoc = async (id) => {
-    if (!user?.uid || !window.firebaseDb) return;
+    const uid = _getUid();
+    if (!uid || !window.firebaseDb) return;
     try {
-      // Use setDoc with a deleted flag since deleteDoc may not be available
+      // Try real deleteDoc first (subcollection)
+      if (window.deleteDoc) {
+        try {
+          await window.deleteDoc(
+            window.doc(window.firebaseDb, 'users', uid, 'contacts', id)
+          );
+          return;
+        } catch (subErr) {
+          console.warn('Subcollection delete failed, falling back:', subErr.message);
+        }
+      }
+      // Fall back: remove from user doc contacts array
+      const userDoc = await window.getDoc(window.doc(window.firebaseDb, 'users', uid));
+      const existing = userDoc.exists() ? (userDoc.data().contacts || []) : [];
       await window.setDoc(
-        window.doc(window.firebaseDb, 'users', user.uid, 'contacts', id),
-        { _deleted: true, id }
+        window.doc(window.firebaseDb, 'users', uid),
+        { contacts: existing.filter(c => c.id !== id) },
+        { merge: true }
       );
     } catch (e) { console.error('Error deleting contact:', e); }
   };
 
   const saveActivities = async (activitiesList) => {
-    if (!user?.uid || !window.firebaseDb) return;
+    const uid = _getUid();
+    if (!uid || !window.firebaseDb) return;
     try {
       for (const activity of activitiesList) {
         if (!activity.id) continue;
-        await window.setDoc(
-          window.doc(window.firebaseDb, 'users', user.uid, 'activities', activity.id),
-          activity
-        );
+        try {
+          await window.setDoc(
+            window.doc(window.firebaseDb, 'users', uid, 'activities', activity.id),
+            activity
+          );
+        } catch (subErr) {
+          await window.setDoc(window.doc(window.firebaseDb, 'users', uid), { activities: activitiesList }, { merge: true });
+          return;
+        }
       }
     } catch (e) { console.error('Error saving activities:', e); }
   };
 
-  // Save a single activity (preferred)
   const saveActivity = async (activity) => {
-    if (!user?.uid || !window.firebaseDb || !activity.id) return;
+    const uid = _getUid();
+    if (!uid || !window.firebaseDb || !activity?.id) return;
     try {
-      await window.setDoc(
-        window.doc(window.firebaseDb, 'users', user.uid, 'activities', activity.id),
-        activity
-      );
+      try {
+        await window.setDoc(
+          window.doc(window.firebaseDb, 'users', uid, 'activities', activity.id),
+          activity
+        );
+      } catch (subErr) {
+        const userDoc = await window.getDoc(window.doc(window.firebaseDb, 'users', uid));
+        const existing = userDoc.exists() ? (userDoc.data().activities || []) : [];
+        const updated = existing.some(a => a.id === activity.id)
+          ? existing.map(a => a.id === activity.id ? activity : a)
+          : [activity, ...existing];
+        await window.setDoc(window.doc(window.firebaseDb, 'users', uid), { activities: updated }, { merge: true });
+      }
     } catch (e) { console.error('Error saving activity:', e); }
   };
 
   const saveCategories = async (cats) => {
-    if (!user?.uid || !window.firebaseDb) return;
+    const uid = _getUid();
+    if (!uid || !window.firebaseDb) return;
     try {
-      // Store categories as a single field on the user doc (small, bounded data)
       await window.setDoc(
-        window.doc(window.firebaseDb, 'users', user.uid),
+        window.doc(window.firebaseDb, 'users', uid),
         { categories: cats },
         { merge: true }
       );
