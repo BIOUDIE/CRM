@@ -4761,11 +4761,11 @@ const Sidebar = () => (
                   );
                 })()}
 
-                {/* EMAIL RESULTS — one card per contact */}
+                {/* EMAIL RESULTS — one editable card per contact */}
                 {bulkIcebreakerData.channel === 'email' && Object.keys(bulkIcebreakerData.emailResults).length > 0 && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-gray-700">Generated Emails ({Object.keys(bulkIcebreakerData.emailResults).length})</p>
+                      <p className="text-sm font-semibold text-gray-700">Generated Emails ({Object.keys(bulkIcebreakerData.emailResults).length}) <span className="font-normal text-gray-400 text-xs">— edit before sending</span></p>
                       <button onClick={sendAllBulkIcebreakers} disabled={bulkIcebreakerData.sending}
                         className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition">
                         {bulkIcebreakerData.sending
@@ -4777,7 +4777,9 @@ const Sidebar = () => (
                     {bulkIcebreakerData.selectedContacts.map(contactId => {
                       const contact = contacts.find(c => c.id === contactId);
                       const msg = bulkIcebreakerData.emailResults[contactId] || '';
-                      const parts = msg.includes(' | ') ? msg.split(' | ') : [null, msg];
+                      const hasSubject = msg.includes(' | ');
+                      const subject = hasSubject ? msg.split(' | ')[0] : '';
+                      const body = hasSubject ? msg.split(' | ').slice(1).join(' | ') : msg;
                       if (!contact) return null;
                       return (
                         <div key={contactId} className="rounded-xl border border-indigo-200 bg-indigo-50 overflow-hidden">
@@ -4791,9 +4793,39 @@ const Sidebar = () => (
                               <span className="material-symbols-outlined text-[12px]">content_copy</span> Copy
                             </button>
                           </div>
-                          <div className="p-3">
-                            {parts[0] && <p className="text-xs font-semibold text-indigo-700 mb-1">Subject: {parts[0]}</p>}
-                            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{parts[1] || msg}</p>
+                          <div className="p-3 space-y-2">
+                            {hasSubject && (
+                              <div>
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-500 mb-1">Subject</p>
+                                <input
+                                  type="text"
+                                  value={subject}
+                                  onChange={e => {
+                                    const newMsg = `${e.target.value} | ${body}`;
+                                    setBulkIcebreakerData(prev => ({
+                                      ...prev,
+                                      emailResults: { ...prev.emailResults, [contactId]: newMsg }
+                                    }));
+                                  }}
+                                  className="w-full text-xs border border-indigo-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 font-semibold text-gray-800"
+                                />
+                              </div>
+                            )}
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-500 mb-1">Message</p>
+                              <textarea
+                                value={body}
+                                rows={4}
+                                onChange={e => {
+                                  const newMsg = hasSubject ? `${subject} | ${e.target.value}` : e.target.value;
+                                  setBulkIcebreakerData(prev => ({
+                                    ...prev,
+                                    emailResults: { ...prev.emailResults, [contactId]: newMsg }
+                                  }));
+                                }}
+                                className="w-full text-xs border border-indigo-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-700 leading-relaxed resize-none"
+                              />
+                            </div>
                           </div>
                         </div>
                       );
@@ -4801,16 +4833,22 @@ const Sidebar = () => (
                   </div>
                 )}
 
-                {/* SOCIAL RESULT — one broadcast message */}
+                {/* SOCIAL RESULT — editable broadcast message */}
                 {bulkIcebreakerData.channel === 'social' && bulkIcebreakerData.generatedMessage && (
                   <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50 overflow-hidden">
                     <div className="px-4 py-2 bg-indigo-100 flex items-center justify-between">
                       <p className="text-xs font-bold text-indigo-800">
-                        Broadcast message · {icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.label}
+                        Broadcast · {icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.label}
                       </p>
+                      <span className="text-[10px] text-indigo-400">edit before sending</span>
                     </div>
-                    <div className="p-4">
-                      <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{bulkIcebreakerData.generatedMessage}</p>
+                    <div className="p-3">
+                      <textarea
+                        value={bulkIcebreakerData.generatedMessage}
+                        rows={5}
+                        onChange={e => setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: e.target.value }))}
+                        className="w-full text-sm border border-indigo-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-700 leading-relaxed resize-none"
+                      />
                     </div>
                     <div className="border-t border-indigo-200 px-4 py-3 flex gap-2 bg-white">
                       <button onClick={copyAllBulkIcebreakers}
@@ -5018,7 +5056,9 @@ const Sidebar = () => (
                 ) : icebreakerLines.length > 0 ? (() => {
                   const msg = Array.isArray(icebreakerLines) ? (icebreakerLines[0] || '') : icebreakerLines;
                   const isEmail = icebreakerChannel === 'email';
-                  const parts = isEmail && msg.includes(' | ') ? msg.split(' | ') : null;
+                  const hasSubject = isEmail && msg.includes(' | ');
+                  const subject = hasSubject ? msg.split(' | ')[0] : '';
+                  const body = hasSubject ? msg.split(' | ').slice(1).join(' | ') : msg;
                   const isCopied = icebreakerCopied === 0;
                   const ch = icebreakerChannels.find(c => c.id === icebreakerChannel);
                   return (
@@ -5027,18 +5067,28 @@ const Sidebar = () => (
                         ? darkMode ? 'border-green-500 bg-green-900/20' : 'border-green-400 bg-green-50'
                         : darkMode ? 'border-indigo-700 bg-indigo-900/20' : 'border-indigo-100 bg-indigo-50'
                     }`}>
-                      {/* Message body */}
-                      <div className="p-5">
-                        {parts ? (
-                          <>
+                      {/* Editable message body */}
+                      <div className="p-5 space-y-3">
+                        {hasSubject && (
+                          <div>
                             <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Subject</p>
-                            <p className={`text-sm font-semibold mb-3 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>{parts[0]}</p>
-                            <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Message</p>
-                            <p className={`text-sm leading-relaxed ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{parts[1]}</p>
-                          </>
-                        ) : (
-                          <p className={`text-sm leading-relaxed ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{msg}</p>
+                            <input
+                              type="text"
+                              value={subject}
+                              onChange={e => setIcebreakerLines([`${e.target.value} | ${body}`])}
+                              className={`w-full text-sm font-semibold border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-indigo-200 text-gray-800'}`}
+                            />
+                          </div>
                         )}
+                        <div>
+                          <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Message</p>
+                          <textarea
+                            value={body}
+                            rows={5}
+                            onChange={e => setIcebreakerLines([hasSubject ? `${subject} | ${e.target.value}` : e.target.value])}
+                            className={`w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 leading-relaxed resize-none ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-white border-indigo-200 text-gray-700'}`}
+                          />
+                        </div>
                       </div>
 
                       {/* Action buttons */}
@@ -5055,13 +5105,16 @@ const Sidebar = () => (
 
                         {/* Email: send via API */}
                         {icebreakerChannel === 'email' && icebreakerContact?.email && (
+                        {icebreakerChannel === 'email' && icebreakerContact?.email && (
                           <button onClick={async () => {
-                            const subject = parts ? parts[0] : 'Quick hello';
-                            const body = parts ? parts[1] : msg;
+                            const current = icebreakerLines[0] || '';
+                            const hasSub = current.includes(' | ');
+                            const emailSubject = hasSub ? current.split(' | ')[0] : 'Quick hello';
+                            const emailBody = hasSub ? current.split(' | ').slice(1).join(' | ') : current;
                             try {
                               const r = await fetch('/api/send-email', {
                                 method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ to: icebreakerContact.email, subject, body,
+                                body: JSON.stringify({ to: icebreakerContact.email, subject: emailSubject, body: emailBody,
                                   fromName: user?.emailConfig?.fromName || user?.name,
                                   fromEmail: user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || null,
                                   replyToEmail: user?.emailConfig?.replyToEmail || user?.email || null,
@@ -5076,6 +5129,28 @@ const Sidebar = () => (
                           className="flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition">
                             ✉️ Send Email
                           </button>
+                        )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                         )}
 
                         {/* WhatsApp: open wa.me with message */}
