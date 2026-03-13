@@ -1612,27 +1612,21 @@ export default function App() {
   // --- TODAY'S FOCUS MODAL STATES ---
   const [showFocusModal, setShowFocusModal] = useState(false);
   const [showFocusSettings, setShowFocusSettings] = useState(false);
-  const [focusSettings, setFocusSettings] = useState(() => {
-    const saved = localStorage.getItem('focus_settings');
-    return saved ? JSON.parse(saved) : {
-      enabled: true,
-      dayThreshold: 7,
-      vibeScoreMin: 8
-    };
+  const [focusSettings, setFocusSettings] = useState({
+    enabled: true,
+    dayThreshold: 7,
+    vibeScoreMin: 8
   });
 
   // --- NAVIGATION & VIEW STATES ---
   const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard' | 'contacts' | 'deals' | 'tasks' | 'analytics'
   const [showBusinessProfile, setShowBusinessProfile] = useState(false);
-  const [businessProfile, setBusinessProfile] = useState(() => {
-    const saved = localStorage.getItem('business_profile');
-    return saved ? JSON.parse(saved) : {
-      businessName: '',
-      industry: '',
-      description: '',
-      targetAudience: '',
-      valueProposition: ''
-    };
+  const [businessProfile, setBusinessProfile] = useState({
+    businessName: '',
+    industry: '',
+    description: '',
+    targetAudience: '',
+    valueProposition: ''
   });
 
   // --- IN-APP EMAIL SENDER STATES ---
@@ -1649,16 +1643,10 @@ export default function App() {
 });
 
 // NEW - Feature 1: Collapsible Sidebar
-const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-  const saved = localStorage.getItem('sidebar_collapsed');
-  return saved ? JSON.parse(saved) : false;
-});
+const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
 // NEW - Feature 4: Dark Mode
-const [darkMode, setDarkMode] = useState(() => {
-  const saved = localStorage.getItem('dark_mode');
-  return saved ? JSON.parse(saved) : false;
-});
+const [darkMode, setDarkMode] = useState(false);
 
 // NEW - Feature 6: Compact Smart Capture
 const [showMagicPaste, setShowMagicPaste] = useState(false);
@@ -1703,20 +1691,26 @@ const [showAdminPanel, setShowAdminPanel] = useState(false);  // Admin change re
     return () => window.removeEventListener('keydown', handleEscapeKey);
   }, []);
 
-  // Persist sidebar collapsed state
+  // Persist sidebar collapsed state to Firestore
 useEffect(() => {
-  localStorage.setItem('sidebar_collapsed', JSON.stringify(sidebarCollapsed));
-}, [sidebarCollapsed]);
+  if (user?.uid && window.firebaseDb) {
+    window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), { sidebarCollapsed }, { merge: true })
+      .catch(() => {});
+  }
+}, [sidebarCollapsed, user]);
 
-// Persist dark mode
+// Persist dark mode to Firestore + apply to DOM
 useEffect(() => {
-  localStorage.setItem('dark_mode', JSON.stringify(darkMode));
+  if (user?.uid && window.firebaseDb) {
+    window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), { darkMode }, { merge: true })
+      .catch(() => {});
+  }
   if (darkMode) {
     document.documentElement.classList.add('dark');
   } else {
     document.documentElement.classList.remove('dark');
   }
-}, [darkMode]);
+}, [darkMode, user]);
 
   // Auto-close loading screen after 3 seconds as failsafe
   useEffect(() => {
@@ -1789,11 +1783,65 @@ useEffect(() => {
                     email: firebaseUser.email,
                     name: userData.name || firebaseUser.email.split('@')[0],
                     isPremium: userData.isPremium || false,
-                    isAdmin: userData.isAdmin || false,  // Admin flag
+                    isAdmin: userData.isAdmin || false,
                     emailConfig: emailConfig
                   });
                   setIsPremium(userData.isPremium || false);
-                } else {
+
+                  // Load categories (small, stays on user doc)
+                  if (userData.categories) setCategories(userData.categories);
+
+                  // Load businessProfile + focusSettings from Firestore
+                  if (userData.businessProfile) setBusinessProfile(userData.businessProfile);
+                  if (userData.focusSettings)   setFocusSettings(userData.focusSettings);
+
+                  // Load UI preferences
+                  if (userData.sidebarCollapsed !== undefined) setSidebarCollapsed(userData.sidebarCollapsed);
+                  if (userData.darkMode !== undefined) setDarkMode(userData.darkMode);
+
+                  // Load contacts from subcollection
+                  try {
+                    const contactsSnap = await window.getDocs(
+                      window.collection(window.firebaseDb, 'users', firebaseUser.uid, 'contacts')
+                    );
+                    const loadedContacts = [];
+                    contactsSnap.forEach(doc => { const d = doc.data(); if (!d._deleted) loadedContacts.push(d); });
+                    if (loadedContacts.length > 0)
+                      setContacts(loadedContacts.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0)));
+                  } catch (e) { console.error('Error loading contacts:', e); }
+
+                  // Load activities from subcollection
+                  try {
+                    const activitiesSnap = await window.getDocs(
+                      window.collection(window.firebaseDb, 'users', firebaseUser.uid, 'activities')
+                    );
+                    const loadedActivities = [];
+                    activitiesSnap.forEach(doc => loadedActivities.push(doc.data()));
+                    if (loadedActivities.length > 0)
+                      setActivities(loadedActivities.sort((a,b) => new Date(b.timestamp||b.date||0) - new Date(a.timestamp||a.date||0)));
+                  } catch (e) { console.error('Error loading activities:', e); }
+
+                  // One-time migration: old array fields + localStorage -> subcollections
+                  try {
+                    if (userData.contacts && Array.isArray(userData.contacts) && userData.contacts.length > 0) {
+                      for (const c of userData.contacts)
+                        if (c.id) await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid, 'contacts', c.id), c);
+                      await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), { contacts: null }, { merge: true });
+                    }
+                    if (userData.activities && Array.isArray(userData.activities) && userData.activities.length > 0) {
+                      for (const a of userData.activities)
+                        if (a.id) await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid, 'activities', a.id), a);
+                      await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), { activities: null }, { merge: true });
+                    }
+                    const lsC = localStorage.getItem('crm_contacts');
+                    const lsA = localStorage.getItem('crm_activities');
+                    const lsCat = localStorage.getItem('crm_categories');
+                    if (lsC) { for (const c of JSON.parse(lsC)) if (c.id) await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid, 'contacts', c.id), c); localStorage.removeItem('crm_contacts'); }
+                    if (lsA) { for (const a of JSON.parse(lsA)) if (a.id) await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid, 'activities', a.id), a); localStorage.removeItem('crm_activities'); }
+                    if (lsCat) { await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), { categories: JSON.parse(lsCat) }, { merge: true }); localStorage.removeItem('crm_categories'); }
+                  } catch (migrateErr) { console.error('Migration error (non-fatal):', migrateErr); }
+
+                                } else {
                   // User exists in auth but not in Firestore - create doc
                   console.log('📝 Creating new user document');
                   
@@ -2081,14 +2129,20 @@ useEffect(() => {
   const FREE_CONTACT_LIMIT = 10;
   const atFreeLimit = !isPremium && contacts.length >= FREE_CONTACT_LIMIT;
 
-  // --- Persist focus settings to localStorage ---
+  // --- Persist focus settings to Firestore ---
   useEffect(() => {
-    localStorage.setItem('focus_settings', JSON.stringify(focusSettings));
+    if (user?.uid && window.firebaseDb) {
+      window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), { focusSettings }, { merge: true })
+        .catch(e => console.error('Error saving focusSettings:', e));
+    }
   }, [focusSettings]);
 
-  // --- Persist business profile to localStorage ---
+  // --- Persist business profile to Firestore ---
   useEffect(() => {
-    localStorage.setItem('business_profile', JSON.stringify(businessProfile));
+    if (user?.uid && window.firebaseDb) {
+      window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), { businessProfile }, { merge: true })
+        .catch(e => console.error('Error saving businessProfile:', e));
+    }
   }, [businessProfile]);
 
   // --- TODAY'S FOCUS: Hot contacts not reached in X days (user configurable) ---
@@ -2122,35 +2176,82 @@ useEffect(() => {
 
   useEffect(() => {
     const initApp = async () => {
-      const savedUser = await window.storage.get('auth_user');
-      if (savedUser?.value) {
-        const userData = JSON.parse(savedUser.value);
-        setUser(userData);
-        setIsPremium(userData.isPremium || false);
-      }
-      const savedContacts = await window.storage.get('crm_contacts');
-      if (savedContacts?.value) setContacts(JSON.parse(savedContacts.value));
-      const savedActivities = await window.storage.get('crm_activities');
-      if (savedActivities?.value) setActivities(JSON.parse(savedActivities.value));
-      const premiumStatus = await window.storage.get('premium_status');
-      if (premiumStatus?.value) setIsPremium(JSON.parse(premiumStatus.value));
-      const savedCategories = await window.storage.get('crm_categories');
-      if (savedCategories?.value) setCategories(JSON.parse(savedCategories.value));
+      // UI prefs only from localStorage (device-specific, fine)
       setIsLoading(false);
     };
     initApp();
   }, []);
 
   const saveContacts = async (contactsList) => {
-    await window.storage.set('crm_contacts', JSON.stringify(contactsList));
+    if (!user?.uid || !window.firebaseDb) return;
+    try {
+      // Write each contact as its own doc in subcollection
+      for (const contact of contactsList) {
+        await window.setDoc(
+          window.doc(window.firebaseDb, 'users', user.uid, 'contacts', contact.id),
+          contact
+        );
+      }
+    } catch (e) { console.error('Error saving contacts:', e); }
+  };
+
+  // Save a single contact (preferred — only touches one doc)
+  const saveContact = async (contact) => {
+    if (!user?.uid || !window.firebaseDb) return;
+    try {
+      await window.setDoc(
+        window.doc(window.firebaseDb, 'users', user.uid, 'contacts', contact.id),
+        contact
+      );
+    } catch (e) { console.error('Error saving contact:', e); }
+  };
+
+  // Delete a single contact doc
+  const deleteContactDoc = async (id) => {
+    if (!user?.uid || !window.firebaseDb) return;
+    try {
+      // Use setDoc with a deleted flag since deleteDoc may not be available
+      await window.setDoc(
+        window.doc(window.firebaseDb, 'users', user.uid, 'contacts', id),
+        { _deleted: true, id }
+      );
+    } catch (e) { console.error('Error deleting contact:', e); }
   };
 
   const saveActivities = async (activitiesList) => {
-    await window.storage.set('crm_activities', JSON.stringify(activitiesList));
+    if (!user?.uid || !window.firebaseDb) return;
+    try {
+      for (const activity of activitiesList) {
+        if (!activity.id) continue;
+        await window.setDoc(
+          window.doc(window.firebaseDb, 'users', user.uid, 'activities', activity.id),
+          activity
+        );
+      }
+    } catch (e) { console.error('Error saving activities:', e); }
+  };
+
+  // Save a single activity (preferred)
+  const saveActivity = async (activity) => {
+    if (!user?.uid || !window.firebaseDb || !activity.id) return;
+    try {
+      await window.setDoc(
+        window.doc(window.firebaseDb, 'users', user.uid, 'activities', activity.id),
+        activity
+      );
+    } catch (e) { console.error('Error saving activity:', e); }
   };
 
   const saveCategories = async (cats) => {
-    await window.storage.set('crm_categories', JSON.stringify(cats));
+    if (!user?.uid || !window.firebaseDb) return;
+    try {
+      // Store categories as a single field on the user doc (small, bounded data)
+      await window.setDoc(
+        window.doc(window.firebaseDb, 'users', user.uid),
+        { categories: cats },
+        { merge: true }
+      );
+    } catch (e) { console.error('Error saving categories:', e); }
   };
 
   const addCategory = async () => {
@@ -2169,20 +2270,21 @@ useEffect(() => {
     const updated = categories.filter(c => c.id !== id);
     setCategories(updated);
     await saveCategories(updated);
-    // Remove category from any contacts that had it
+    // Remove category from affected contacts only
+    const affected = contacts.filter(c => c.category === id);
     const updatedContacts = contacts.map(c =>
       c.category === id ? { ...c, category: '' } : c
     );
     setContacts(updatedContacts);
-    await saveContacts(updatedContacts);
+    for (const c of affected) await saveContact({ ...c, category: '' });
   };
 
   const updateContactCategory = async (contactId, categoryId) => {
-    const updated = contacts.map(c =>
-      c.id === contactId ? { ...c, category: categoryId } : c
-    );
-    setContacts(updated);
-    await saveContacts(updated);
+    const contact = contacts.find(c => c.id === contactId);
+    if (!contact) return;
+    const updatedContact = { ...contact, category: categoryId };
+    setContacts(contacts.map(c => c.id === contactId ? updatedContact : c));
+    await saveContact(updatedContact);
   };
 
   // --- FEATURE 1: ICEBREAKER AI ---
@@ -2409,13 +2511,11 @@ useEffect(() => {
   // --- FEATURE 2: BOARD VIEW — move contact vibe by drag column drop ---
   const moveContactVibe = async (contactId, newVibeLabel) => {
     const scoreMap = { hot: 9, warm: 5, cold: 2 };
-    const updated = contacts.map(c =>
-      c.id === contactId
-        ? { ...c, vibeLabel: newVibeLabel, vibeScore: scoreMap[newVibeLabel] }
-        : c
-    );
-    setContacts(updated);
-    await saveContacts(updated);
+    const contact = contacts.find(c => c.id === contactId);
+    if (!contact) return;
+    const updatedContact = { ...contact, vibeLabel: newVibeLabel, vibeScore: scoreMap[newVibeLabel] };
+    setContacts(contacts.map(c => c.id === contactId ? updatedContact : c));
+    await saveContact(updatedContact);
   };
 
   const handleLogout = async () => {
@@ -2447,14 +2547,15 @@ useEffect(() => {
       setShowPremiumModal(true);
       return;
     }
-    const updated = [{
+    const newContactObj = {
       ...newContact,
       id: Date.now().toString(),
       createdAt: new Date().toISOString(),
       isFavorite: false
-    }, ...contacts];
+    };
+    const updated = [newContactObj, ...contacts];
     setContacts(updated);
-    await saveContacts(updated);
+    await saveContact(newContactObj);
     setShowAddModal(false);
     resetScan();
     setNewContact({ name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm', notes: '', tags: [], category: '', meetingLink: '', referredBy: '', reminderDays: 30, contactFrequency: 30 });
@@ -2463,25 +2564,27 @@ useEffect(() => {
   const deleteContact = async (id) => {
     const updated = contacts.filter(c => c.id !== id);
     setContacts(updated);
-    await saveContacts(updated);
+    await deleteContactDoc(id);
   };
 
   const updateContact = async (updatedContact) => {
     const updated = contacts.map(c => c.id === updatedContact.id ? updatedContact : c);
     setContacts(updated);
-    await saveContacts(updated);
+    await saveContact(updatedContact); // single doc write, not full array
   };
 
   const toggleFavorite = async (id) => {
+    const contact = contacts.find(c => c.id === id);
+    if (!contact) return;
     const updated = contacts.map(c => c.id === id ? {...c, isFavorite: !c.isFavorite} : c);
     setContacts(updated);
-    await saveContacts(updated);
+    await saveContact({...contact, isFavorite: !contact.isFavorite});
   };
 
   const addActivity = async (activity) => {
     const updated = [activity, ...activities];
     setActivities(updated);
-    await saveActivities(updated);
+    await saveActivity(activity); // single doc write
     const contact = contacts.find(c => c.id === activity.contactId);
     if (contact) {
       updateContact({...contact, lastContactDate: activity.date});
@@ -2622,7 +2725,7 @@ useEffect(() => {
         
         const updated = [...contacts, ...newContacts];
         setContacts(updated);
-        await saveContacts(updated);
+        for (const c of newContacts) await saveContact(c);
         setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from phone/WhatsApp!`);
         setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
         return;
@@ -2649,7 +2752,7 @@ useEffect(() => {
         
         const updated = [...contacts, ...newContacts];
         setContacts(updated);
-        await saveContacts(updated);
+        for (const c of newContacts) await saveContact(c);
         setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from Excel!`);
         setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
         return;
@@ -2688,7 +2791,7 @@ useEffect(() => {
 
       const updated = [...contacts, ...newContacts];
       setContacts(updated);
-      await saveContacts(updated);
+      for (const c of newContacts) await saveContact(c);
       setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!${warnMsg}`);
       setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
 
@@ -2746,7 +2849,7 @@ useEffect(() => {
 
       const updated = [...contacts, ...newContacts];
       setContacts(updated);
-      await saveContacts(updated);
+      for (const c of newContacts) await saveContact(c);
       setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!`);
       setBulkContactsText('');
       setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
@@ -2763,8 +2866,9 @@ useEffect(() => {
       return { ...c, lastContactDate: bulkUpdate.date };
     });
     setContacts(updated);
-    await saveContacts(updated);
-    // optionally log an activity for each selected contact
+    // Save only the updated contacts
+    for (const c of updated.filter(c => bulkUpdate.selectedIds.includes(c.id))) await saveContact(c);
+    // Optionally log an activity per contact
     if (bulkUpdate.addActivity) {
       const newActivities = bulkUpdate.selectedIds.map(id => ({
         id: `${Date.now()}_${id}`,
@@ -2774,9 +2878,8 @@ useEffect(() => {
         date: bulkUpdate.date,
         timestamp: new Date().toISOString(),
       }));
-      const allActivities = [...newActivities, ...activities];
-      setActivities(allActivities);
-      await saveActivities(allActivities);
+      setActivities([...newActivities, ...activities]);
+      for (const a of newActivities) await saveActivity(a);
     }
     setShowBulkUpdate(false);
     setBulkUpdate({ selectedIds: [], date: new Date().toISOString().split('T')[0], note: '', addActivity: true });
@@ -2931,7 +3034,9 @@ useEffect(() => {
   };
 
   const activatePremium = async () => {
-    await window.storage.set('premium_status', JSON.stringify(true));
+    if (user?.uid && window.firebaseDb) {
+      await window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), { isPremium: true }, { merge: true });
+    }
     setIsPremium(true);
     setShowPremiumModal(false);
     alert('Premium activated! 🎉');
@@ -2959,18 +3064,8 @@ useEffect(() => {
       lastContactDate: new Date().toISOString().split('T')[0]
     };
     
-    // Save individual contact
-    await window.storage.set(`contact:${contact.id}`, JSON.stringify(updatedContact));
-    
-    // Update contacts array
-    const updatedContacts = contacts.map(c => 
-      c.id === contact.id ? updatedContact : c
-    );
-    setContacts(updatedContacts);
-    
-    // Save entire contacts list
-    await saveContacts(updatedContacts);
-    
+    setContacts(contacts.map(c => c.id === contact.id ? updatedContact : c));
+    await saveContact(updatedContact);
     alert(`✅ ${contact.name} marked as contacted today!`);
   };
 
@@ -2983,7 +3078,6 @@ useEffect(() => {
         ...contact,
         lastContactDate: today
       };
-      await window.storage.set(`contact:${contact.id}`, JSON.stringify(updatedContact));
       return updatedContact;
     });
     
@@ -2996,10 +3090,7 @@ useEffect(() => {
     });
     
     setContacts(updatedContacts);
-    
-    // Save entire contacts list
-    await saveContacts(updatedContacts);
-    
+    for (const c of updatedFocusContacts) await saveContact(c);
     setShowFocusModal(false);
     alert(`✅ ${focusContacts.length} contacts marked as contacted!`);
   };
