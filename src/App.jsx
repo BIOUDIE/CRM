@@ -853,10 +853,20 @@ function AdminChangeRequests() {
   );
 };
 
-function IcebreakerMessageCard({ channel, contact, subject, body, onSubjectChange, onBodyChange, darkMode, isCopied, onCopy, onOpen, icebreakerChannels, user }) {
+// Channel definitions — module level so all components can access
+const ICEBREAKER_CHANNELS = [
+  { id: 'whatsapp',  icon: '💬', label: 'WhatsApp',   color: 'bg-green-500 hover:bg-green-600' },
+  { id: 'email',     icon: '✉️', label: 'Email',      color: 'bg-indigo-500 hover:bg-indigo-600' },
+  { id: 'linkedin',  icon: '💼', label: 'LinkedIn',   color: 'bg-blue-600 hover:bg-blue-700' },
+  { id: 'instagram', icon: '📸', label: 'Instagram',  color: 'bg-pink-500 hover:bg-pink-600' },
+  { id: 'twitter',   icon: '𝕏',  label: 'X/Twitter',  color: 'bg-slate-800 hover:bg-slate-900' },
+  { id: 'facebook',  icon: '👥', label: 'Facebook',   color: 'bg-blue-500 hover:bg-blue-600' },
+];
+
+function IcebreakerMessageCard({ channel, contact, subject, body, onSubjectChange, onBodyChange, darkMode, isCopied, onCopy, onOpen, user }) {
   const isEmail = channel === 'email';
   const fullMsg = isEmail && subject ? `${subject} | ${body}` : body;
-  const ch = icebreakerChannels.find(c => c.id === channel);
+  const ch = ICEBREAKER_CHANNELS.find(c => c.id === channel);
 
   const sendEmail = async () => {
     try {
@@ -1628,16 +1638,6 @@ useEffect(() => {
     setTimeout(() => setIcebreakerCopied(null), 2000);
   };
 
-  // Channel definitions — used in both single + bulk modals
-  const icebreakerChannels = [
-    { id: 'whatsapp',  icon: '💬', label: 'WhatsApp',   color: 'bg-green-500 hover:bg-green-600' },
-    { id: 'email',     icon: '✉️', label: 'Email',      color: 'bg-indigo-500 hover:bg-indigo-600' },
-    { id: 'linkedin',  icon: '💼', label: 'LinkedIn',   color: 'bg-blue-600 hover:bg-blue-700' },
-    { id: 'instagram', icon: '📸', label: 'Instagram',  color: 'bg-pink-500 hover:bg-pink-600' },
-    { id: 'twitter',   icon: '𝕏',  label: 'X/Twitter',  color: 'bg-slate-800 hover:bg-slate-900' },
-    { id: 'facebook',  icon: '👥', label: 'Facebook',   color: 'bg-blue-500 hover:bg-blue-600' },
-  ];
-
   // Returns the deep-link URL for a channel + message
   const getChannelUrl = (channel, message) => {
     const enc = encodeURIComponent(message);
@@ -1779,7 +1779,7 @@ useEffect(() => {
     navigator.clipboard.writeText(msg);
     const url = getChannelUrl(bulkIcebreakerData.social, msg);
     if (url) setTimeout(() => window.open(url, '_blank'), 200);
-    const chLabel = icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.label || '';
+    const chLabel = ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.label || '';
     const t = document.createElement('div');
     t.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-semibold shadow-lg z-[60] text-sm text-center max-w-xs';
     t.innerHTML = `Message copied! Opening ${chLabel} — select your BC list or recipients there.`;
@@ -4742,13 +4742,13 @@ const Sidebar = () => (
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
                         bulkIcebreakerData.channel === 'social' ? 'bg-white text-indigo-700' : 'bg-white/20 text-white hover:bg-white/30'
                       }`}>
-                      {icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.icon || '💬'}
-                      {icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.label || 'Social'}
+                      {ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.icon || '💬'}
+                      {ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.label || 'Social'}
                       <span className="material-symbols-outlined text-[14px]">expand_more</span>
                     </button>
                     {bulkIcebreakerData.showSocialDropdown && (
                       <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden min-w-[150px]">
-                        {icebreakerChannels.filter(c => c.id !== 'email').map(ch => (
+                        {ICEBREAKER_CHANNELS.filter(c => c.id !== 'email').map(ch => (
                           <button key={ch.id}
                             onClick={() => setBulkIcebreakerData(prev => ({ ...prev, channel: 'social', social: ch.id, showSocialDropdown: false, generatedMessage: '' }))}
                             className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 hover:bg-indigo-50 transition ${
@@ -4938,7 +4938,7 @@ const Sidebar = () => (
                   <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50 overflow-hidden">
                     <div className="px-4 py-2 bg-indigo-100 flex items-center justify-between">
                       <p className="text-xs font-bold text-indigo-800">
-                        Broadcast · {icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.label}
+                        Broadcast · {ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.label}
                       </p>
                       <span className="text-[10px] text-indigo-400">edit before sending</span>
                     </div>
@@ -4957,10 +4957,10 @@ const Sidebar = () => (
                       </button>
                       <button onClick={sendAllBulkIcebreakers}
                         className={`flex-1 text-xs font-semibold px-3 py-2 rounded-lg text-white transition flex items-center justify-center gap-1.5 ${
-                          icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.color || 'bg-slate-700 hover:bg-slate-800'
+                          ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.color || 'bg-slate-700 hover:bg-slate-800'
                         }`}>
                         <span className="material-symbols-outlined text-[14px]">open_in_new</span>
-                        Open {icebreakerChannels.find(c => c.id === bulkIcebreakerData.social)?.label}
+                        Open {ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.label}
                       </button>
                     </div>
                   </div>
@@ -5134,7 +5134,7 @@ const Sidebar = () => (
                 {/* Channel toggle */}
                 <div className="flex gap-1.5 mt-4 flex-wrap">
                   <span className="text-xs text-indigo-200 self-center mr-1">Channel:</span>
-                  {icebreakerChannels.map(ch => (
+                  {ICEBREAKER_CHANNELS.map(ch => (
                     <button key={ch.id}
                       onClick={() => { setIcebreakerChannel(ch.id); generateIcebreaker(icebreakerContact, ch.id); }}
                       className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
@@ -5151,7 +5151,7 @@ const Sidebar = () => (
                 {icebreakerLoading ? (
                   <div className="py-10 flex flex-col items-center gap-3 text-gray-400">
                     <div className="w-8 h-8 border-[3px] border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-sm">Crafting your {icebreakerChannels.find(c=>c.id===icebreakerChannel)?.label} message…</p>
+                    <p className="text-sm">Crafting your {ICEBREAKER_CHANNELS.find(c=>c.id===icebreakerChannel)?.label} message…</p>
                   </div>
                 ) : icebreakerEditBody ? (
                   <IcebreakerMessageCard
@@ -5165,7 +5165,6 @@ const Sidebar = () => (
                     isCopied={icebreakerCopied === 0}
                     onCopy={copyIcebreakerLine}
                     onOpen={openChannelWithMessage}
-                    icebreakerChannels={icebreakerChannels}
                     user={user}
                   />
                 ) : null}
