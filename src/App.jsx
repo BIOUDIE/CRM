@@ -465,168 +465,765 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
 }
 
 // --- ANALYTICS DASHBOARD ---
-function AnalyticsDashboard({ contacts, activities, onClose }) {
-  const totalContacts = contacts.length;
-  const avgVibeScore = contacts.length > 0
-    ? (contacts.reduce((sum, c) => sum + c.vibeScore, 0) / contacts.length).toFixed(1)
-    : 0;
-  const overdueContacts = contacts.filter(c => {
-    if (!c.lastContactDate) return true;
-    const days = Math.ceil((new Date() - new Date(c.lastContactDate)) / (1000 * 60 * 60 * 24));
-    return days > 30;
-  }).length;
-  const vibeDistribution = {
-    high: contacts.filter(c => c.vibeScore >= 8).length,
-    medium: contacts.filter(c => c.vibeScore >= 5 && c.vibeScore < 8).length,
-    low: contacts.filter(c => c.vibeScore < 5).length
+function AnalyticsDashboard({ contacts, activities, onClose, categories = [] }) {
+  const [activeTab, setActiveTab] = React.useState('overview');
+  const now = new Date();
+
+  // ── Core helpers ──────────────────────────────────────────────────────────
+  const daysSince = (dateStr) => {
+    if (!dateStr) return 999;
+    return Math.ceil((now - new Date(dateStr)) / 86400000);
   };
-  const recentActivity = activities.slice(0, 10);
+
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0);
+
+  // ── KPI calculations ──────────────────────────────────────────────────────
+  const total = contacts.length;
+  const hot   = contacts.filter(c => c.vibeLabel === 'hot'  || c.vibeScore >= 8).length;
+  const warm  = contacts.filter(c => c.vibeLabel === 'warm' || (c.vibeScore >= 4 && c.vibeScore < 8)).length;
+  const cold  = contacts.filter(c => c.vibeLabel === 'cold' || c.vibeScore < 4).length;
+
+  const activitiesThisMonth = activities.filter(a => new Date(a.date || a.timestamp) >= thisMonthStart);
+  const activitiesLastMonth = activities.filter(a => {
+    const d = new Date(a.date || a.timestamp);
+    return d >= lastMonthStart && d <= lastMonthEnd;
+  });
+  const activityGrowth = activitiesLastMonth.length > 0
+    ? Math.round(((activitiesThisMonth.length - activitiesLastMonth.length) / activitiesLastMonth.length) * 100)
+    : 0;
+
+  const contactedThisMonth = new Set(activitiesThisMonth.map(a => a.contactId)).size;
+  const neverContacted = contacts.filter(c => !c.lastContactDate).length;
+  const overdueContacts = contacts.filter(c => {
+    const freq = c.contactFrequency || 30;
+    return daysSince(c.lastContactDate) > freq;
+  });
+
+  // ── Wins this month ───────────────────────────────────────────────────────
+  const newContactsThisMonth = contacts.filter(c => {
+    const created = c.createdAt || c.lastContactDate;
+    return created && new Date(created) >= thisMonthStart;
+  }).length;
+  const emailsSentThisMonth = activitiesThisMonth.filter(a => a.type === 'email').length;
+  const meetingsThisMonth   = activitiesThisMonth.filter(a => a.type === 'meeting').length;
+  const callsThisMonth      = activitiesThisMonth.filter(a => a.type === 'call').length;
+
+  // ── Most contacted ────────────────────────────────────────────────────────
+  const contactCounts = {};
+  activities.forEach(a => {
+    if (a.contactId) contactCounts[a.contactId] = (contactCounts[a.contactId] || 0) + 1;
+  });
+  const mostContacted = Object.entries(contactCounts)
+    .map(([id, count]) => ({ contact: contacts.find(c => c.id === id), count }))
+    .filter(r => r.contact)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  // ── Contact frequency health ──────────────────────────────────────────────
+  const avgContactFreq = contacts.length > 0
+    ? Math.round(contacts.reduce((s, c) => s + (daysSince(c.lastContactDate) === 999 ? 0 : daysSince(c.lastContactDate)), 0) / contacts.filter(c => c.lastContactDate).length)
+    : 0;
+
+  // ── Relationship health list ──────────────────────────────────────────────
+  const healthList = contacts
+    .map(c => {
+      const days = daysSince(c.lastContactDate);
+      const freq = c.contactFrequency || 30;
+      const overduePct = Math.min((days / freq) * 100, 300);
+      let urgency = 'ok';
+      if (days === 999) urgency = 'never';
+      else if (days > freq * 2) urgency = 'critical';
+      else if (days > freq) urgency = 'overdue';
+      return { ...c, days, freq, overduePct, urgency };
+    })
+    .filter(c => c.urgency !== 'ok')
+    .sort((a, b) => b.overduePct - a.overduePct)
+    .slice(0, 15);
+
+  // ── Outreach momentum — last 8 weeks ─────────────────────────────────────
+  const weeks = Array.from({ length: 8 }, (_, i) => {
+    const end   = new Date(now); end.setDate(now.getDate() - i * 7);
+    const start = new Date(end); start.setDate(end.getDate() - 6);
+    const label = start.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+    const count = activities.filter(a => {
+      const d = new Date(a.date || a.timestamp);
+      return d >= start && d <= end;
+    }).length;
+    return { label, count, start, end };
+  }).reverse();
+  const maxWeek = Math.max(...weeks.map(w => w.count), 1);
+
+  // ── Activity type breakdown ───────────────────────────────────────────────
+  const typeBreakdown = ['email','call','meeting','note'].map(type => ({
+    type,
+    count: activities.filter(a => a.type === type).length,
+    thisMonth: activitiesThisMonth.filter(a => a.type === type).length,
+  }));
+
+  // ── Tag breakdown ─────────────────────────────────────────────────────────
+  const tagMap = {};
+  contacts.forEach(c => {
+    (c.tags || []).forEach(tag => {
+      if (!tagMap[tag]) tagMap[tag] = { count: 0, totalVibe: 0, hot: 0 };
+      tagMap[tag].count++;
+      tagMap[tag].totalVibe += c.vibeScore || 5;
+      if (c.vibeScore >= 8 || c.vibeLabel === 'hot') tagMap[tag].hot++;
+    });
+  });
+  const tagList = Object.entries(tagMap)
+    .map(([tag, d]) => ({ tag, count: d.count, avgVibe: (d.totalVibe / d.count).toFixed(1), hot: d.hot }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 12);
+
+  // ── Company breakdown ─────────────────────────────────────────────────────
+  const companyMap = {};
+  contacts.forEach(c => {
+    if (!c.company) return;
+    if (!companyMap[c.company]) companyMap[c.company] = { count: 0, totalVibe: 0 };
+    companyMap[c.company].count++;
+    companyMap[c.company].totalVibe += c.vibeScore || 5;
+  });
+  const companyList = Object.entries(companyMap)
+    .map(([co, d]) => ({ company: co, count: d.count, avgVibe: (d.totalVibe / d.count).toFixed(1) }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  // ── Pipeline velocity ─────────────────────────────────────────────────────
+  const stageContacts = {
+    cold: contacts.filter(c => c.vibeLabel === 'cold' || (c.vibeScore < 4 && !c.vibeLabel)),
+    warm: contacts.filter(c => c.vibeLabel === 'warm' || (c.vibeScore >= 4 && c.vibeScore < 8 && !c.vibeLabel)),
+    hot:  contacts.filter(c => c.vibeLabel === 'hot'  || (c.vibeScore >= 8 && !c.vibeLabel)),
+  };
+  const convColdToWarm = stageContacts.cold.length > 0
+    ? Math.round((stageContacts.warm.length / (stageContacts.cold.length + stageContacts.warm.length)) * 100) : 0;
+  const convWarmToHot = (stageContacts.warm.length + stageContacts.hot.length) > 0
+    ? Math.round((stageContacts.hot.length / (stageContacts.warm.length + stageContacts.hot.length)) * 100) : 0;
+
+  // ── CSV Export ────────────────────────────────────────────────────────────
+  const exportCSV = () => {
+    const headers = ['Name','Email','Phone','Company','Job Title','Vibe Score','Stage','Last Contact','Days Since Contact','Tags','Notes'];
+    const rows = contacts.map(c => [
+      c.name || '',
+      c.email || '',
+      c.phone || '',
+      c.company || '',
+      c.jobTitle || '',
+      c.vibeScore || '',
+      c.vibeLabel || '',
+      c.lastContactDate || '',
+      daysSince(c.lastContactDate) === 999 ? 'Never' : daysSince(c.lastContactDate),
+      (c.tags || []).join('; '),
+      (c.notes || '').replace(/,/g, ' ').replace(/\n/g, ' '),
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `crm-contacts-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  const exportActivitiesCSV = () => {
+    const headers = ['Contact','Type','Date','Notes'];
+    const rows = activities.map(a => {
+      const c = contacts.find(x => x.id === a.contactId);
+      return [c?.name || 'Unknown', a.type || '', a.date || '', (a.content || '').replace(/,/g,' ').replace(/\n/g,' ')];
+    });
+    const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = `crm-activities-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  // ── Urgency helpers ───────────────────────────────────────────────────────
+  const urgencyConfig = {
+    never:    { label: 'Never contacted', color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', bar: 'bg-slate-400' },
+    critical: { label: 'Critical',        color: 'bg-red-50 text-red-700',      dot: 'bg-red-500',   bar: 'bg-red-500'   },
+    overdue:  { label: 'Overdue',         color: 'bg-amber-50 text-amber-700',  dot: 'bg-amber-500', bar: 'bg-amber-400' },
+  };
+
+  const typeConfig = {
+    email:   { icon: '✉️', color: 'bg-indigo-100 text-indigo-700', bar: 'bg-indigo-500' },
+    call:    { icon: '📞', color: 'bg-green-100 text-green-700',   bar: 'bg-green-500'  },
+    meeting: { icon: '🤝', color: 'bg-purple-100 text-purple-700', bar: 'bg-purple-500' },
+    note:    { icon: '📝', color: 'bg-slate-100 text-slate-600',   bar: 'bg-slate-400'  },
+  };
+
+  const tabs = [
+    { id: 'overview',  label: 'Overview',   icon: 'dashboard'    },
+    { id: 'health',    label: 'Health',     icon: 'favorite'     },
+    { id: 'momentum',  label: 'Momentum',   icon: 'trending_up'  },
+    { id: 'pipeline',  label: 'Pipeline',   icon: 'funnel'       },
+    { id: 'breakdown', label: 'Breakdown',  icon: 'donut_small'  },
+    { id: 'export',    label: 'Export',     icon: 'download'     },
+  ];
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto p-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-3xl font-bold text-gray-800 flex items-center gap-2">
-            <span className="material-symbols-outlined text-[32px] text-blue-600">analytics</span> Analytics Dashboard
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg transition">
-            <span className="material-symbols-outlined text-[24px]">close</span>
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-3">
+      <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+
+        {/* Header */}
+        <div className="bg-gradient-to-r from-slate-900 to-indigo-900 px-6 py-4 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-indigo-500/30 rounded-xl flex items-center justify-center">
+              <span className="material-symbols-outlined text-indigo-200 text-[20px]">analytics</span>
+            </div>
+            <div>
+              <h2 className="text-white font-bold text-lg leading-none">Analytics</h2>
+              <p className="text-indigo-300 text-xs mt-0.5">{total} contacts · {activities.length} activities</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition">
+            <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-xl shadow-lg">
-            <span className="material-symbols-outlined text-[32px] opacity-80">group</span>
-            <p className="text-3xl font-bold">{totalContacts}</p>
-            <p className="text-sm opacity-90">Total Contacts</p>
-          </div>
-          <div className="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-xl shadow-lg">
-            <span className="material-symbols-outlined text-[32px] opacity-80">trending_up</span>
-            <p className="text-3xl font-bold">{avgVibeScore}</p>
-            <p className="text-sm opacity-90">Avg Vibe Score</p>
-          </div>
-          <div className="bg-gradient-to-br from-red-500 to-red-600 text-white p-6 rounded-xl shadow-lg">
-            <span className="material-symbols-outlined text-[32px] opacity-80">error</span>
-            <p className="text-3xl font-bold">{overdueContacts}</p>
-            <p className="text-sm opacity-90">Need Attention</p>
-          </div>
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-xl shadow-lg">
-            <span className="material-symbols-outlined text-[32px] opacity-80">timeline</span>
-            <p className="text-3xl font-bold">{activities.length}</p>
-            <p className="text-sm opacity-90">Total Activities</p>
-          </div>
+        {/* Tabs */}
+        <div className="flex gap-0.5 px-4 pt-3 pb-0 border-b border-slate-100 flex-shrink-0 overflow-x-auto">
+          {tabs.map(tab => (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg transition whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'bg-indigo-600 text-white'
+                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+              }`}>
+              <span className="material-symbols-outlined text-[14px]">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px]">pie_chart</span> Vibe Score Distribution
-            </h3>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm text-gray-600">High (8-10)</span>
-                  <span className="text-sm font-bold text-green-600">{vibeDistribution.high}</span>
-                </div>
-                <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-green-500" style={{width: `${(vibeDistribution.high / (totalContacts || 1) * 100)}%`}}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm text-gray-600">Medium (5-7)</span>
-                  <span className="text-sm font-bold text-yellow-600">{vibeDistribution.medium}</span>
-                </div>
-                <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-yellow-500" style={{width: `${(vibeDistribution.medium / (totalContacts || 1) * 100)}%`}}></div>
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-sm text-gray-600">Low (1-4)</span>
-                  <span className="text-sm font-bold text-red-600">{vibeDistribution.low}</span>
-                </div>
-                <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-red-500" style={{width: `${(vibeDistribution.low / (totalContacts || 1) * 100)}%`}}></div>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-5 bg-slate-50">
 
-          <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[20px]">timeline</span> Recent Activity
-            </h3>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
-              {recentActivity.length === 0 ? (
-                <p className="text-gray-400 text-sm text-center py-4">No activities yet</p>
-              ) : (
-                recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
-                    <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-800 capitalize">{activity.type}</p>
-                      <p className="text-xs text-gray-500">{new Date(activity.timestamp).toLocaleDateString()}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* FEATURE 5: REFERRAL LEADERBOARD */}
-        {(() => {
-          const referralCounts = {};
-          contacts.forEach(c => {
-            if (c.referredBy) {
-              referralCounts[c.referredBy] = (referralCounts[c.referredBy] || 0) + 1;
-            }
-          });
-          const leaderboard = Object.entries(referralCounts)
-            .map(([id, count]) => ({ contact: contacts.find(c => c.id === id), count }))
-            .filter(r => r.contact)
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 5);
-
-          if (leaderboard.length === 0) return null;
-          return (
-            <div className="bg-white border border-gray-200 rounded-xl p-6 mb-8">
-              <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <span className="material-symbols-outlined text-[20px] text-purple-500">group</span> Top Referrers
-              </h3>
-              <div className="space-y-2">
-                {leaderboard.map((r, i) => (
-                  <div key={r.contact.id} className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl">
-                    <span className="w-7 h-7 bg-purple-200 text-purple-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
-                      {i + 1}
-                    </span>
-                    <div className="flex-1">
-                      <p className="font-semibold text-gray-800 text-sm">{r.contact.name}</p>
-                      {r.contact.company && <p className="text-xs text-gray-400">{r.contact.company}</p>}
-                    </div>
-                    <span className="text-sm font-bold text-purple-700">{r.count} referral{r.count !== 1 ? 's' : ''}</span>
+          {/* ── OVERVIEW ── */}
+          {activeTab === 'overview' && (
+            <div className="space-y-5">
+              {/* KPI row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: 'Total Contacts', value: total, icon: 'group', color: 'from-slate-700 to-slate-800' },
+                  { label: 'Hot Contacts',   value: hot,   icon: 'local_fire_department', color: 'from-red-500 to-orange-500' },
+                  { label: 'Outreach / Month', value: contactedThisMonth, icon: 'send', color: 'from-indigo-500 to-violet-600' },
+                  { label: 'Need Attention', value: overdueContacts.length, icon: 'notification_important', color: 'from-amber-500 to-orange-500' },
+                ].map(kpi => (
+                  <div key={kpi.label} className={`bg-gradient-to-br ${kpi.color} rounded-xl p-4 text-white shadow-sm`}>
+                    <span className="material-symbols-outlined text-[22px] opacity-70">{kpi.icon}</span>
+                    <p className="text-3xl font-bold mt-1">{kpi.value}</p>
+                    <p className="text-xs opacity-80 mt-0.5">{kpi.label}</p>
                   </div>
                 ))}
               </div>
-            </div>
-          );
-        })()}
 
-        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200 rounded-xl p-6">
-          <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-            <span className="material-symbols-outlined text-[20px]">download</span> Export Data
-          </h3>
-          <div className="flex gap-3">
-            <button className="bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">Export to CSV</button>
-            <button className="bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">Export to PDF</button>
-            <button className="bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50">Export to Excel</button>
-          </div>
+              {/* Wins this month */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-amber-500">emoji_events</span>
+                  Wins This Month
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: 'New contacts', value: newContactsThisMonth, icon: 'person_add', color: 'text-indigo-600 bg-indigo-50' },
+                    { label: 'Emails sent',  value: emailsSentThisMonth,  icon: 'mail',        color: 'text-blue-600 bg-blue-50' },
+                    { label: 'Meetings',     value: meetingsThisMonth,    icon: 'handshake',   color: 'text-green-600 bg-green-50' },
+                    { label: 'Calls made',   value: callsThisMonth,       icon: 'call',        color: 'text-purple-600 bg-purple-50' },
+                  ].map(w => (
+                    <div key={w.label} className={`rounded-xl p-4 ${w.color} flex items-center gap-3`}>
+                      <span className="material-symbols-outlined text-[22px]">{w.icon}</span>
+                      <div>
+                        <p className="text-2xl font-bold">{w.value}</p>
+                        <p className="text-xs font-medium opacity-70">{w.label}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pipeline summary */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-indigo-500">funnel</span>
+                  Pipeline Snapshot
+                </h3>
+                <div className="space-y-3">
+                  {[
+                    { label: 'Cold', count: cold,  pct: Math.round((cold/total||0)*100),  color: 'bg-slate-400', text: 'text-slate-600' },
+                    { label: 'Warm', count: warm,  pct: Math.round((warm/total||0)*100),  color: 'bg-amber-400', text: 'text-amber-600' },
+                    { label: 'Hot',  count: hot,   pct: Math.round((hot/total||0)*100),   color: 'bg-red-500',   text: 'text-red-600'   },
+                  ].map(s => (
+                    <div key={s.label}>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className={`text-xs font-semibold ${s.text}`}>{s.label}</span>
+                        <span className="text-xs text-slate-500">{s.count} contacts · {s.pct}%</span>
+                      </div>
+                      <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${s.color} rounded-full transition-all`} style={{width: `${s.pct}%`}}></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Most contacted */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-green-500">star</span>
+                  Most Contacted
+                </h3>
+                {mostContacted.length === 0 ? (
+                  <p className="text-slate-400 text-sm text-center py-4">No activity data yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {mostContacted.map((r, i) => {
+                      const pct = Math.round((r.count / mostContacted[0].count) * 100);
+                      return (
+                        <div key={r.contact.id} className="flex items-center gap-3">
+                          <span className="w-5 text-xs font-bold text-slate-400 text-right flex-shrink-0">{i+1}</span>
+                          <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {r.contact.name?.[0]?.toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-center mb-0.5">
+                              <span className="text-xs font-semibold text-slate-700 truncate">{r.contact.name}</span>
+                              <span className="text-xs text-slate-500 ml-2 flex-shrink-0">{r.count}x</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-indigo-400 rounded-full" style={{width:`${pct}%`}}></div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── HEALTH ── */}
+          {activeTab === 'health' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+                  <p className="text-3xl font-bold text-red-500">{overdueContacts.length}</p>
+                  <p className="text-xs text-slate-500 mt-1">Overdue contacts</p>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+                  <p className="text-3xl font-bold text-slate-500">{neverContacted}</p>
+                  <p className="text-xs text-slate-500 mt-1">Never contacted</p>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+                  <p className="text-3xl font-bold text-indigo-600">{avgContactFreq}<span className="text-lg">d</span></p>
+                  <p className="text-xs text-slate-500 mt-1">Avg days between contact</p>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-red-500">notification_important</span>
+                  Contacts Needing Attention
+                </h3>
+                <p className="text-xs text-slate-400 mb-4">Sorted by how overdue they are relative to their contact frequency</p>
+                {healthList.length === 0 ? (
+                  <div className="text-center py-8">
+                    <span className="material-symbols-outlined text-green-400 text-[48px]">check_circle</span>
+                    <p className="text-slate-500 mt-2 text-sm">All contacts are up to date!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {healthList.map(c => {
+                      const cfg = urgencyConfig[c.urgency];
+                      const barW = Math.min(c.overduePct, 100);
+                      return (
+                        <div key={c.id} className={`rounded-xl p-3 border ${c.urgency === 'critical' ? 'border-red-200 bg-red-50' : c.urgency === 'never' ? 'border-slate-200 bg-slate-50' : 'border-amber-200 bg-amber-50'}`}>
+                          <div className="flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`}></div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-semibold text-slate-800 truncate">{c.name}</span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-2 flex-shrink-0 ${cfg.color}`}>{cfg.label}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-1.5 bg-white/70 rounded-full overflow-hidden">
+                                  <div className={`h-full ${cfg.bar} rounded-full`} style={{width:`${barW}%`}}></div>
+                                </div>
+                                <span className="text-[10px] text-slate-500 flex-shrink-0">
+                                  {c.urgency === 'never' ? 'No contact on record' : `${c.days}d ago · every ${c.freq}d`}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── MOMENTUM ── */}
+          {activeTab === 'momentum' && (
+            <div className="space-y-4">
+              {/* Activity trend */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                    <span className="material-symbols-outlined text-[18px] text-indigo-500">bar_chart</span>
+                    Outreach Activity — Last 8 Weeks
+                  </h3>
+                  <span className={`text-xs font-bold px-2 py-1 rounded-lg ${activityGrowth >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                    {activityGrowth >= 0 ? '+' : ''}{activityGrowth}% vs last month
+                  </span>
+                </div>
+                <div className="flex items-end gap-1.5 h-36">
+                  {weeks.map((w, i) => {
+                    const h = maxWeek > 0 ? Math.max((w.count / maxWeek) * 100, w.count > 0 ? 4 : 0) : 0;
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                        <span className="text-[9px] text-slate-500">{w.count || ''}</span>
+                        <div className="w-full flex items-end" style={{height:'100px'}}>
+                          <div
+                            className={`w-full rounded-t-md transition-all ${i === weeks.length-1 ? 'bg-indigo-500' : 'bg-indigo-200'}`}
+                            style={{height:`${h}%`, minHeight: w.count > 0 ? '4px' : '0'}}
+                          ></div>
+                        </div>
+                        <span className="text-[8px] text-slate-400 text-center leading-tight">{w.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Type breakdown */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-purple-500">category</span>
+                  Activity Breakdown
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {typeBreakdown.map(t => {
+                    const cfg = typeConfig[t.type] || typeConfig.note;
+                    const pct = activities.length > 0 ? Math.round((t.count / activities.length) * 100) : 0;
+                    return (
+                      <div key={t.type} className={`rounded-xl p-4 ${cfg.color}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-lg">{cfg.icon}</span>
+                          <span className="text-xs font-bold capitalize">{t.type}s</span>
+                        </div>
+                        <p className="text-2xl font-bold">{t.count}</p>
+                        <p className="text-xs opacity-70">{t.thisMonth} this month · {pct}% of total</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Best contact days */}
+              {(() => {
+                const dayCounts = [0,0,0,0,0,0,0];
+                activities.forEach(a => {
+                  if (a.date) dayCounts[new Date(a.date).getDay()]++;
+                });
+                const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+                const maxDay = Math.max(...dayCounts, 1);
+                return (
+                  <div className="bg-white rounded-xl border border-slate-200 p-5">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                      <span className="material-symbols-outlined text-[18px] text-green-500">calendar_today</span>
+                      Best Days to Reach Out
+                    </h3>
+                    <div className="flex gap-2">
+                      {days.map((day, i) => {
+                        const pct = Math.round((dayCounts[i] / maxDay) * 100);
+                        const isWeekend = i === 0 || i === 6;
+                        return (
+                          <div key={day} className="flex-1 flex flex-col items-center gap-1">
+                            <span className="text-[10px] text-slate-500">{dayCounts[i] || ''}</span>
+                            <div className="w-full flex items-end" style={{height:'60px'}}>
+                              <div className={`w-full rounded-t-md ${isWeekend ? 'bg-slate-200' : pct >= 75 ? 'bg-green-500' : pct >= 40 ? 'bg-green-300' : 'bg-green-100'}`}
+                                style={{height:`${Math.max(pct, dayCounts[i] > 0 ? 5 : 0)}%`}}></div>
+                            </div>
+                            <span className="text-[10px] font-semibold text-slate-500">{day}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* ── PIPELINE ── */}
+          {activeTab === 'pipeline' && (
+            <div className="space-y-4">
+              {/* Funnel */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-5 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-indigo-500">funnel</span>
+                  Pipeline Funnel
+                </h3>
+                <div className="space-y-3">
+                  {[
+                    { label: 'Cold',  count: cold, color: 'bg-slate-400', light: 'bg-slate-50 border-slate-200', text: 'text-slate-600', desc: 'Never engaged or very low vibe' },
+                    { label: 'Warm',  count: warm, color: 'bg-amber-400', light: 'bg-amber-50 border-amber-200', text: 'text-amber-700', desc: 'In conversation, building rapport' },
+                    { label: 'Hot',   count: hot,  color: 'bg-red-500',   light: 'bg-red-50 border-red-200',     text: 'text-red-700',   desc: 'High engagement, strong relationship' },
+                  ].map((s, i) => {
+                    const w = total > 0 ? Math.max(100 - i * 20, 60) : 60;
+                    const pct = total > 0 ? Math.round((s.count / total) * 100) : 0;
+                    return (
+                      <div key={s.label} className="flex items-center gap-4" style={{paddingLeft:`${i * 5}%`, paddingRight:`${i * 5}%`}}>
+                        <div className={`flex-1 rounded-xl border p-4 ${s.light}`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`text-sm font-bold ${s.text}`}>{s.label}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-slate-500">{s.count} contacts</span>
+                              <span className={`text-xs font-bold ${s.text}`}>{pct}%</span>
+                            </div>
+                          </div>
+                          <div className="h-2 bg-white/70 rounded-full overflow-hidden">
+                            <div className={`h-full ${s.color} rounded-full`} style={{width:`${pct}%`}}></div>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-1.5">{s.desc}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Conversion rates */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-green-500">swap_horiz</span>
+                  Stage Conversion Rates
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    { from: 'Cold → Warm', rate: convColdToWarm, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200', bar: 'bg-amber-400' },
+                    { from: 'Warm → Hot',  rate: convWarmToHot,  color: 'text-red-600',   bg: 'bg-red-50 border-red-200',     bar: 'bg-red-500'   },
+                  ].map(c => (
+                    <div key={c.from} className={`rounded-xl border p-5 ${c.bg}`}>
+                      <p className="text-xs font-semibold text-slate-500 mb-2">{c.from}</p>
+                      <p className={`text-4xl font-bold ${c.color} mb-3`}>{c.rate}%</p>
+                      <div className="h-2 bg-white/70 rounded-full overflow-hidden">
+                        <div className={`h-full ${c.bar} rounded-full`} style={{width:`${c.rate}%`}}></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Vibe score distribution */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-violet-500">equalizer</span>
+                  Vibe Score Distribution
+                </h3>
+                <div className="flex items-end gap-1 h-24">
+                  {Array.from({length: 10}, (_, i) => {
+                    const score = i + 1;
+                    const count = contacts.filter(c => Math.round(c.vibeScore) === score).length;
+                    const h = total > 0 ? Math.max((count / total) * 100, count > 0 ? 5 : 0) : 0;
+                    const color = score >= 8 ? 'bg-red-400' : score >= 5 ? 'bg-amber-400' : 'bg-slate-300';
+                    return (
+                      <div key={score} className="flex-1 flex flex-col items-center gap-1">
+                        <div className="w-full flex items-end" style={{height:'80px'}}>
+                          <div className={`w-full rounded-t-sm ${color}`} style={{height:`${h}%`}}></div>
+                        </div>
+                        <span className="text-[9px] text-slate-400">{score}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── BREAKDOWN ── */}
+          {activeTab === 'breakdown' && (
+            <div className="space-y-4">
+              {/* Tags */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-indigo-500">label</span>
+                  Tag Breakdown
+                </h3>
+                {tagList.length === 0 ? (
+                  <p className="text-slate-400 text-sm text-center py-6">No tags added to contacts yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {tagList.map((t, i) => {
+                      const pct = Math.round((t.count / total) * 100);
+                      const vibeColor = parseFloat(t.avgVibe) >= 7 ? 'text-green-600' : parseFloat(t.avgVibe) >= 4 ? 'text-amber-600' : 'text-red-500';
+                      return (
+                        <div key={t.tag} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg">
+                          <span className="w-5 text-xs text-slate-400 font-bold text-right">{i+1}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-semibold text-slate-700 truncate">{t.tag}</span>
+                              <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                                <span className={`text-[10px] font-bold ${vibeColor}`}>★ {t.avgVibe}</span>
+                                <span className="text-[10px] text-slate-400">{t.count} contacts</span>
+                              </div>
+                            </div>
+                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-indigo-400 rounded-full" style={{width:`${pct}%`}}></div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Company */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-purple-500">business</span>
+                  Top Companies
+                </h3>
+                {companyList.length === 0 ? (
+                  <p className="text-slate-400 text-sm text-center py-6">No company data yet</p>
+                ) : (
+                  <div className="space-y-2">
+                    {companyList.map((c, i) => {
+                      const pct = Math.round((c.count / total) * 100);
+                      return (
+                        <div key={c.company} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg">
+                          <span className="w-5 text-xs text-slate-400 font-bold text-right">{i+1}</span>
+                          <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {c.company[0]?.toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-semibold text-slate-700 truncate">{c.company}</span>
+                              <span className="text-[10px] text-slate-400 ml-2 flex-shrink-0">{c.count} people</span>
+                            </div>
+                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-purple-400 rounded-full" style={{width:`${pct}%`}}></div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Contact frequency distribution */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-green-500">schedule</span>
+                  Overall Contact Frequency
+                </h3>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Weekly or less', days: [0, 7],  color: 'bg-green-100 text-green-700 border-green-200' },
+                    { label: 'Monthly',        days: [8, 30], color: 'bg-amber-100 text-amber-700 border-amber-200' },
+                    { label: 'Infrequent',     days: [31, 999], color: 'bg-red-100 text-red-700 border-red-200' },
+                  ].map(bucket => {
+                    const count = contacts.filter(c => {
+                      const d = daysSince(c.lastContactDate);
+                      return d >= bucket.days[0] && d <= bucket.days[1];
+                    }).length;
+                    return (
+                      <div key={bucket.label} className={`rounded-xl border p-4 text-center ${bucket.color}`}>
+                        <p className="text-2xl font-bold">{count}</p>
+                        <p className="text-[10px] font-semibold mt-0.5 opacity-80">{bucket.label}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── EXPORT ── */}
+          {activeTab === 'export' && (
+            <div className="space-y-4">
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-indigo-500">download</span>
+                  Export Your Data
+                </h3>
+                <p className="text-xs text-slate-400 mb-5">Download your CRM data as CSV files — ready for Excel, Google Sheets, or any CRM tool.</p>
+
+                <div className="space-y-3">
+                  {[
+                    {
+                      title: 'All Contacts',
+                      desc: `${total} contacts with all fields — name, email, phone, company, vibe score, tags, last contact date`,
+                      icon: 'group',
+                      color: 'bg-indigo-600 hover:bg-indigo-700',
+                      action: exportCSV,
+                      filename: 'contacts.csv'
+                    },
+                    {
+                      title: 'Activity Log',
+                      desc: `${activities.length} activities — contact name, type, date, notes`,
+                      icon: 'timeline',
+                      color: 'bg-green-600 hover:bg-green-700',
+                      action: exportActivitiesCSV,
+                      filename: 'activities.csv'
+                    },
+                    {
+                      title: 'Contacts Needing Attention',
+                      desc: `${overdueContacts.length} overdue contacts — ready to action`,
+                      icon: 'notification_important',
+                      color: 'bg-amber-600 hover:bg-amber-700',
+                      action: () => {
+                        const headers = ['Name','Email','Company','Days Since Contact','Contact Frequency','Vibe Score'];
+                        const rows = overdueContacts.map(c => [
+                          c.name||'', c.email||'', c.company||'',
+                          daysSince(c.lastContactDate) === 999 ? 'Never' : daysSince(c.lastContactDate),
+                          c.contactFrequency||30, c.vibeScore||''
+                        ]);
+                        const csv = [headers,...rows].map(r => r.map(v=>`"${v}"`).join(',')).join('\n');
+                        const blob = new Blob([csv],{type:'text/csv'});
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a'); a.href=url;
+                        a.download=`crm-overdue-${new Date().toISOString().split('T')[0]}.csv`;
+                        a.click(); URL.revokeObjectURL(url);
+                      },
+                      filename: 'overdue.csv'
+                    },
+                  ].map(item => (
+                    <div key={item.title} className="flex items-center gap-4 p-4 border border-slate-200 rounded-xl hover:border-slate-300 transition">
+                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
+                        <span className="material-symbols-outlined text-slate-600 text-[20px]">{item.icon}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-800">{item.title}</p>
+                        <p className="text-xs text-slate-400 truncate">{item.desc}</p>
+                      </div>
+                      <button onClick={item.action}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-xs font-bold transition flex-shrink-0 ${item.color}`}>
+                        <span className="material-symbols-outlined text-[14px]">download</span>
+                        Download
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-slate-100 rounded-xl p-4 text-center">
+                <p className="text-xs text-slate-500">CSV files open in Excel, Google Sheets, Notion, Airtable, and most CRM tools.</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
+
 
 // --- MAIN CRM APP ---
 
@@ -3301,6 +3898,7 @@ const Sidebar = () => (
           <AnalyticsDashboard
             contacts={contacts}
             activities={activities}
+            categories={categories}
             onClose={() => setShowAnalytics(false)}
           />
         )}
