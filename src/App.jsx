@@ -886,8 +886,10 @@ export default function App() {
   const [icebreakerContact, setIcebreakerContact] = useState(null);
   const [icebreakerLines, setIcebreakerLines] = useState([]);
   const [icebreakerLoading, setIcebreakerLoading] = useState(false);
-  const [icebreakerChannel, setIcebreakerChannel] = useState('whatsapp'); // 'whatsapp' | 'linkedin' | 'email' | 'instagram' | 'twitter' | 'facebook'
-  const [icebreakerCopied, setIcebreakerCopied] = useState(null); // index of copied line
+  const [icebreakerChannel, setIcebreakerChannel] = useState('whatsapp');
+  const [icebreakerCopied, setIcebreakerCopied] = useState(null);
+  const [icebreakerEditSubject, setIcebreakerEditSubject] = useState('');
+  const [icebreakerEditBody, setIcebreakerEditBody] = useState('');
   const [nudgeEnabled, setNudgeEnabled] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState(null); // 'cold' | 'warm' | 'hot'
   const [draggingId, setDraggingId] = useState(null);
@@ -1494,6 +1496,8 @@ useEffect(() => {
   const generateIcebreaker = async (contact, channel = icebreakerChannel) => {
     setIcebreakerContact(contact);
     setIcebreakerLines([]);
+    setIcebreakerEditSubject('');
+    setIcebreakerEditBody('');
     setIcebreakerLoading(true);
     setIcebreakerCopied(null);
     setShowIcebreaker(true);
@@ -1516,7 +1520,13 @@ useEffect(() => {
       }
 
       const data = await response.json();
-      setIcebreakerLines(data.lines || []);
+      const lines = data.lines || [];
+      setIcebreakerLines(lines);
+      // Populate editable fields from first line
+      const first = lines[0] || '';
+      const hasSub = icebreakerChannel === 'email' && first.includes(' | ');
+      setIcebreakerEditSubject(hasSub ? first.split(' | ')[0] : '');
+      setIcebreakerEditBody(hasSub ? first.split(' | ').slice(1).join(' | ') : first);
     } catch (err) {
       setIcebreakerLines(['Could not generate — check your connection and try again.']);
     }
@@ -5054,13 +5064,14 @@ const Sidebar = () => (
                     <p className="text-sm">Crafting your {icebreakerChannels.find(c=>c.id===icebreakerChannel)?.label} message…</p>
                   </div>
                 ) : icebreakerLines.length > 0 ? (() => {
-                  const msg = Array.isArray(icebreakerLines) ? (icebreakerLines[0] || '') : icebreakerLines;
                   const isEmail = icebreakerChannel === 'email';
-                  const hasSubject = isEmail && msg.includes(' | ');
-                  const subject = hasSubject ? msg.split(' | ')[0] : '';
-                  const body = hasSubject ? msg.split(' | ').slice(1).join(' | ') : msg;
+                  const hasSubject = isEmail && icebreakerEditSubject !== '';
                   const isCopied = icebreakerCopied === 0;
                   const ch = icebreakerChannels.find(c => c.id === icebreakerChannel);
+                  // Full message for copy/send
+                  const fullMsg = hasSubject
+                    ? `${icebreakerEditSubject} | ${icebreakerEditBody}`
+                    : icebreakerEditBody;
                   return (
                     <div className={`rounded-xl border-2 transition ${
                       isCopied
@@ -5074,8 +5085,8 @@ const Sidebar = () => (
                             <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Subject</p>
                             <input
                               type="text"
-                              value={subject}
-                              onChange={e => setIcebreakerLines([`${e.target.value} | ${body}`])}
+                              value={icebreakerEditSubject}
+                              onChange={e => setIcebreakerEditSubject(e.target.value)}
                               className={`w-full text-sm font-semibold border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-indigo-200 text-gray-800'}`}
                             />
                           </div>
@@ -5083,9 +5094,9 @@ const Sidebar = () => (
                         <div>
                           <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Message</p>
                           <textarea
-                            value={body}
+                            value={icebreakerEditBody}
                             rows={5}
-                            onChange={e => setIcebreakerLines([hasSubject ? `${subject} | ${e.target.value}` : e.target.value])}
+                            onChange={e => setIcebreakerEditBody(e.target.value)}
                             className={`w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 leading-relaxed resize-none ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-white border-indigo-200 text-gray-700'}`}
                           />
                         </div>
@@ -5094,7 +5105,7 @@ const Sidebar = () => (
                       {/* Action buttons */}
                       <div className={`border-t px-4 py-3 flex gap-2 flex-wrap ${darkMode ? 'border-indigo-700' : 'border-indigo-100'}`}>
                         {/* Copy — always shown */}
-                        <button onClick={() => copyIcebreakerLine(msg, 0)}
+                        <button onClick={() => copyIcebreakerLine(fullMsg, 0)}
                           className={`flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition ${
                             isCopied
                               ? 'bg-green-500 text-white'
@@ -5104,7 +5115,6 @@ const Sidebar = () => (
                         </button>
 
                         {/* Email: send via API */}
-                        {icebreakerChannel === 'email' && icebreakerContact?.email && (
                         {icebreakerChannel === 'email' && icebreakerContact?.email && (
                           <button onClick={async () => {
                             const current = icebreakerLines[0] || '';
@@ -5131,31 +5141,9 @@ const Sidebar = () => (
                           </button>
                         )}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                        )}
-
                         {/* WhatsApp: open wa.me with message */}
                         {icebreakerChannel === 'whatsapp' && (
-                          <button onClick={() => openChannelWithMessage('whatsapp', msg)}
+                          <button onClick={() => openChannelWithMessage('whatsapp', fullMsg)}
                             className="flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white transition">
                             💬 Open WhatsApp
                           </button>
@@ -5163,7 +5151,7 @@ const Sidebar = () => (
 
                         {/* All other socials */}
                         {['linkedin','instagram','twitter','facebook'].includes(icebreakerChannel) && (
-                          <button onClick={() => openChannelWithMessage(icebreakerChannel, msg)}
+                          <button onClick={() => openChannelWithMessage(icebreakerChannel, fullMsg)}
                             className={`flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-white transition ${ch?.color || 'bg-slate-700 hover:bg-slate-800'}`}>
                             {ch?.icon} Open {ch?.label}
                           </button>
