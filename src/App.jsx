@@ -4716,7 +4716,7 @@ const Sidebar = () => (
                     </h2>
                     <p className="text-indigo-200 text-sm mt-0.5">One message generated for all tagged contacts</p>
                   </div>
-                  <button onClick={() => { setShowBulkIcebreaker(false); setBulkIcebreakerData({ selectedContacts: [], channel: 'email', social: 'whatsapp', customPrompt: '', generatedMessage: '', showSocialDropdown: false }); }}
+                  <button onClick={() => { setShowBulkIcebreaker(false); setBulkIcebreakerData({ selectedContacts: [], channel: 'email', social: 'whatsapp', customPrompt: '', generatedMessage: '', emailResults: {}, showSocialDropdown: false, sending: false }); }}
                     className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition">
                     <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
@@ -4839,8 +4839,9 @@ const Sidebar = () => (
                 {/* Generate button */}
                 {(() => {
                   const isEmail = bulkIcebreakerData.channel === 'email';
+                  const emailResults = bulkIcebreakerData.emailResults || {};
                   const hasResults = isEmail
-                    ? Object.keys(bulkIcebreakerData.emailResults).length > 0
+                    ? Object.keys(emailResults).length > 0
                     : !!bulkIcebreakerData.generatedMessage;
                   const disabled = bulkIcebreakerLoading || (isEmail && bulkIcebreakerData.selectedContacts.length === 0);
                   return (
@@ -4861,10 +4862,10 @@ const Sidebar = () => (
                 })()}
 
                 {/* EMAIL RESULTS — one editable card per contact */}
-                {bulkIcebreakerData.channel === 'email' && Object.keys(bulkIcebreakerData.emailResults).length > 0 && (
+                {bulkIcebreakerData.channel === 'email' && Object.keys(bulkIcebreakerData.emailResults || {}).length > 0 && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-gray-700">Generated Emails ({Object.keys(bulkIcebreakerData.emailResults).length}) <span className="font-normal text-gray-400 text-xs">— edit before sending</span></p>
+                      <p className="text-sm font-semibold text-gray-700">Generated Emails ({Object.keys(bulkIcebreakerData.emailResults || {}).length}) <span className="font-normal text-gray-400 text-xs">— edit before sending</span></p>
                       <button onClick={sendAllBulkIcebreakers} disabled={bulkIcebreakerData.sending}
                         className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition">
                         {bulkIcebreakerData.sending
@@ -5125,7 +5126,7 @@ const Sidebar = () => (
                       {icebreakerContact.company && `${icebreakerContact.company} · `}AI-generated opening lines
                     </p>
                   </div>
-                  <button onClick={() => setShowIcebreaker(false)} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition">
+                  <button onClick={() => { setShowIcebreaker(false); setIcebreakerEditSubject(''); setIcebreakerEditBody(''); setIcebreakerLines([]); }} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition">
                     <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
                 </div>
