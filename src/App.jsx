@@ -465,7 +465,7 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
 }
 
 // --- ANALYTICS DASHBOARD ---
-function AnalyticsDashboard({ contacts, activities, onClose, categories = [] }) {
+function AnalyticsDashboard({ contacts, activities, onClose, categories = [], darkMode = false }) {
   const [activeTab, setActiveTab] = React.useState('overview');
   const now = new Date();
 
@@ -1148,12 +1148,12 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [] }) 
           {/* ── EXPORT ── */}
           {activeTab === 'export' && (
             <div className="space-y-4">
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-1 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-indigo-500">download</span>
                   Export Your Data
                 </h3>
-                <p className="text-xs text-slate-400 mb-5">Download your CRM data as CSV files — ready for Excel, Google Sheets, or any CRM tool.</p>
+                <p className={`text-xs mb-5 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>Download your CRM data as CSV files — ready for Excel, Google Sheets, or any CRM tool.</p>
 
                 <div className="space-y-3">
                   {[
@@ -1195,13 +1195,13 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [] }) 
                       filename: 'overdue.csv'
                     },
                   ].map(item => (
-                    <div key={item.title} className="flex items-center gap-4 p-4 border border-slate-200 rounded-xl hover:border-slate-300 transition">
-                      <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center flex-shrink-0">
-                        <span className="material-symbols-outlined text-slate-600 text-[20px]">{item.icon}</span>
+                    <div key={item.title} className={`flex items-center gap-4 p-4 border rounded-xl transition ${darkMode ? 'border-slate-600 hover:border-slate-500' : 'border-slate-200 hover:border-slate-300'}`}>
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                        <span className={`material-symbols-outlined text-[20px] ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{item.icon}</span>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-800">{item.title}</p>
-                        <p className="text-xs text-slate-400 truncate">{item.desc}</p>
+                        <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>{item.title}</p>
+                        <p className={`text-xs truncate ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>{item.desc}</p>
                       </div>
                       <button onClick={item.action}
                         className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-xs font-bold transition flex-shrink-0 ${item.color}`}>
@@ -1213,8 +1213,164 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [] }) 
                 </div>
               </div>
 
-              <div className="bg-slate-100 rounded-xl p-4 text-center">
-                <p className="text-xs text-slate-500">CSV files open in Excel, Google Sheets, Notion, Airtable, and most CRM tools.</p>
+              <div className={`rounded-xl p-4 text-center ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>CSV files open in Excel, Google Sheets, Notion, Airtable, and most CRM tools.</p>
+              </div>
+
+              {/* ── Full Analytics Report ── */}
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-1 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+                  <span className="material-symbols-outlined text-[18px] text-purple-500">summarize</span>
+                  Full Analytics Report
+                </h3>
+                <p className={`text-xs mb-5 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>
+                  Download a complete snapshot of all 5 analytics tabs — Overview, Health, Momentum, Pipeline, and Breakdown — as a single HTML report you can open, print, or share.
+                </p>
+                <button
+                  onClick={() => {
+                    const now2 = new Date();
+                    const fmt = (d) => d ? new Date(d).toLocaleDateString() : 'Never';
+                    const ds = (dateStr) => dateStr ? Math.ceil((now2 - new Date(dateStr)) / 86400000) : 999;
+                    const total2 = contacts.length;
+                    const hot = contacts.filter(c => c.vibeScore >= 8).length;
+                    const warm = contacts.filter(c => c.vibeScore >= 5 && c.vibeScore < 8).length;
+                    const cold = contacts.filter(c => c.vibeScore < 5).length;
+                    const thisMonth = new Date(now2.getFullYear(), now2.getMonth(), 1);
+                    const newThisMonth = contacts.filter(c => c.createdAt && new Date(c.createdAt) >= thisMonth).length;
+                    const emailsThisMonth = activities.filter(a => a.type === 'email' && new Date(a.date||a.timestamp) >= thisMonth).length;
+                    const callsThisMonth  = activities.filter(a => a.type === 'call'  && new Date(a.date||a.timestamp) >= thisMonth).length;
+                    const meetingsThisMonth = activities.filter(a => a.type === 'meeting' && new Date(a.date||a.timestamp) >= thisMonth).length;
+
+                    // Health — overdue contacts
+                    const overdueList = contacts
+                      .map(c => ({ ...c, _days: ds(c.lastContactDate), _freq: c.contactFrequency || 30 }))
+                      .filter(c => c._days > c._freq)
+                      .sort((a,b) => (b._days/b._freq) - (a._days/a._freq))
+                      .slice(0, 20);
+
+                    // Momentum — 8-week activity
+                    const weeks = Array.from({ length: 8 }, (_, i) => {
+                      const d = new Date(now2); d.setDate(d.getDate() - (7*(7-i)));
+                      return { label: `Wk ${i+1}`, start: new Date(d), count: 0 };
+                    });
+                    activities.forEach(a => {
+                      const d = new Date(a.date||a.timestamp);
+                      weeks.forEach(w => { if (d >= w.start && d < new Date(w.start.getTime() + 7*86400000)) w.count++; });
+                    });
+
+                    // Tag breakdown
+                    const tagMap = {};
+                    contacts.forEach(c => (c.tags||[]).forEach(t => {
+                      if (!tagMap[t]) tagMap[t] = { count: 0, vibeSum: 0 };
+                      tagMap[t].count++; tagMap[t].vibeSum += (c.vibeScore||5);
+                    }));
+                    const tagRows = Object.entries(tagMap).sort((a,b) => b[1].count - a[1].count).slice(0,10);
+
+                    const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Micro CRM Analytics Report — ${now2.toLocaleDateString()}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1e293b; max-width: 900px; margin: 40px auto; padding: 0 24px; }
+  h1 { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
+  .subtitle { color: #64748b; font-size: 14px; margin-bottom: 40px; }
+  h2 { font-size: 18px; font-weight: 700; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; }
+  .grid4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; margin-bottom: 24px; }
+  .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; }
+  .card .val { font-size: 28px; font-weight: 800; color: #4f46e5; }
+  .card .lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #f1f5f9; text-align: left; padding: 8px 12px; font-size: 11px; text-transform: uppercase; color: #64748b; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
+  tr:hover td { background: #f8fafc; }
+  .bar-wrap { background: #e2e8f0; border-radius: 4px; height: 8px; flex: 1; }
+  .bar { background: #4f46e5; border-radius: 4px; height: 8px; }
+  .bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; font-size: 13px; }
+  .bar-label { width: 60px; text-align: right; color: #64748b; font-size: 11px; }
+  .tag { display: inline-block; background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 20px; font-size: 11px; margin: 2px; }
+  .badge-hot { color: #16a34a; font-weight: 700; } .badge-warm { color: #ca8a04; font-weight: 700; } .badge-cold { color: #dc2626; font-weight: 700; }
+  @media print { body { margin: 20px; } }
+</style></head><body>
+<h1>📊 Micro CRM Analytics Report</h1>
+<p class="subtitle">Generated ${now2.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})} · ${total2} contacts · ${activities.length} activities</p>
+
+<h2>Overview</h2>
+<div class="grid4">
+  <div class="card"><div class="val">${total2}</div><div class="lbl">Total Contacts</div></div>
+  <div class="card"><div class="val" style="color:#16a34a">${hot}</div><div class="lbl">Hot Contacts</div></div>
+  <div class="card"><div class="val" style="color:#ca8a04">${newThisMonth}</div><div class="lbl">New This Month</div></div>
+  <div class="card"><div class="val" style="color:#7c3aed">${emailsThisMonth + callsThisMonth + meetingsThisMonth}</div><div class="lbl">Outreach This Month</div></div>
+</div>
+<div class="grid4">
+  <div class="card"><div class="val">${emailsThisMonth}</div><div class="lbl">Emails Sent</div></div>
+  <div class="card"><div class="val">${callsThisMonth}</div><div class="lbl">Calls Made</div></div>
+  <div class="card"><div class="val">${meetingsThisMonth}</div><div class="lbl">Meetings</div></div>
+  <div class="card"><div class="val">${activities.length}</div><div class="lbl">Total Activities</div></div>
+</div>
+
+<h2>Pipeline</h2>
+<div class="grid4">
+  <div class="card"><div class="val" style="color:#16a34a">${hot}</div><div class="lbl">🔥 Hot</div></div>
+  <div class="card"><div class="val" style="color:#ca8a04">${warm}</div><div class="lbl">🌤 Warm</div></div>
+  <div class="card"><div class="val" style="color:#dc2626">${cold}</div><div class="lbl">❄️ Cold</div></div>
+  <div class="card"><div class="val">${total2 > 0 ? Math.round(hot/total2*100) : 0}%</div><div class="lbl">Hot Rate</div></div>
+</div>
+${['Hot','Warm','Cold'].map(label => {
+  const count = label === 'Hot' ? hot : label === 'Warm' ? warm : cold;
+  const pct = total2 > 0 ? Math.round(count/total2*100) : 0;
+  return `<div class="bar-row"><span style="width:60px;font-size:13px">${label}</span><div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${label==='Hot'?'#16a34a':label==='Warm'?'#ca8a04':'#dc2626'}"></div></div><span style="font-size:12px;color:#64748b;width:50px">${count} (${pct}%)</span></div>`;
+}).join('')}
+
+<h2>Health — Overdue Contacts (top 20)</h2>
+${overdueList.length === 0 ? '<p style="color:#64748b;font-size:14px">✅ All contacts are up to date!</p>' : `
+<table><thead><tr><th>Name</th><th>Company</th><th>Days Since Contact</th><th>Target Frequency</th><th>Overdue By</th><th>Vibe</th></tr></thead><tbody>
+${overdueList.map(c => `<tr>
+  <td><strong>${c.name||'—'}</strong></td>
+  <td>${c.company||'—'}</td>
+  <td style="color:#dc2626;font-weight:700">${c._days === 999 ? 'Never' : c._days + 'd'}</td>
+  <td>Every ${c._freq}d</td>
+  <td>${c._days === 999 ? '∞' : Math.round(c._days/c._freq * 10)/10}×</td>
+  <td class="${c.vibeScore>=8?'badge-hot':c.vibeScore>=5?'badge-warm':'badge-cold'}">${c.vibeScore||'—'}</td>
+</tr>`).join('')}
+</tbody></table>`}
+
+<h2>Momentum — 8-Week Outreach</h2>
+${weeks.map(w => {
+  const pct = Math.max(...weeks.map(x=>x.count)) > 0 ? Math.round(w.count / Math.max(...weeks.map(x=>x.count)) * 100) : 0;
+  return `<div class="bar-row"><span class="bar-label">${w.label}</span><div class="bar-wrap"><div class="bar" style="width:${pct}%"></div></div><span style="font-size:12px;color:#64748b;margin-left:8px">${w.count} activities</span></div>`;
+}).join('')}
+
+<h2>Breakdown — Tags</h2>
+${tagRows.length === 0 ? '<p style="color:#64748b;font-size:14px">No tags used yet.</p>' : `
+<table><thead><tr><th>Tag</th><th>Contacts</th><th>Avg Vibe Score</th></tr></thead><tbody>
+${tagRows.map(([tag, data]) => `<tr><td><span class="tag">${tag}</span></td><td>${data.count}</td><td>${Math.round(data.vibeSum/data.count*10)/10}/10</td></tr>`).join('')}
+</tbody></table>`}
+
+<h2>All Contacts</h2>
+<table><thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Vibe</th><th>Last Contact</th><th>Tags</th></tr></thead><tbody>
+${contacts.map(c => `<tr>
+  <td><strong>${c.name||'—'}</strong></td>
+  <td>${c.email||'—'}</td>
+  <td>${c.company||'—'}</td>
+  <td class="${(c.vibeScore||5)>=8?'badge-hot':(c.vibeScore||5)>=5?'badge-warm':'badge-cold'}">${c.vibeScore||5}</td>
+  <td>${fmt(c.lastContactDate)}</td>
+  <td>${(c.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</td>
+</tr>`).join('')}
+</tbody></table>
+
+<p style="margin-top:40px;color:#94a3b8;font-size:12px;text-align:center">Generated by Micro CRM · ${now2.toISOString()}</p>
+</body></html>`;
+
+                    const blob = new Blob([html], { type: 'text/html' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a'); a.href = url;
+                    a.download = `micro-crm-report-${now2.toISOString().split('T')[0]}.html`;
+                    a.click(); URL.revokeObjectURL(url);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-white font-bold text-sm bg-purple-600 hover:bg-purple-700 transition"
+                >
+                  <span className="material-symbols-outlined text-[18px]">summarize</span>
+                  Download Full Analytics Report (.html)
+                </button>
               </div>
             </div>
           )}
@@ -3952,12 +4108,12 @@ const Sidebar = () => (
         )}
 
         {filteredContacts.length === 0 && (
-          <div className="bg-white rounded-xl p-12 text-center border border-gray-100">
-            <span className="material-symbols-outlined text-[64px] text-gray-300">group</span>
-            <h3 className="text-xl font-bold text-gray-800 mb-2">
+          <div className={`rounded-xl p-12 text-center border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100'}`}>
+            <span className={`material-symbols-outlined text-[64px] ${darkMode ? 'text-slate-600' : 'text-gray-300'}`}>group</span>
+            <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
               {contacts.length === 0 ? 'No contacts yet' : 'No contacts found'}
             </h3>
-            <p className="text-gray-500 mb-4">
+            <p className={`mb-4 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
               {contacts.length === 0 ? 'Add your first contact to get started' : 'Try a different search or filter'}
             </p>
             {contacts.length === 0 && (
@@ -3990,6 +4146,7 @@ const Sidebar = () => (
             contacts={contacts}
             activities={activities}
             categories={categories}
+            darkMode={darkMode}
             onClose={() => setShowAnalytics(false)}
           />
         )}
