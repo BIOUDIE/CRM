@@ -853,6 +853,92 @@ function AdminChangeRequests() {
   );
 };
 
+function IcebreakerMessageCard({ channel, contact, subject, body, onSubjectChange, onBodyChange, darkMode, isCopied, onCopy, onOpen, icebreakerChannels, user }) {
+  const isEmail = channel === 'email';
+  const fullMsg = isEmail && subject ? `${subject} | ${body}` : body;
+  const ch = icebreakerChannels.find(c => c.id === channel);
+
+  const sendEmail = async () => {
+    try {
+      const r = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: contact.email,
+          subject: subject || 'Quick hello',
+          body: body,
+          fromName: user?.emailConfig?.fromName || user?.name,
+          fromEmail: user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || null,
+          replyToEmail: user?.emailConfig?.replyToEmail || user?.email || null,
+          images: [], links: []
+        })
+      });
+      const t = document.createElement('div');
+      t.className = `fixed top-4 left-1/2 -translate-x-1/2 ${r.ok ? 'bg-green-600' : 'bg-red-500'} text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2`;
+      t.innerHTML = r.ok ? '<span class="material-symbols-outlined text-[18px]">check_circle</span> Email sent!' : 'Failed to send email';
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2500);
+    } catch(e) { alert('Failed to send.'); }
+  };
+
+  return (
+    <div className={`rounded-xl border-2 transition ${
+      isCopied
+        ? darkMode ? 'border-green-500 bg-green-900/20' : 'border-green-400 bg-green-50'
+        : darkMode ? 'border-indigo-700 bg-indigo-900/20' : 'border-indigo-100 bg-indigo-50'
+    }`}>
+      <div className="p-5 space-y-3">
+        {isEmail && (
+          <div>
+            <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Subject</p>
+            <input
+              type="text"
+              value={subject}
+              onChange={e => onSubjectChange(e.target.value)}
+              className={`w-full text-sm font-semibold border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-indigo-200 text-gray-800'}`}
+            />
+          </div>
+        )}
+        <div>
+          <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Message</p>
+          <textarea
+            value={body}
+            rows={5}
+            onChange={e => onBodyChange(e.target.value)}
+            className={`w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 leading-relaxed resize-none ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-white border-indigo-200 text-gray-700'}`}
+          />
+        </div>
+      </div>
+      <div className={`border-t px-4 py-3 flex gap-2 flex-wrap ${darkMode ? 'border-indigo-700' : 'border-indigo-100'}`}>
+        <button onClick={() => onCopy(fullMsg, 0)}
+          className={`flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition ${
+            isCopied ? 'bg-green-500 text-white' : darkMode ? 'bg-indigo-900/30 text-indigo-300 hover:bg-indigo-900/50' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+          }`}>
+          {isCopied ? '\u2713 Copied!' : '\ud83d\udccb Copy Message'}
+        </button>
+        {isEmail && contact?.email && (
+          <button onClick={sendEmail}
+            className="flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition">
+            \u2709\ufe0f Send Email
+          </button>
+        )}
+        {channel === 'whatsapp' && (
+          <button onClick={() => onOpen('whatsapp', fullMsg)}
+            className="flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white transition">
+            \ud83d\udcac Open WhatsApp
+          </button>
+        )}
+        {['linkedin','instagram','twitter','facebook'].includes(channel) && (
+          <button onClick={() => onOpen(channel, fullMsg)}
+            className={`flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-white transition ${ch?.color || 'bg-slate-700 hover:bg-slate-800'}`}>
+            {ch?.icon} Open {ch?.label}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -1522,13 +1608,16 @@ useEffect(() => {
       const data = await response.json();
       const lines = data.lines || [];
       setIcebreakerLines(lines);
-      // Populate editable fields from first line
+      // Populate editable fields from first line — use local `channel` param not state
       const first = lines[0] || '';
-      const hasSub = icebreakerChannel === 'email' && first.includes(' | ');
+      const hasSub = channel === 'email' && first.includes(' | ');
       setIcebreakerEditSubject(hasSub ? first.split(' | ')[0] : '');
       setIcebreakerEditBody(hasSub ? first.split(' | ').slice(1).join(' | ') : first);
     } catch (err) {
-      setIcebreakerLines(['Could not generate — check your connection and try again.']);
+      const errMsg = 'Could not generate — check your connection and try again.';
+      setIcebreakerLines([errMsg]);
+      setIcebreakerEditBody(errMsg);
+      setIcebreakerEditSubject('');
     }
     setIcebreakerLoading(false);
   };
@@ -5063,103 +5152,22 @@ const Sidebar = () => (
                     <div className="w-8 h-8 border-[3px] border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
                     <p className="text-sm">Crafting your {icebreakerChannels.find(c=>c.id===icebreakerChannel)?.label} message…</p>
                   </div>
-                ) : icebreakerLines.length > 0 ? (() => {
-                  const isEmail = icebreakerChannel === 'email';
-                  const hasSubject = isEmail && icebreakerEditSubject !== '';
-                  const isCopied = icebreakerCopied === 0;
-                  const ch = icebreakerChannels.find(c => c.id === icebreakerChannel);
-                  // Full message for copy/send
-                  const fullMsg = hasSubject
-                    ? `${icebreakerEditSubject} | ${icebreakerEditBody}`
-                    : icebreakerEditBody;
-                  return (
-                    <div className={`rounded-xl border-2 transition ${
-                      isCopied
-                        ? darkMode ? 'border-green-500 bg-green-900/20' : 'border-green-400 bg-green-50'
-                        : darkMode ? 'border-indigo-700 bg-indigo-900/20' : 'border-indigo-100 bg-indigo-50'
-                    }`}>
-                      {/* Editable message body */}
-                      <div className="p-5 space-y-3">
-                        {hasSubject && (
-                          <div>
-                            <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Subject</p>
-                            <input
-                              type="text"
-                              value={icebreakerEditSubject}
-                              onChange={e => setIcebreakerEditSubject(e.target.value)}
-                              className={`w-full text-sm font-semibold border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-indigo-200 text-gray-800'}`}
-                            />
-                          </div>
-                        )}
-                        <div>
-                          <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Message</p>
-                          <textarea
-                            value={icebreakerEditBody}
-                            rows={5}
-                            onChange={e => setIcebreakerEditBody(e.target.value)}
-                            className={`w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 leading-relaxed resize-none ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-white border-indigo-200 text-gray-700'}`}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className={`border-t px-4 py-3 flex gap-2 flex-wrap ${darkMode ? 'border-indigo-700' : 'border-indigo-100'}`}>
-                        {/* Copy — always shown */}
-                        <button onClick={() => copyIcebreakerLine(fullMsg, 0)}
-                          className={`flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition ${
-                            isCopied
-                              ? 'bg-green-500 text-white'
-                              : darkMode ? 'bg-indigo-900/30 text-indigo-300 hover:bg-indigo-900/50' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                          }`}>
-                          {isCopied ? '✓ Copied!' : '📋 Copy Message'}
-                        </button>
-
-                        {/* Email: send via API */}
-                        {icebreakerChannel === 'email' && icebreakerContact?.email && (
-                          <button onClick={async () => {
-                            const current = icebreakerLines[0] || '';
-                            const hasSub = current.includes(' | ');
-                            const emailSubject = hasSub ? current.split(' | ')[0] : 'Quick hello';
-                            const emailBody = hasSub ? current.split(' | ').slice(1).join(' | ') : current;
-                            try {
-                              const r = await fetch('/api/send-email', {
-                                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ to: icebreakerContact.email, subject: emailSubject, body: emailBody,
-                                  fromName: user?.emailConfig?.fromName || user?.name,
-                                  fromEmail: user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || null,
-                                  replyToEmail: user?.emailConfig?.replyToEmail || user?.email || null,
-                                  images: [], links: [] })
-                              });
-                              const t = document.createElement('div');
-                              t.className = `fixed top-4 left-1/2 -translate-x-1/2 ${r.ok ? 'bg-green-600' : 'bg-red-500'} text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2`;
-                              t.innerHTML = r.ok ? '<span class="material-symbols-outlined text-[18px]">check_circle</span> Email sent!' : 'Failed to send email';
-                              document.body.appendChild(t); setTimeout(() => t.remove(), 2500);
-                            } catch(e) { alert('Failed to send.'); }
-                          }}
-                          className="flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition">
-                            ✉️ Send Email
-                          </button>
-                        )}
-
-                        {/* WhatsApp: open wa.me with message */}
-                        {icebreakerChannel === 'whatsapp' && (
-                          <button onClick={() => openChannelWithMessage('whatsapp', fullMsg)}
-                            className="flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white transition">
-                            💬 Open WhatsApp
-                          </button>
-                        )}
-
-                        {/* All other socials */}
-                        {['linkedin','instagram','twitter','facebook'].includes(icebreakerChannel) && (
-                          <button onClick={() => openChannelWithMessage(icebreakerChannel, fullMsg)}
-                            className={`flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-white transition ${ch?.color || 'bg-slate-700 hover:bg-slate-800'}`}>
-                            {ch?.icon} Open {ch?.label}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })() : null}
+                ) : icebreakerEditBody ? (
+                  <IcebreakerMessageCard
+                    channel={icebreakerChannel}
+                    contact={icebreakerContact}
+                    subject={icebreakerEditSubject}
+                    body={icebreakerEditBody}
+                    onSubjectChange={setIcebreakerEditSubject}
+                    onBodyChange={setIcebreakerEditBody}
+                    darkMode={darkMode}
+                    isCopied={icebreakerCopied === 0}
+                    onCopy={copyIcebreakerLine}
+                    onOpen={openChannelWithMessage}
+                    icebreakerChannels={icebreakerChannels}
+                    user={user}
+                  />
+                ) : null}
               </div>
 
               {/* FIXED FOOTER */}
