@@ -1955,59 +1955,31 @@ useEffect(() => {
                   if (userData.sidebarCollapsed !== undefined) setSidebarCollapsed(userData.sidebarCollapsed);
                   if (userData.darkMode !== undefined) setDarkMode(userData.darkMode);
 
-                  // Load contacts from subcollection
-                  try {
-                    const contactsSnap = await window.getDocs(
-                      window.collection(window.firebaseDb, 'users', firebaseUser.uid, 'contacts')
-                    );
-                    const loadedContacts = [];
-                    contactsSnap.forEach(doc => { const d = doc.data(); if (!d._deleted) loadedContacts.push(d); });
-                    if (loadedContacts.length > 0) {
-                      setContacts(loadedContacts.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0)));
-                    } else if (userData.contacts && Array.isArray(userData.contacts)) {
-                      // Fallback: subcollection empty, use array on user doc
-                      setContacts(userData.contacts);
-                    }
-                  } catch (e) {
-                    console.warn('Subcollection load failed, using user doc fallback:', e.message);
-                    if (userData.contacts && Array.isArray(userData.contacts)) setContacts(userData.contacts);
-                  }
+                  // Load contacts, activities, categories directly from user doc (array storage)
+                  if (userData.contacts && Array.isArray(userData.contacts))
+                    setContacts(userData.contacts.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0)));
+                  if (userData.activities && Array.isArray(userData.activities))
+                    setActivities(userData.activities.sort((a,b) => new Date(b.timestamp||b.date||0) - new Date(a.timestamp||a.date||0)));
+                  if (userData.categories && Array.isArray(userData.categories))
+                    setCategories(userData.categories);
 
-                  // Load activities from subcollection
+                  // One-time migration: pull any contacts still in localStorage into Firestore
                   try {
-                    const activitiesSnap = await window.getDocs(
-                      window.collection(window.firebaseDb, 'users', firebaseUser.uid, 'activities')
-                    );
-                    const loadedActivities = [];
-                    activitiesSnap.forEach(doc => loadedActivities.push(doc.data()));
-                    if (loadedActivities.length > 0) {
-                      setActivities(loadedActivities.sort((a,b) => new Date(b.timestamp||b.date||0) - new Date(a.timestamp||a.date||0)));
-                    } else if (userData.activities && Array.isArray(userData.activities)) {
-                      setActivities(userData.activities);
-                    }
-                  } catch (e) {
-                    console.warn('Activities subcollection load failed:', e.message);
-                    if (userData.activities && Array.isArray(userData.activities)) setActivities(userData.activities);
-                  }
-
-                  // One-time migration: old array fields + localStorage -> subcollections
-                  try {
-                    if (userData.contacts && Array.isArray(userData.contacts) && userData.contacts.length > 0) {
-                      for (const c of userData.contacts)
-                        if (c.id) await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid, 'contacts', c.id), c);
-                      await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), { contacts: null }, { merge: true });
-                    }
-                    if (userData.activities && Array.isArray(userData.activities) && userData.activities.length > 0) {
-                      for (const a of userData.activities)
-                        if (a.id) await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid, 'activities', a.id), a);
-                      await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), { activities: null }, { merge: true });
-                    }
                     const lsC = localStorage.getItem('crm_contacts');
                     const lsA = localStorage.getItem('crm_activities');
                     const lsCat = localStorage.getItem('crm_categories');
-                    if (lsC) { for (const c of JSON.parse(lsC)) if (c.id) await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid, 'contacts', c.id), c); localStorage.removeItem('crm_contacts'); }
-                    if (lsA) { for (const a of JSON.parse(lsA)) if (a.id) await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid, 'activities', a.id), a); localStorage.removeItem('crm_activities'); }
-                    if (lsCat) { await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), { categories: JSON.parse(lsCat) }, { merge: true }); localStorage.removeItem('crm_categories'); }
+                    if (lsC || lsA || lsCat) {
+                      const patch = {};
+                      if (lsC && !userData.contacts)   { patch.contacts   = JSON.parse(lsC);   setContacts(patch.contacts); }
+                      if (lsA && !userData.activities) { patch.activities = JSON.parse(lsA);   setActivities(patch.activities); }
+                      if (lsCat && !userData.categories){ patch.categories = JSON.parse(lsCat); setCategories(patch.categories); }
+                      if (Object.keys(patch).length > 0)
+                        await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), patch, { merge: true });
+                      localStorage.removeItem('crm_contacts');
+                      localStorage.removeItem('crm_activities');
+                      localStorage.removeItem('crm_categories');
+                      console.log('✅ Migrated localStorage → Firestore');
+                    }
                   } catch (migrateErr) { console.error('Migration error (non-fatal):', migrateErr); }
 
                                 } else {
@@ -2771,6 +2743,14 @@ useEffect(() => {
       setShowPremiumModal(true);
       return;
     }
+    // Duplicate check
+    const email = newContact.email?.trim().toLowerCase();
+    const phone = newContact.phone?.trim().replace(/\s+/g, '');
+    const dupEmail = email && contacts.some(c => c.email?.trim().toLowerCase() === email);
+    const dupPhone = phone && contacts.some(c => c.phone?.trim().replace(/\s+/g, '') === phone);
+    if (dupEmail) { alert(`A contact with email "${newContact.email}" already exists.`); return; }
+    if (dupPhone) { alert(`A contact with phone "${newContact.phone}" already exists.`); return; }
+
     const newContactObj = {
       ...newContact,
       id: Date.now().toString(),
@@ -2783,6 +2763,25 @@ useEffect(() => {
     setShowAddModal(false);
     resetScan();
     setNewContact({ name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm', notes: '', tags: [], category: '', meetingLink: '', referredBy: '', reminderDays: 30, contactFrequency: 30 });
+  };
+
+  // Returns only contacts whose email/phone don't already exist in the current list.
+  // Also de-dupes within the incoming batch itself.
+  const dedupeContacts = (incoming, existing = contacts) => {
+    const emailSet = new Set(existing.map(c => c.email?.trim().toLowerCase()).filter(Boolean));
+    const phoneSet = new Set(existing.map(c => c.phone?.trim().replace(/\s+/g, '')).filter(Boolean));
+    const fresh = [];
+    for (const c of incoming) {
+      const email = c.email?.trim().toLowerCase();
+      const phone = c.phone?.trim().replace(/\s+/g, '');
+      const dupEmail = email && emailSet.has(email);
+      const dupPhone = phone && phoneSet.has(phone);
+      if (dupEmail || dupPhone) continue;
+      fresh.push(c);
+      if (email) emailSet.add(email);
+      if (phone) phoneSet.add(phone);
+    }
+    return fresh;
   };
 
   const deleteContact = async (id) => {
@@ -2941,16 +2940,22 @@ useEffect(() => {
         let newContacts = parseVCard(text);
         if (newContacts.length === 0) { setImportStatus('No contacts found in vCard file.'); return; }
         
+        const skipped = newContacts.length;
+        newContacts = dedupeContacts(newContacts);
+        const dupCount = skipped - newContacts.length;
+
         // FREE TIER LIMIT: Cap at 10 contacts per import
         if (!isPremium && newContacts.length > 10) {
           setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
           newContacts = newContacts.slice(0, 10);
         }
         
+        if (newContacts.length === 0) { setImportStatus(`⚠️ All ${dupCount} contact${dupCount !== 1 ? 's' : ''} already exist (duplicate email/phone).`); return; }
         const updated = [...contacts, ...newContacts];
         setContacts(updated);
         for (const c of newContacts) await saveContact(c);
-        setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from phone/WhatsApp!`);
+        const dupMsg = dupCount > 0 ? ` (${dupCount} duplicate${dupCount !== 1 ? 's' : ''} skipped)` : '';
+        setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from phone/WhatsApp!${dupMsg}`);
         setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
         return;
       }
@@ -2968,16 +2973,22 @@ useEffect(() => {
           .map((row, i) => mapRowToContact(row, i, true, bulkImportCategory))
           .filter(Boolean);
         
+        const skipped = newContacts.length;
+        newContacts = dedupeContacts(newContacts);
+        const dupCount = skipped - newContacts.length;
+
         // FREE TIER LIMIT: Cap at 10 contacts per import
         if (!isPremium && newContacts.length > 10) {
           setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
           newContacts = newContacts.slice(0, 10);
         }
         
+        if (newContacts.length === 0) { setImportStatus(`⚠️ All ${dupCount} contact${dupCount !== 1 ? 's' : ''} already exist (duplicate email/phone).`); return; }
         const updated = [...contacts, ...newContacts];
         setContacts(updated);
         for (const c of newContacts) await saveContact(c);
-        setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from Excel!`);
+        const dupMsg = dupCount > 0 ? ` (${dupCount} duplicate${dupCount !== 1 ? 's' : ''} skipped)` : '';
+        setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from Excel!${dupMsg}`);
         setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
         return;
       }
@@ -3007,16 +3018,22 @@ useEffect(() => {
         return;
       }
 
+      const skippedCount = newContacts.length;
+      newContacts = dedupeContacts(newContacts);
+      const dupCount = skippedCount - newContacts.length;
+
       // FREE TIER LIMIT: Cap at 10 contacts per import
       if (!isPremium && newContacts.length > 10) {
         setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
         newContacts = newContacts.slice(0, 10);
       }
 
+      if (newContacts.length === 0) { setImportStatus(`⚠️ All ${dupCount} contact${dupCount !== 1 ? 's' : ''} already exist (duplicate email/phone).`); return; }
       const updated = [...contacts, ...newContacts];
       setContacts(updated);
       for (const c of newContacts) await saveContact(c);
-      setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!${warnMsg}`);
+      const dupMsg = dupCount > 0 ? ` (${dupCount} duplicate${dupCount !== 1 ? 's' : ''} skipped)` : '';
+      setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!${warnMsg}${dupMsg}`);
       setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
 
     } catch (error) {
@@ -3065,16 +3082,22 @@ useEffect(() => {
         return;
       }
 
+      const skippedBulk = newContacts.length;
+      newContacts = dedupeContacts(newContacts);
+      const dupCountBulk = skippedBulk - newContacts.length;
+
       // FREE TIER LIMIT: Cap at 10 contacts per import for free users
       if (!isPremium && newContacts.length > 10) {
         setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
         newContacts = newContacts.slice(0, 10);
       }
 
+      if (newContacts.length === 0) { setImportStatus(`⚠️ All ${dupCountBulk} contact${dupCountBulk !== 1 ? 's' : ''} already exist (duplicate email/phone).`); return; }
       const updated = [...contacts, ...newContacts];
       setContacts(updated);
       for (const c of newContacts) await saveContact(c);
-      setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!`);
+      const dupMsgBulk = dupCountBulk > 0 ? ` (${dupCountBulk} duplicate${dupCountBulk !== 1 ? 's' : ''} skipped)` : '';
+      setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!${dupMsgBulk}`);
       setBulkContactsText('');
       setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
     } catch (error) {
