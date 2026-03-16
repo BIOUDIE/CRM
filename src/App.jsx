@@ -1955,11 +1955,43 @@ useEffect(() => {
                   if (userData.sidebarCollapsed !== undefined) setSidebarCollapsed(userData.sidebarCollapsed);
                   if (userData.darkMode !== undefined) setDarkMode(userData.darkMode);
 
-                  // Load contacts, activities, categories directly from user doc (array storage)
-                  if (userData.contacts && Array.isArray(userData.contacts))
-                    setContacts(userData.contacts.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0)));
-                  if (userData.activities && Array.isArray(userData.activities))
-                    setActivities(userData.activities.sort((a,b) => new Date(b.timestamp||b.date||0) - new Date(a.timestamp||a.date||0)));
+                  // Load contacts — try subcollection first, fall back to user doc array
+                  try {
+                    const contactsSnap = await window.getDocs(
+                      window.collection(window.firebaseDb, 'users', firebaseUser.uid, 'contacts')
+                    );
+                    const loadedContacts = [];
+                    contactsSnap.forEach(doc => { const d = doc.data(); if (!d._deleted) loadedContacts.push(d); });
+                    if (loadedContacts.length > 0) {
+                      setContacts(loadedContacts.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0)));
+                    } else if (userData.contacts && Array.isArray(userData.contacts) && userData.contacts.length > 0) {
+                      // Fallback: nothing in subcollection yet, use user doc array
+                      setContacts(userData.contacts.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0)));
+                    }
+                  } catch (e) {
+                    console.warn('Subcollection contacts load failed, using user doc fallback:', e.message);
+                    if (userData.contacts && Array.isArray(userData.contacts))
+                      setContacts(userData.contacts.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0)));
+                  }
+
+                  // Load activities — try subcollection first, fall back to user doc array
+                  try {
+                    const activitiesSnap = await window.getDocs(
+                      window.collection(window.firebaseDb, 'users', firebaseUser.uid, 'activities')
+                    );
+                    const loadedActivities = [];
+                    activitiesSnap.forEach(doc => loadedActivities.push(doc.data()));
+                    if (loadedActivities.length > 0) {
+                      setActivities(loadedActivities.sort((a,b) => new Date(b.timestamp||b.date||0) - new Date(a.timestamp||a.date||0)));
+                    } else if (userData.activities && Array.isArray(userData.activities) && userData.activities.length > 0) {
+                      setActivities(userData.activities.sort((a,b) => new Date(b.timestamp||b.date||0) - new Date(a.timestamp||a.date||0)));
+                    }
+                  } catch (e) {
+                    console.warn('Subcollection activities load failed, using user doc fallback:', e.message);
+                    if (userData.activities && Array.isArray(userData.activities))
+                      setActivities(userData.activities.sort((a,b) => new Date(b.timestamp||b.date||0) - new Date(a.timestamp||a.date||0)));
+                  }
+
                   if (userData.categories && Array.isArray(userData.categories))
                     setCategories(userData.categories);
 
