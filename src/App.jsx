@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import TasksPage from './TasksPage.jsx';
 
 // Firebase will be loaded from CDN in index.html
 // We'll access it via window object
@@ -3751,13 +3752,19 @@ const Sidebar = () => (
 
       {/* MOBILE BOTTOM TAB BAR */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 flex items-center justify-around px-2 py-2 safe-area-pb">
-        <button className="flex flex-col items-center gap-0.5 px-3 py-1 text-indigo-600">
+        <button
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 ${currentView === 'dashboard' ? 'text-indigo-600' : 'text-slate-400'}`}
+          onClick={() => setCurrentView('dashboard')}
+        >
           <span className="material-symbols-outlined text-xl">dashboard</span>
           <span className="text-[10px] font-semibold">Dashboard</span>
         </button>
-        <button className="flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400" onClick={() => setShowAddModal(true)}>
-          <span className="material-symbols-outlined text-xl">group</span>
-          <span className="text-[10px] font-semibold">Contacts</span>
+        <button
+          className={`flex flex-col items-center gap-0.5 px-3 py-1 ${currentView === 'tasks' ? 'text-indigo-600' : 'text-slate-400'}`}
+          onClick={() => setCurrentView('tasks')}
+        >
+          <span className="material-symbols-outlined text-xl">checklist</span>
+          <span className="text-[10px] font-semibold">Tasks</span>
         </button>
         <button className="flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400" onClick={() => setShowAnalytics(true)}>
           <span className="material-symbols-outlined text-xl">analytics</span>
@@ -3773,6 +3780,11 @@ const Sidebar = () => (
       <main className={`p-4 pt-20 pb-24 lg:pb-10 lg:pt-10 lg:p-10 space-y-8 transition-all duration-300 ${
   sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
 }`}>
+
+        {/* ── TASKS VIEW ── */}
+        {currentView === 'tasks' ? (
+          <TasksPage user={user} contacts={contacts} darkMode={darkMode} />
+        ) : (<>
 
         {/* Header Row: Welcome + Premium */}
         <HeaderSection />
@@ -7684,6 +7696,7 @@ const Sidebar = () => (
 
       {/* Mobile FAB */}
       <MobileFAB />
+      </>)}
 
     </div>
   );
