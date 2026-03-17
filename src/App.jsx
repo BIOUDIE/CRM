@@ -6310,6 +6310,8 @@ const Sidebar = () => (
           </div>
         )}
 
+      </>)}
+
       </main>
 
       {/* TODAY'S FOCUS MODAL */}
@@ -7694,10 +7696,10 @@ const Sidebar = () => (
   </div>
 )}
 
-      {/* Mobile FAB */}
+        {/* Mobile FAB */}
       <MobileFAB />
-      </>)}
 
     </div>
-  );
+
+    );
 }
