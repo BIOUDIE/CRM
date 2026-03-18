@@ -3466,7 +3466,7 @@ const Sidebar = () => (
       {['dashboard', 'contacts', 'deals', 'tasks', 'analytics'].map((view) => (
         <button
           key={view}
-          onClick={() => setCurrentView(view)}
+          onClick={() => view === 'analytics' ? setShowAnalytics(true) : setCurrentView(view)}
           className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-2xl font-bold transition-all ${
             currentView === view
               ? darkMode 
