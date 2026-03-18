@@ -1820,6 +1820,7 @@ const [customEmailPrefix, setCustomEmailPrefix] = useState('');
 const [checkingAvailability, setCheckingAvailability] = useState(false);
 const [emailAvailable, setEmailAvailable] = useState(null);
 const [showAdminPanel, setShowAdminPanel] = useState(false);  // Admin change request panel
+const [showMobileMenu, setShowMobileMenu] = useState(false); // Mobile drawer
 
   // ===== EMERGENCY MODAL ESCAPE SYSTEM =====
   // Close all modals with ESC key
@@ -3729,52 +3730,129 @@ const Sidebar = () => (
       {/* SIDEBAR - Desktop Only */}
       <Sidebar />
 
-      {/* MOBILE TOP NAV */}
-      <nav className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+     {/* MOBILE TOP NAV */}
+      <nav className={`lg:hidden fixed top-0 left-0 right-0 z-40 border-b px-4 py-3 flex items-center justify-between ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center">
-            <span className="material-symbols-outlined text-white text-base">bolt</span>
+          <button onClick={() => setShowMobileMenu(true)} className={`p-2 rounded-xl ${darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}>
+            <span className="material-symbols-outlined">menu</span>
+          </button>
+          <div className="w-7 h-7 bg-indigo-600 rounded-lg flex items-center justify-center">
+            <span className="material-symbols-outlined text-white text-sm">bolt</span>
           </div>
-          <span className="text-base font-extrabold tracking-tight text-slate-800">Micro CRM</span>
+          <span className={`text-base font-extrabold tracking-tight ${darkMode ? 'text-white' : 'text-slate-800'}`}>Micro CRM</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowAnalytics(true)} className="p-2 text-slate-500 hover:text-indigo-600 transition">
-            <span className="material-symbols-outlined">analytics</span>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-xl ${darkMode ? 'text-yellow-400 hover:bg-slate-800' : 'text-slate-500 hover:bg-slate-100'}`}>
+            <span className="material-symbols-outlined text-[20px]">{darkMode ? 'light_mode' : 'dark_mode'}</span>
           </button>
-          <button onClick={() => setShowAddModal(true)} className="w-8 h-8 bg-indigo-600 text-white rounded-xl flex items-center justify-center">
+          <button onClick={() => setShowAddModal(true)} className="w-8 h-8 bg-indigo-600 text-white rounded-xl flex items-center justify-center hover:bg-indigo-700 transition">
             <span className="material-symbols-outlined text-base">add</span>
-          </button>
-          <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-red-500 transition">
-            <span className="material-symbols-outlined">logout</span>
           </button>
         </div>
       </nav>
 
       {/* MOBILE BOTTOM TAB BAR */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 flex items-center justify-around px-2 py-2 safe-area-pb">
-        <button
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 ${currentView === 'dashboard' ? 'text-indigo-600' : 'text-slate-400'}`}
-          onClick={() => setCurrentView('dashboard')}
-        >
+      <nav className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t flex items-center justify-around px-1 py-2 safe-area-pb ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${currentView==='dashboard' ? 'text-indigo-600' : darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setCurrentView('dashboard')}>
           <span className="material-symbols-outlined text-xl">dashboard</span>
-          <span className="text-[10px] font-semibold">Dashboard</span>
+          <span className="text-[9px] font-semibold">Home</span>
         </button>
-        <button
-          className={`flex flex-col items-center gap-0.5 px-3 py-1 ${currentView === 'tasks' ? 'text-indigo-600' : 'text-slate-400'}`}
-          onClick={() => setCurrentView('tasks')}
-        >
+        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${currentView==='tasks' ? 'text-indigo-600' : darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setCurrentView('tasks')}>
           <span className="material-symbols-outlined text-xl">checklist</span>
-          <span className="text-[10px] font-semibold">Tasks</span>
+          <span className="text-[9px] font-semibold">Tasks</span>
         </button>
-        <button className="flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400" onClick={() => setShowAnalytics(true)}>
+        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setShowAnalytics(true)}>
           <span className="material-symbols-outlined text-xl">analytics</span>
-          <span className="text-[10px] font-semibold">Analytics</span>
+          <span className="text-[9px] font-semibold">Analytics</span>
         </button>
-        <button className="flex flex-col items-center gap-0.5 px-3 py-1 text-slate-400" onClick={() => isPremium ? setShowBulkImport(true) : setShowPremiumModal(true)}>
+        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => isPremium ? setShowBulkImport(true) : setShowPremiumModal(true)}>
           <span className="material-symbols-outlined text-xl">upload</span>
-          <span className="text-[10px] font-semibold">Import</span>
+          <span className="text-[9px] font-semibold">Import</span>
+        </button>
+        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setShowMobileMenu(true)}>
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${darkMode ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
+            {user?.name?.[0]?.toUpperCase() || 'U'}
+          </div>
+          <span className="text-[9px] font-semibold">Menu</span>
         </button>
       </nav>
+
+      {/* MOBILE DRAWER */}
+      {showMobileMenu && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowMobileMenu(false)} />
+          <div className={`relative w-72 h-full flex flex-col shadow-2xl ${darkMode ? 'bg-slate-900' : 'bg-white'}`}>
+            <div className={`flex items-center justify-between p-5 border-b ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-indigo-600 rounded-2xl flex items-center justify-center">
+                  <span className="material-symbols-outlined text-white text-[18px]">bolt</span>
+                </div>
+                <span className={`text-lg font-extrabold ${darkMode ? 'text-white' : 'text-slate-800'}`}>Micro CRM</span>
+              </div>
+              <button onClick={() => setShowMobileMenu(false)} className={`p-2 rounded-xl ${darkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-400 hover:bg-slate-100'}`}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className={`mx-4 mt-4 p-4 rounded-2xl border cursor-pointer ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'}`}
+              onClick={() => { setShowMobileMenu(false); setShowBusinessProfile(true); }}>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${darkMode ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
+                  {user?.name?.[0]?.toUpperCase() || 'U'}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-bold truncate ${darkMode ? 'text-white' : 'text-slate-800'}`}>{user?.name || 'User'}</p>
+                  <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{isPremium ? '⭐ Premium' : 'Free plan'}</p>
+                </div>
+                <span className={`material-symbols-outlined text-sm ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>chevron_right</span>
+              </div>
+            </div>
+            <nav className="flex-1 px-4 py-4 space-y-1 overflow-y-auto">
+              {[
+                { view: 'dashboard', icon: 'dashboard',       label: 'Dashboard' },
+                { view: 'contacts',  icon: 'group',           label: 'Contacts'  },
+                { view: 'deals',     icon: 'monetization_on', label: 'Deals'     },
+                { view: 'tasks',     icon: 'checklist',       label: 'Tasks'     },
+              ].map(item => (
+                <button key={item.view} onClick={() => { setCurrentView(item.view); setShowMobileMenu(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${currentView===item.view ? darkMode ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-700' : darkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-50'}`}>
+                  <span className="material-symbols-outlined">{item.icon}</span>
+                  <span>{item.label}</span>
+                </button>
+              ))}
+              <button onClick={() => { setShowAnalytics(true); setShowMobileMenu(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${darkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-50'}`}>
+                <span className="material-symbols-outlined">analytics</span>
+                <span>Analytics</span>
+              </button>
+              {user?.isAdmin && (
+                <button onClick={() => { setShowAdminPanel(true); setShowMobileMenu(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold border ${darkMode ? 'text-red-400 border-red-800' : 'text-red-600 border-red-200'}`}>
+                  <span className="material-symbols-outlined">admin_panel_settings</span>
+                  <span>Admin Panel</span>
+                </button>
+              )}
+            </nav>
+            <div className={`px-4 pb-6 space-y-2 border-t pt-4 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+              <button onClick={() => { setShowEmailSettings(true); setShowMobileMenu(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold border transition ${darkMode ? 'text-slate-400 border-slate-700 hover:bg-slate-800' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                <span className="material-symbols-outlined text-[20px]">mail</span>
+                <span className="text-sm">Email Settings</span>
+                {!user?.emailConfig?.defaultEmail && <span className="ml-auto px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded">Setup</span>}
+              </button>
+              <button onClick={() => setDarkMode(!darkMode)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold border transition ${darkMode ? 'text-yellow-400 border-slate-700 hover:bg-slate-800' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+                <span className="material-symbols-outlined text-[20px]">{darkMode ? 'light_mode' : 'dark_mode'}</span>
+                <span className="text-sm">{darkMode ? 'Light Mode' : 'Dark Mode'}</span>
+              </button>
+              <button onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-red-500 hover:bg-red-50 transition">
+                <span className="material-symbols-outlined text-[20px]">logout</span>
+                <span className="text-sm">Sign Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MAIN CONTENT */}
       <main className={`p-4 pt-20 pb-24 lg:pb-10 lg:pt-10 lg:p-10 space-y-8 transition-all duration-300 ${
