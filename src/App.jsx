@@ -466,11 +466,10 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
 }
 
 // --- ANALYTICS DASHBOARD ---
-function AnalyticsDashboard({ contacts, activities, onClose, categories = [], darkMode = false }) {
+function AnalyticsDashboard({ contacts, activities, onClose, categories = [], darkMode = false, inline = false }) {
   const [activeTab, setActiveTab] = React.useState('overview');
   const now = new Date();
 
-  // ── Core helpers ──────────────────────────────────────────────────────────
   const daysSince = (dateStr) => {
     if (!dateStr) return 999;
     return Math.ceil((now - new Date(dateStr)) / 86400000);
@@ -480,7 +479,6 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
   const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0);
 
-  // ── KPI calculations ──────────────────────────────────────────────────────
   const total = contacts.length;
   const hot   = contacts.filter(c => c.vibeLabel === 'hot'  || c.vibeScore >= 8).length;
   const warm  = contacts.filter(c => c.vibeLabel === 'warm' || (c.vibeScore >= 4 && c.vibeScore < 8)).length;
@@ -502,7 +500,6 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
     return daysSince(c.lastContactDate) > freq;
   });
 
-  // ── Wins this month ───────────────────────────────────────────────────────
   const newContactsThisMonth = contacts.filter(c => {
     const created = c.createdAt || c.lastContactDate;
     return created && new Date(created) >= thisMonthStart;
@@ -511,7 +508,6 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
   const meetingsThisMonth   = activitiesThisMonth.filter(a => a.type === 'meeting').length;
   const callsThisMonth      = activitiesThisMonth.filter(a => a.type === 'call').length;
 
-  // ── Most contacted ────────────────────────────────────────────────────────
   const contactCounts = {};
   activities.forEach(a => {
     if (a.contactId) contactCounts[a.contactId] = (contactCounts[a.contactId] || 0) + 1;
@@ -522,12 +518,10 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
     .sort((a, b) => b.count - a.count)
     .slice(0, 8);
 
-  // ── Contact frequency health ──────────────────────────────────────────────
-  const avgContactFreq = contacts.length > 0
+  const avgContactFreq = contacts.filter(c => c.lastContactDate).length > 0
     ? Math.round(contacts.reduce((s, c) => s + (daysSince(c.lastContactDate) === 999 ? 0 : daysSince(c.lastContactDate)), 0) / contacts.filter(c => c.lastContactDate).length)
     : 0;
 
-  // ── Relationship health list ──────────────────────────────────────────────
   const healthList = contacts
     .map(c => {
       const days = daysSince(c.lastContactDate);
@@ -543,7 +537,6 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
     .sort((a, b) => b.overduePct - a.overduePct)
     .slice(0, 15);
 
-  // ── Outreach momentum — last 8 weeks ─────────────────────────────────────
   const weeks = Array.from({ length: 8 }, (_, i) => {
     const end   = new Date(now); end.setDate(now.getDate() - i * 7);
     const start = new Date(end); start.setDate(end.getDate() - 6);
@@ -552,18 +545,16 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
       const d = new Date(a.date || a.timestamp);
       return d >= start && d <= end;
     }).length;
-    return { label, count, start, end };
+    return { label, count };
   }).reverse();
   const maxWeek = Math.max(...weeks.map(w => w.count), 1);
 
-  // ── Activity type breakdown ───────────────────────────────────────────────
   const typeBreakdown = ['email','call','meeting','note'].map(type => ({
     type,
     count: activities.filter(a => a.type === type).length,
     thisMonth: activitiesThisMonth.filter(a => a.type === type).length,
   }));
 
-  // ── Tag breakdown ─────────────────────────────────────────────────────────
   const tagMap = {};
   contacts.forEach(c => {
     (c.tags || []).forEach(tag => {
@@ -578,7 +569,6 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
     .sort((a, b) => b.count - a.count)
     .slice(0, 12);
 
-  // ── Company breakdown ─────────────────────────────────────────────────────
   const companyMap = {};
   contacts.forEach(c => {
     if (!c.company) return;
@@ -591,7 +581,6 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 
-  // ── Pipeline velocity ─────────────────────────────────────────────────────
   const stageContacts = {
     cold: contacts.filter(c => c.vibeLabel === 'cold' || (c.vibeScore < 4 && !c.vibeLabel)),
     warm: contacts.filter(c => c.vibeLabel === 'warm' || (c.vibeScore >= 4 && c.vibeScore < 8 && !c.vibeLabel)),
@@ -602,21 +591,13 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
   const convWarmToHot = (stageContacts.warm.length + stageContacts.hot.length) > 0
     ? Math.round((stageContacts.hot.length / (stageContacts.warm.length + stageContacts.hot.length)) * 100) : 0;
 
-  // ── CSV Export ────────────────────────────────────────────────────────────
   const exportCSV = () => {
     const headers = ['Name','Email','Phone','Company','Job Title','Vibe Score','Stage','Last Contact','Days Since Contact','Tags','Notes'];
     const rows = contacts.map(c => [
-      c.name || '',
-      c.email || '',
-      c.phone || '',
-      c.company || '',
-      c.jobTitle || '',
-      c.vibeScore || '',
-      c.vibeLabel || '',
-      c.lastContactDate || '',
+      c.name || '', c.email || '', c.phone || '', c.company || '', c.jobTitle || '',
+      c.vibeScore || '', c.vibeLabel || '', c.lastContactDate || '',
       daysSince(c.lastContactDate) === 999 ? 'Never' : daysSince(c.lastContactDate),
-      (c.tags || []).join('; '),
-      (c.notes || '').replace(/,/g, ' ').replace(/\n/g, ' '),
+      (c.tags || []).join('; '), (c.notes || '').replace(/,/g, ' ').replace(/\n/g, ' '),
     ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${v}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -640,7 +621,6 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
     a.click(); URL.revokeObjectURL(url);
   };
 
-  // ── Urgency helpers ───────────────────────────────────────────────────────
   const urgencyConfig = {
     never:    { label: 'Never contacted', color: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400', bar: 'bg-slate-400' },
     critical: { label: 'Critical',        color: 'bg-red-50 text-red-700',      dot: 'bg-red-500',   bar: 'bg-red-500'   },
@@ -655,727 +635,538 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
   };
 
   const tabs = [
-    { id: 'overview',  label: 'Overview',   icon: 'dashboard'    },
-    { id: 'health',    label: 'Health',     icon: 'favorite'     },
-    { id: 'momentum',  label: 'Momentum',   icon: 'trending_up'  },
-    { id: 'pipeline',  label: 'Pipeline',   icon: 'funnel'       },
-    { id: 'breakdown', label: 'Breakdown',  icon: 'donut_small'  },
-    { id: 'export',    label: 'Export',     icon: 'download'     },
+    { id: 'overview',  label: 'Overview',  icon: 'dashboard'   },
+    { id: 'health',    label: 'Health',    icon: 'favorite'    },
+    { id: 'momentum',  label: 'Momentum',  icon: 'trending_up' },
+    { id: 'pipeline',  label: 'Pipeline',  icon: 'funnel'      },
+    { id: 'breakdown', label: 'Breakdown', icon: 'donut_small' },
+    { id: 'export',    label: 'Export',    icon: 'download'    },
   ];
+
+  const activeTabContent = (
+    <div className="flex-1 overflow-y-auto p-5 bg-slate-50">
+
+      {activeTab === 'overview' && (
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: 'Total Contacts',   value: total,                  icon: 'group',                  color: 'from-slate-700 to-slate-800'   },
+              { label: 'Hot Contacts',     value: hot,                    icon: 'local_fire_department',  color: 'from-red-500 to-orange-500'    },
+              { label: 'Outreach / Month', value: contactedThisMonth,     icon: 'send',                   color: 'from-indigo-500 to-violet-600' },
+              { label: 'Need Attention',   value: overdueContacts.length, icon: 'notification_important', color: 'from-amber-500 to-orange-500'  },
+            ].map(kpi => (
+              <div key={kpi.label} className={`bg-gradient-to-br ${kpi.color} rounded-xl p-4 text-white shadow-sm`}>
+                <span className="material-symbols-outlined text-[22px] opacity-70">{kpi.icon}</span>
+                <p className="text-3xl font-bold mt-1">{kpi.value}</p>
+                <p className="text-xs opacity-80 mt-0.5">{kpi.label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-amber-500">emoji_events</span> Wins This Month
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {[
+                { label: 'New contacts', value: newContactsThisMonth, icon: 'person_add', color: 'text-indigo-600 bg-indigo-50' },
+                { label: 'Emails sent',  value: emailsSentThisMonth,  icon: 'mail',       color: 'text-blue-600 bg-blue-50'    },
+                { label: 'Meetings',     value: meetingsThisMonth,    icon: 'handshake',  color: 'text-green-600 bg-green-50'  },
+                { label: 'Calls made',   value: callsThisMonth,       icon: 'call',       color: 'text-purple-600 bg-purple-50'},
+              ].map(w => (
+                <div key={w.label} className={`rounded-xl p-4 ${w.color} flex items-center gap-3`}>
+                  <span className="material-symbols-outlined text-[22px]">{w.icon}</span>
+                  <div><p className="text-2xl font-bold">{w.value}</p><p className="text-xs font-medium opacity-70">{w.label}</p></div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-indigo-500">funnel</span> Pipeline Snapshot
+            </h3>
+            <div className="space-y-3">
+              {[
+                { label: 'Cold', count: cold, pct: Math.round((cold/total||0)*100), color: 'bg-slate-400', text: 'text-slate-600' },
+                { label: 'Warm', count: warm, pct: Math.round((warm/total||0)*100), color: 'bg-amber-400', text: 'text-amber-600' },
+                { label: 'Hot',  count: hot,  pct: Math.round((hot/total||0)*100),  color: 'bg-red-500',   text: 'text-red-600'   },
+              ].map(s => (
+                <div key={s.label}>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className={`text-xs font-semibold ${s.text}`}>{s.label}</span>
+                    <span className="text-xs text-slate-500">{s.count} contacts · {s.pct}%</span>
+                  </div>
+                  <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full ${s.color} rounded-full`} style={{width:`${s.pct}%`}}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-green-500">star</span> Most Contacted
+            </h3>
+            {mostContacted.length === 0 ? (
+              <p className="text-slate-400 text-sm text-center py-4">No activity data yet</p>
+            ) : (
+              <div className="space-y-2">
+                {mostContacted.map((r, i) => {
+                  const pct = Math.round((r.count / mostContacted[0].count) * 100);
+                  return (
+                    <div key={r.contact.id} className="flex items-center gap-3">
+                      <span className="w-5 text-xs font-bold text-slate-400 text-right flex-shrink-0">{i+1}</span>
+                      <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {r.contact.name?.[0]?.toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-center mb-0.5">
+                          <span className="text-xs font-semibold text-slate-700 truncate">{r.contact.name}</span>
+                          <span className="text-xs text-slate-500 ml-2 flex-shrink-0">{r.count}x</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-400 rounded-full" style={{width:`${pct}%`}}></div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'health' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+              <p className="text-3xl font-bold text-red-500">{overdueContacts.length}</p>
+              <p className="text-xs text-slate-500 mt-1">Overdue contacts</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+              <p className="text-3xl font-bold text-slate-500">{neverContacted}</p>
+              <p className="text-xs text-slate-500 mt-1">Never contacted</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+              <p className="text-3xl font-bold text-indigo-600">{avgContactFreq}<span className="text-lg">d</span></p>
+              <p className="text-xs text-slate-500 mt-1">Avg days between contact</p>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-red-500">notification_important</span> Contacts Needing Attention
+            </h3>
+            <p className="text-xs text-slate-400 mb-4">Sorted by how overdue they are relative to their contact frequency</p>
+            {healthList.length === 0 ? (
+              <div className="text-center py-8">
+                <span className="material-symbols-outlined text-green-400 text-[48px]">check_circle</span>
+                <p className="text-slate-500 mt-2 text-sm">All contacts are up to date!</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {healthList.map(c => {
+                  const cfg = urgencyConfig[c.urgency];
+                  return (
+                    <div key={c.id} className={`rounded-xl p-3 border ${c.urgency === 'critical' ? 'border-red-200 bg-red-50' : c.urgency === 'never' ? 'border-slate-200 bg-slate-50' : 'border-amber-200 bg-amber-50'}`}>
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`}></div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-slate-800 truncate">{c.name}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-2 flex-shrink-0 ${cfg.color}`}>{cfg.label}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 bg-white/70 rounded-full overflow-hidden">
+                              <div className={`h-full ${cfg.bar} rounded-full`} style={{width:`${Math.min(c.overduePct,100)}%`}}></div>
+                            </div>
+                            <span className="text-[10px] text-slate-500 flex-shrink-0">
+                              {c.urgency === 'never' ? 'No contact on record' : `${c.days}d ago · every ${c.freq}d`}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'momentum' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                <span className="material-symbols-outlined text-[18px] text-indigo-500">bar_chart</span> Outreach Activity — Last 8 Weeks
+              </h3>
+              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${activityGrowth >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                {activityGrowth >= 0 ? '+' : ''}{activityGrowth}% vs last month
+              </span>
+            </div>
+            <div className="flex items-end gap-1.5 h-36">
+              {weeks.map((w, i) => {
+                const h = maxWeek > 0 ? Math.max((w.count / maxWeek) * 100, w.count > 0 ? 4 : 0) : 0;
+                return (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                    <span className="text-[9px] text-slate-500">{w.count || ''}</span>
+                    <div className="w-full flex items-end" style={{height:'100px'}}>
+                      <div className={`w-full rounded-t-md transition-all ${i === weeks.length-1 ? 'bg-indigo-500' : 'bg-indigo-200'}`}
+                        style={{height:`${h}%`, minHeight: w.count > 0 ? '4px' : '0'}}></div>
+                    </div>
+                    <span className="text-[8px] text-slate-400 text-center leading-tight">{w.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-purple-500">category</span> Activity Breakdown
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              {typeBreakdown.map(t => {
+                const cfg = typeConfig[t.type] || typeConfig.note;
+                const pct = activities.length > 0 ? Math.round((t.count / activities.length) * 100) : 0;
+                return (
+                  <div key={t.type} className={`rounded-xl p-4 ${cfg.color}`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-lg">{cfg.icon}</span>
+                      <span className="text-xs font-bold capitalize">{t.type}s</span>
+                    </div>
+                    <p className="text-2xl font-bold">{t.count}</p>
+                    <p className="text-xs opacity-70">{t.thisMonth} this month · {pct}% of total</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          {(() => {
+            const dayCounts = [0,0,0,0,0,0,0];
+            activities.forEach(a => { if (a.date) dayCounts[new Date(a.date).getDay()]++; });
+            const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            const maxDay = Math.max(...dayCounts, 1);
+            return (
+              <div className="bg-white rounded-xl border border-slate-200 p-5">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                  <span className="material-symbols-outlined text-[18px] text-green-500">calendar_today</span> Best Days to Reach Out
+                </h3>
+                <div className="flex gap-2">
+                  {days.map((day, i) => {
+                    const pct = Math.round((dayCounts[i] / maxDay) * 100);
+                    const isWeekend = i === 0 || i === 6;
+                    return (
+                      <div key={day} className="flex-1 flex flex-col items-center gap-1">
+                        <span className="text-[10px] text-slate-500">{dayCounts[i] || ''}</span>
+                        <div className="w-full flex items-end" style={{height:'60px'}}>
+                          <div className={`w-full rounded-t-md ${isWeekend ? 'bg-slate-200' : pct >= 75 ? 'bg-green-500' : pct >= 40 ? 'bg-green-300' : 'bg-green-100'}`}
+                            style={{height:`${Math.max(pct, dayCounts[i] > 0 ? 5 : 0)}%`}}></div>
+                        </div>
+                        <span className="text-[10px] font-semibold text-slate-500">{day}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {activeTab === 'pipeline' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-800 mb-5 flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-indigo-500">funnel</span> Pipeline Funnel
+            </h3>
+            <div className="space-y-3">
+              {[
+                { label: 'Cold', count: cold, color: 'bg-slate-400', light: 'bg-slate-50 border-slate-200', text: 'text-slate-600', desc: 'Never engaged or very low vibe' },
+                { label: 'Warm', count: warm, color: 'bg-amber-400', light: 'bg-amber-50 border-amber-200', text: 'text-amber-700', desc: 'In conversation, building rapport' },
+                { label: 'Hot',  count: hot,  color: 'bg-red-500',   light: 'bg-red-50 border-red-200',     text: 'text-red-700',   desc: 'High engagement, strong relationship' },
+              ].map((s, i) => {
+                const pct = total > 0 ? Math.round((s.count / total) * 100) : 0;
+                return (
+                  <div key={s.label} className="flex items-center gap-4" style={{paddingLeft:`${i*5}%`, paddingRight:`${i*5}%`}}>
+                    <div className={`flex-1 rounded-xl border p-4 ${s.light}`}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-sm font-bold ${s.text}`}>{s.label}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-500">{s.count} contacts</span>
+                          <span className={`text-xs font-bold ${s.text}`}>{pct}%</span>
+                        </div>
+                      </div>
+                      <div className="h-2 bg-white/70 rounded-full overflow-hidden">
+                        <div className={`h-full ${s.color} rounded-full`} style={{width:`${pct}%`}}></div>
+                      </div>
+                      <p className="text-[10px] text-slate-400 mt-1.5">{s.desc}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-green-500">swap_horiz</span> Stage Conversion Rates
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { from: 'Cold → Warm', rate: convColdToWarm, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200', bar: 'bg-amber-400' },
+                { from: 'Warm → Hot',  rate: convWarmToHot,  color: 'text-red-600',   bg: 'bg-red-50 border-red-200',     bar: 'bg-red-500'   },
+              ].map(c => (
+                <div key={c.from} className={`rounded-xl border p-5 ${c.bg}`}>
+                  <p className="text-xs font-semibold text-slate-500 mb-2">{c.from}</p>
+                  <p className={`text-4xl font-bold ${c.color} mb-3`}>{c.rate}%</p>
+                  <div className="h-2 bg-white/70 rounded-full overflow-hidden">
+                    <div className={`h-full ${c.bar} rounded-full`} style={{width:`${c.rate}%`}}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-violet-500">equalizer</span> Vibe Score Distribution
+            </h3>
+            <div className="flex items-end gap-1 h-24">
+              {Array.from({length: 10}, (_, i) => {
+                const score = i + 1;
+                const count = contacts.filter(c => Math.round(c.vibeScore) === score).length;
+                const h = total > 0 ? Math.max((count / total) * 100, count > 0 ? 5 : 0) : 0;
+                const color = score >= 8 ? 'bg-red-400' : score >= 5 ? 'bg-amber-400' : 'bg-slate-300';
+                return (
+                  <div key={score} className="flex-1 flex flex-col items-center gap-1">
+                    <div className="w-full flex items-end" style={{height:'80px'}}>
+                      <div className={`w-full rounded-t-sm ${color}`} style={{height:`${h}%`}}></div>
+                    </div>
+                    <span className="text-[9px] text-slate-400">{score}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'breakdown' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-indigo-500">label</span> Tag Breakdown
+            </h3>
+            {tagList.length === 0 ? (
+              <p className="text-slate-400 text-sm text-center py-6">No tags added to contacts yet</p>
+            ) : (
+              <div className="space-y-2">
+                {tagList.map((t, i) => {
+                  const pct = Math.round((t.count / total) * 100);
+                  const vibeColor = parseFloat(t.avgVibe) >= 7 ? 'text-green-600' : parseFloat(t.avgVibe) >= 4 ? 'text-amber-600' : 'text-red-500';
+                  return (
+                    <div key={t.tag} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg">
+                      <span className="w-5 text-xs text-slate-400 font-bold text-right">{i+1}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-slate-700 truncate">{t.tag}</span>
+                          <div className="flex items-center gap-2 ml-2 flex-shrink-0">
+                            <span className={`text-[10px] font-bold ${vibeColor}`}>★ {t.avgVibe}</span>
+                            <span className="text-[10px] text-slate-400">{t.count} contacts</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-400 rounded-full" style={{width:`${pct}%`}}></div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-purple-500">business</span> Top Companies
+            </h3>
+            {companyList.length === 0 ? (
+              <p className="text-slate-400 text-sm text-center py-6">No company data yet</p>
+            ) : (
+              <div className="space-y-2">
+                {companyList.map((c, i) => {
+                  const pct = Math.round((c.count / total) * 100);
+                  return (
+                    <div key={c.company} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg">
+                      <span className="w-5 text-xs text-slate-400 font-bold text-right">{i+1}</span>
+                      <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {c.company[0]?.toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-slate-700 truncate">{c.company}</span>
+                          <span className="text-[10px] text-slate-400 ml-2 flex-shrink-0">{c.count} people</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-purple-400 rounded-full" style={{width:`${pct}%`}}></div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <span className="material-symbols-outlined text-[18px] text-green-500">schedule</span> Overall Contact Frequency
+            </h3>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'Weekly or less', days: [0, 7],    color: 'bg-green-100 text-green-700 border-green-200'  },
+                { label: 'Monthly',        days: [8, 30],   color: 'bg-amber-100 text-amber-700 border-amber-200'  },
+                { label: 'Infrequent',     days: [31, 999], color: 'bg-red-100 text-red-700 border-red-200'        },
+              ].map(bucket => {
+                const count = contacts.filter(c => {
+                  const d = daysSince(c.lastContactDate);
+                  return d >= bucket.days[0] && d <= bucket.days[1];
+                }).length;
+                return (
+                  <div key={bucket.label} className={`rounded-xl border p-4 text-center ${bucket.color}`}>
+                    <p className="text-2xl font-bold">{count}</p>
+                    <p className="text-[10px] font-semibold mt-0.5 opacity-80">{bucket.label}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'export' && (
+        <div className="space-y-4">
+          <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <h3 className={`font-bold mb-1 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+              <span className="material-symbols-outlined text-[18px] text-indigo-500">download</span> Export Your Data
+            </h3>
+            <p className={`text-xs mb-5 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>Download your CRM data as CSV files — ready for Excel, Google Sheets, or any CRM tool.</p>
+            <div className="space-y-3">
+              {[
+                { title: 'All Contacts',               desc: `${total} contacts with all fields`,          icon: 'group',                  color: 'bg-indigo-600 hover:bg-indigo-700', action: exportCSV },
+                { title: 'Activity Log',               desc: `${activities.length} activities`,            icon: 'timeline',               color: 'bg-green-600 hover:bg-green-700',   action: exportActivitiesCSV },
+                { title: 'Contacts Needing Attention', desc: `${overdueContacts.length} overdue contacts`, icon: 'notification_important', color: 'bg-amber-600 hover:bg-amber-700',   action: () => {
+                  const headers = ['Name','Email','Company','Days Since Contact','Vibe Score'];
+                  const rows = overdueContacts.map(c => [c.name||'', c.email||'', c.company||'', daysSince(c.lastContactDate) === 999 ? 'Never' : daysSince(c.lastContactDate), c.vibeScore||'']);
+                  const csv = [headers,...rows].map(r => r.map(v=>`"${v}"`).join(',')).join('\n');
+                  const blob = new Blob([csv],{type:'text/csv'});
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a'); a.href=url; a.download=`crm-overdue-${new Date().toISOString().split('T')[0]}.csv`; a.click(); URL.revokeObjectURL(url);
+                }},
+              ].map(item => (
+                <div key={item.title} className={`flex items-center gap-4 p-4 border rounded-xl transition ${darkMode ? 'border-slate-600' : 'border-slate-200'}`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+                    <span className={`material-symbols-outlined text-[20px] ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{item.icon}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>{item.title}</p>
+                    <p className={`text-xs truncate ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>{item.desc}</p>
+                  </div>
+                  <button onClick={item.action} className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-xs font-bold transition flex-shrink-0 ${item.color}`}>
+                    <span className="material-symbols-outlined text-[14px]">download</span>Download
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className={`rounded-xl p-4 text-center ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
+            <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>CSV files open in Excel, Google Sheets, Notion, Airtable, and most CRM tools.</p>
+          </div>
+          <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+            <h3 className={`font-bold mb-1 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
+              <span className="material-symbols-outlined text-[18px] text-purple-500">summarize</span> Full Analytics Report
+            </h3>
+            <p className={`text-xs mb-4 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>
+              Download a complete snapshot of all analytics tabs as a single HTML report you can open, print, or share.
+            </p>
+            <button
+              onClick={() => {
+                const now2 = new Date();
+                const fmt = (d) => d ? new Date(d).toLocaleDateString() : 'Never';
+                const ds = (dateStr) => dateStr ? Math.ceil((now2 - new Date(dateStr)) / 86400000) : 999;
+                const total2 = contacts.length;
+                const hotC = contacts.filter(c => c.vibeScore >= 8).length;
+                const warmC = contacts.filter(c => c.vibeScore >= 5 && c.vibeScore < 8).length;
+                const coldC = contacts.filter(c => c.vibeScore < 5).length;
+                const thisMonth2 = new Date(now2.getFullYear(), now2.getMonth(), 1);
+                const newThisMonth = contacts.filter(c => c.createdAt && new Date(c.createdAt) >= thisMonth2).length;
+                const emailsM = activities.filter(a => a.type === 'email' && new Date(a.date||a.timestamp) >= thisMonth2).length;
+                const callsM  = activities.filter(a => a.type === 'call'  && new Date(a.date||a.timestamp) >= thisMonth2).length;
+                const meetM   = activities.filter(a => a.type === 'meeting' && new Date(a.date||a.timestamp) >= thisMonth2).length;
+                const overdueList = contacts.map(c => ({...c, _days: ds(c.lastContactDate), _freq: c.contactFrequency||30})).filter(c => c._days > c._freq).sort((a,b)=>(b._days/b._freq)-(a._days/a._freq)).slice(0,20);
+                const weeksR = Array.from({length:8},(_,i)=>{const d=new Date(now2);d.setDate(d.getDate()-(7*(7-i)));return{label:`Wk ${i+1}`,start:new Date(d),count:0};});
+                activities.forEach(a=>{const d=new Date(a.date||a.timestamp);weeksR.forEach(w=>{if(d>=w.start&&d<new Date(w.start.getTime()+7*86400000))w.count++;});});
+                const tagMapR={};contacts.forEach(c=>(c.tags||[]).forEach(t=>{if(!tagMapR[t])tagMapR[t]={count:0,vibeSum:0};tagMapR[t].count++;tagMapR[t].vibeSum+=(c.vibeScore||5);}));
+                const tagRowsR=Object.entries(tagMapR).sort((a,b)=>b[1].count-a[1].count).slice(0,10);
+                const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Micro CRM Analytics — ${now2.toLocaleDateString()}</title><style>body{font-family:-apple-system,sans-serif;color:#1e293b;max-width:900px;margin:40px auto;padding:0 24px}h1{font-size:28px;font-weight:800}h2{font-size:18px;font-weight:700;margin:32px 0 12px;padding-bottom:8px;border-bottom:2px solid #e2e8f0}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}.card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:16px}.card .val{font-size:28px;font-weight:800;color:#4f46e5}.card .lbl{font-size:12px;color:#64748b;margin-top:4px}table{width:100%;border-collapse:collapse;font-size:13px}th{background:#f1f5f9;text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;color:#64748b}td{padding:8px 12px;border-bottom:1px solid #f1f5f9}.bar-wrap{background:#e2e8f0;border-radius:4px;height:8px;flex:1}.bar{background:#4f46e5;border-radius:4px;height:8px}.bar-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;font-size:13px}.tag{display:inline-block;background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:20px;font-size:11px;margin:2px}.hot{color:#16a34a;font-weight:700}.warm{color:#ca8a04;font-weight:700}.cold{color:#dc2626;font-weight:700}@media print{body{margin:20px}}</style></head><body><h1>📊 Micro CRM Analytics</h1><p style="color:#64748b">Generated ${now2.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})} · ${total2} contacts · ${activities.length} activities</p><h2>Overview</h2><div class="grid4"><div class="card"><div class="val">${total2}</div><div class="lbl">Total Contacts</div></div><div class="card"><div class="val" style="color:#16a34a">${hotC}</div><div class="lbl">Hot Contacts</div></div><div class="card"><div class="val" style="color:#ca8a04">${newThisMonth}</div><div class="lbl">New This Month</div></div><div class="card"><div class="val" style="color:#7c3aed">${emailsM+callsM+meetM}</div><div class="lbl">Outreach This Month</div></div></div><h2>Pipeline</h2><div class="grid4"><div class="card"><div class="val" style="color:#16a34a">${hotC}</div><div class="lbl">🔥 Hot</div></div><div class="card"><div class="val" style="color:#ca8a04">${warmC}</div><div class="lbl">🌤 Warm</div></div><div class="card"><div class="val" style="color:#dc2626">${coldC}</div><div class="lbl">❄️ Cold</div></div><div class="card"><div class="val">${total2>0?Math.round(hotC/total2*100):0}%</div><div class="lbl">Hot Rate</div></div></div><h2>Health — Overdue Contacts</h2>${overdueList.length===0?'<p style="color:#64748b">✅ All contacts are up to date!</p>':`<table><thead><tr><th>Name</th><th>Company</th><th>Days Since Contact</th><th>Target Freq</th><th>Vibe</th></tr></thead><tbody>${overdueList.map(c=>`<tr><td><strong>${c.name||'—'}</strong></td><td>${c.company||'—'}</td><td style="color:#dc2626;font-weight:700">${c._days===999?'Never':c._days+'d'}</td><td>Every ${c._freq}d</td><td class="${c.vibeScore>=8?'hot':c.vibeScore>=5?'warm':'cold'}">${c.vibeScore||'—'}</td></tr>`).join('')}</tbody></table>`}<h2>Momentum — 8-Week Outreach</h2>${weeksR.map(w=>{const pct=Math.max(...weeksR.map(x=>x.count))>0?Math.round(w.count/Math.max(...weeksR.map(x=>x.count))*100):0;return`<div class="bar-row"><span style="width:60px">${w.label}</span><div class="bar-wrap"><div class="bar" style="width:${pct}%"></div></div><span style="font-size:12px;color:#64748b;margin-left:8px">${w.count} activities</span></div>`;}).join('')}<h2>Tags</h2>${tagRowsR.length===0?'<p style="color:#64748b">No tags yet.</p>':`<table><thead><tr><th>Tag</th><th>Contacts</th><th>Avg Vibe</th></tr></thead><tbody>${tagRowsR.map(([tag,data])=>`<tr><td><span class="tag">${tag}</span></td><td>${data.count}</td><td>${Math.round(data.vibeSum/data.count*10)/10}/10</td></tr>`).join('')}</tbody></table>`}<h2>All Contacts</h2><table><thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Vibe</th><th>Last Contact</th><th>Tags</th></tr></thead><tbody>${contacts.map(c=>`<tr><td><strong>${c.name||'—'}</strong></td><td>${c.email||'—'}</td><td>${c.company||'—'}</td><td class="${(c.vibeScore||5)>=8?'hot':(c.vibeScore||5)>=5?'warm':'cold'}">${c.vibeScore||5}</td><td>${fmt(c.lastContactDate)}</td><td>${(c.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</td></tr>`).join('')}</tbody></table><p style="margin-top:40px;color:#94a3b8;font-size:12px;text-align:center">Generated by Micro CRM · ${now2.toISOString()}</p></body></html>`;
+                const blob=new Blob([html],{type:'text/html'});
+                const url=URL.createObjectURL(blob);
+                const a=document.createElement('a');a.href=url;a.download=`micro-crm-report-${now2.toISOString().split('T')[0]}.html`;a.click();URL.revokeObjectURL(url);
+              }}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-white font-bold text-sm bg-purple-600 hover:bg-purple-700 transition"
+            >
+              <span className="material-symbols-outlined text-[18px]">summarize</span>
+              Download Full Analytics Report (.html)
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const headerBlock = (
+    <>
+      <div className="bg-gradient-to-r from-slate-900 to-indigo-900 px-6 py-4 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 bg-indigo-500/30 rounded-xl flex items-center justify-center">
+            <span className="material-symbols-outlined text-indigo-200 text-[20px]">analytics</span>
+          </div>
+          <div>
+            <h2 className="text-white font-bold text-lg leading-none">Analytics</h2>
+            <p className="text-indigo-300 text-xs mt-0.5">{total} contacts · {activities.length} activities</p>
+          </div>
+        </div>
+        {!inline && (
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition">
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        )}
+      </div>
+      <div className="flex gap-0.5 px-4 pt-3 pb-0 border-b border-slate-100 flex-shrink-0 overflow-x-auto">
+        {tabs.map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg transition whitespace-nowrap ${
+              activeTab === tab.id ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+            }`}>
+            <span className="material-symbols-outlined text-[14px]">{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className="bg-white rounded-2xl w-full flex flex-col overflow-hidden shadow-sm border border-slate-200" style={{minHeight:'600px'}}>
+        {headerBlock}
+        {activeTabContent}
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-3">
       <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
-
-        {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 to-indigo-900 px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-indigo-500/30 rounded-xl flex items-center justify-center">
-              <span className="material-symbols-outlined text-indigo-200 text-[20px]">analytics</span>
-            </div>
-            <div>
-              <h2 className="text-white font-bold text-lg leading-none">Analytics</h2>
-              <p className="text-indigo-300 text-xs mt-0.5">{total} contacts · {activities.length} activities</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition">
-            <span className="material-symbols-outlined text-[20px]">close</span>
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-0.5 px-4 pt-3 pb-0 border-b border-slate-100 flex-shrink-0 overflow-x-auto">
-          {tabs.map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg transition whitespace-nowrap ${
-                activeTab === tab.id
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-              }`}>
-              <span className="material-symbols-outlined text-[14px]">{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-5 bg-slate-50">
-
-          {/* ── OVERVIEW ── */}
-          {activeTab === 'overview' && (
-            <div className="space-y-5">
-              {/* KPI row */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[
-                  { label: 'Total Contacts', value: total, icon: 'group', color: 'from-slate-700 to-slate-800' },
-                  { label: 'Hot Contacts',   value: hot,   icon: 'local_fire_department', color: 'from-red-500 to-orange-500' },
-                  { label: 'Outreach / Month', value: contactedThisMonth, icon: 'send', color: 'from-indigo-500 to-violet-600' },
-                  { label: 'Need Attention', value: overdueContacts.length, icon: 'notification_important', color: 'from-amber-500 to-orange-500' },
-                ].map(kpi => (
-                  <div key={kpi.label} className={`bg-gradient-to-br ${kpi.color} rounded-xl p-4 text-white shadow-sm`}>
-                    <span className="material-symbols-outlined text-[22px] opacity-70">{kpi.icon}</span>
-                    <p className="text-3xl font-bold mt-1">{kpi.value}</p>
-                    <p className="text-xs opacity-80 mt-0.5">{kpi.label}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Wins this month */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-[18px] text-amber-500">emoji_events</span>
-                  Wins This Month
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {[
-                    { label: 'New contacts', value: newContactsThisMonth, icon: 'person_add', color: 'text-indigo-600 bg-indigo-50' },
-                    { label: 'Emails sent',  value: emailsSentThisMonth,  icon: 'mail',        color: 'text-blue-600 bg-blue-50' },
-                    { label: 'Meetings',     value: meetingsThisMonth,    icon: 'handshake',   color: 'text-green-600 bg-green-50' },
-                    { label: 'Calls made',   value: callsThisMonth,       icon: 'call',        color: 'text-purple-600 bg-purple-50' },
-                  ].map(w => (
-                    <div key={w.label} className={`rounded-xl p-4 ${w.color} flex items-center gap-3`}>
-                      <span className="material-symbols-outlined text-[22px]">{w.icon}</span>
-                      <div>
-                        <p className="text-2xl font-bold">{w.value}</p>
-                        <p className="text-xs font-medium opacity-70">{w.label}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Pipeline summary */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-[18px] text-indigo-500">funnel</span>
-                  Pipeline Snapshot
-                </h3>
-                <div className="space-y-3">
-                  {[
-                    { label: 'Cold', count: cold,  pct: Math.round((cold/total||0)*100),  color: 'bg-slate-400', text: 'text-slate-600' },
-                    { label: 'Warm', count: warm,  pct: Math.round((warm/total||0)*100),  color: 'bg-amber-400', text: 'text-amber-600' },
-                    { label: 'Hot',  count: hot,   pct: Math.round((hot/total||0)*100),   color: 'bg-red-500',   text: 'text-red-600'   },
-                  ].map(s => (
-                    <div key={s.label}>
-                      <div className="flex justify-between items-center mb-1">
-                        <span className={`text-xs font-semibold ${s.text}`}>{s.label}</span>
-                        <span className="text-xs text-slate-500">{s.count} contacts · {s.pct}%</span>
-                      </div>
-                      <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className={`h-full ${s.color} rounded-full transition-all`} style={{width: `${s.pct}%`}}></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Most contacted */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-[18px] text-green-500">star</span>
-                  Most Contacted
-                </h3>
-                {mostContacted.length === 0 ? (
-                  <p className="text-slate-400 text-sm text-center py-4">No activity data yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {mostContacted.map((r, i) => {
-                      const pct = Math.round((r.count / mostContacted[0].count) * 100);
-                      return (
-                        <div key={r.contact.id} className="flex items-center gap-3">
-                          <span className="w-5 text-xs font-bold text-slate-400 text-right flex-shrink-0">{i+1}</span>
-                          <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                            {r.contact.name?.[0]?.toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-center mb-0.5">
-                              <span className="text-xs font-semibold text-slate-700 truncate">{r.contact.name}</span>
-                              <span className="text-xs text-slate-500 ml-2 flex-shrink-0">{r.count}x</span>
-                            </div>
-                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-indigo-400 rounded-full" style={{width:`${pct}%`}}></div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── HEALTH ── */}
-          {activeTab === 'health' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
-                  <p className="text-3xl font-bold text-red-500">{overdueContacts.length}</p>
-                  <p className="text-xs text-slate-500 mt-1">Overdue contacts</p>
-                </div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
-                  <p className="text-3xl font-bold text-slate-500">{neverContacted}</p>
-                  <p className="text-xs text-slate-500 mt-1">Never contacted</p>
-                </div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
-                  <p className="text-3xl font-bold text-indigo-600">{avgContactFreq}<span className="text-lg">d</span></p>
-                  <p className="text-xs text-slate-500 mt-1">Avg days between contact</p>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-[18px] text-red-500">notification_important</span>
-                  Contacts Needing Attention
-                </h3>
-                <p className="text-xs text-slate-400 mb-4">Sorted by how overdue they are relative to their contact frequency</p>
-                {healthList.length === 0 ? (
-                  <div className="text-center py-8">
-                    <span className="material-symbols-outlined text-green-400 text-[48px]">check_circle</span>
-                    <p className="text-slate-500 mt-2 text-sm">All contacts are up to date!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {healthList.map(c => {
-                      const cfg = urgencyConfig[c.urgency];
-                      const barW = Math.min(c.overduePct, 100);
-                      return (
-                        <div key={c.id} className={`rounded-xl p-3 border ${c.urgency === 'critical' ? 'border-red-200 bg-red-50' : c.urgency === 'never' ? 'border-slate-200 bg-slate-50' : 'border-amber-200 bg-amber-50'}`}>
-                          <div className="flex items-center gap-3">
-                            <div className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`}></div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-semibold text-slate-800 truncate">{c.name}</span>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-2 flex-shrink-0 ${cfg.color}`}>{cfg.label}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 h-1.5 bg-white/70 rounded-full overflow-hidden">
-                                  <div className={`h-full ${cfg.bar} rounded-full`} style={{width:`${barW}%`}}></div>
-                                </div>
-                                <span className="text-[10px] text-slate-500 flex-shrink-0">
-                                  {c.urgency === 'never' ? 'No contact on record' : `${c.days}d ago · every ${c.freq}d`}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── MOMENTUM ── */}
-          {activeTab === 'momentum' && (
-            <div className="space-y-4">
-              {/* Activity trend */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
-                    <span className="material-symbols-outlined text-[18px] text-indigo-500">bar_chart</span>
-                    Outreach Activity — Last 8 Weeks
-                  </h3>
-                  <span className={`text-xs font-bold px-2 py-1 rounded-lg ${activityGrowth >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                    {activityGrowth >= 0 ? '+' : ''}{activityGrowth}% vs last month
-                  </span>
-                </div>
-                <div className="flex items-end gap-1.5 h-36">
-                  {weeks.map((w, i) => {
-                    const h = maxWeek > 0 ? Math.max((w.count / maxWeek) * 100, w.count > 0 ? 4 : 0) : 0;
-                    return (
-                      <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                        <span className="text-[9px] text-slate-500">{w.count || ''}</span>
-                        <div className="w-full flex items-end" style={{height:'100px'}}>
-                          <div
-                            className={`w-full rounded-t-md transition-all ${i === weeks.length-1 ? 'bg-indigo-500' : 'bg-indigo-200'}`}
-                            style={{height:`${h}%`, minHeight: w.count > 0 ? '4px' : '0'}}
-                          ></div>
-                        </div>
-                        <span className="text-[8px] text-slate-400 text-center leading-tight">{w.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Type breakdown */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-[18px] text-purple-500">category</span>
-                  Activity Breakdown
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {typeBreakdown.map(t => {
-                    const cfg = typeConfig[t.type] || typeConfig.note;
-                    const pct = activities.length > 0 ? Math.round((t.count / activities.length) * 100) : 0;
-                    return (
-                      <div key={t.type} className={`rounded-xl p-4 ${cfg.color}`}>
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-lg">{cfg.icon}</span>
-                          <span className="text-xs font-bold capitalize">{t.type}s</span>
-                        </div>
-                        <p className="text-2xl font-bold">{t.count}</p>
-                        <p className="text-xs opacity-70">{t.thisMonth} this month · {pct}% of total</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Best contact days */}
-              {(() => {
-                const dayCounts = [0,0,0,0,0,0,0];
-                activities.forEach(a => {
-                  if (a.date) dayCounts[new Date(a.date).getDay()]++;
-                });
-                const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-                const maxDay = Math.max(...dayCounts, 1);
-                return (
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                      <span className="material-symbols-outlined text-[18px] text-green-500">calendar_today</span>
-                      Best Days to Reach Out
-                    </h3>
-                    <div className="flex gap-2">
-                      {days.map((day, i) => {
-                        const pct = Math.round((dayCounts[i] / maxDay) * 100);
-                        const isWeekend = i === 0 || i === 6;
-                        return (
-                          <div key={day} className="flex-1 flex flex-col items-center gap-1">
-                            <span className="text-[10px] text-slate-500">{dayCounts[i] || ''}</span>
-                            <div className="w-full flex items-end" style={{height:'60px'}}>
-                              <div className={`w-full rounded-t-md ${isWeekend ? 'bg-slate-200' : pct >= 75 ? 'bg-green-500' : pct >= 40 ? 'bg-green-300' : 'bg-green-100'}`}
-                                style={{height:`${Math.max(pct, dayCounts[i] > 0 ? 5 : 0)}%`}}></div>
-                            </div>
-                            <span className="text-[10px] font-semibold text-slate-500">{day}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-
-          {/* ── PIPELINE ── */}
-          {activeTab === 'pipeline' && (
-            <div className="space-y-4">
-              {/* Funnel */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-5 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-[18px] text-indigo-500">funnel</span>
-                  Pipeline Funnel
-                </h3>
-                <div className="space-y-3">
-                  {[
-                    { label: 'Cold',  count: cold, color: 'bg-slate-400', light: 'bg-slate-50 border-slate-200', text: 'text-slate-600', desc: 'Never engaged or very low vibe' },
-                    { label: 'Warm',  count: warm, color: 'bg-amber-400', light: 'bg-amber-50 border-amber-200', text: 'text-amber-700', desc: 'In conversation, building rapport' },
-                    { label: 'Hot',   count: hot,  color: 'bg-red-500',   light: 'bg-red-50 border-red-200',     text: 'text-red-700',   desc: 'High engagement, strong relationship' },
-                  ].map((s, i) => {
-                    const w = total > 0 ? Math.max(100 - i * 20, 60) : 60;
-                    const pct = total > 0 ? Math.round((s.count / total) * 100) : 0;
-                    return (
-                      <div key={s.label} className="flex items-center gap-4" style={{paddingLeft:`${i * 5}%`, paddingRight:`${i * 5}%`}}>
-                        <div className={`flex-1 rounded-xl border p-4 ${s.light}`}>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={`text-sm font-bold ${s.text}`}>{s.label}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-500">{s.count} contacts</span>
-                              <span className={`text-xs font-bold ${s.text}`}>{pct}%</span>
-                            </div>
-                          </div>
-                          <div className="h-2 bg-white/70 rounded-full overflow-hidden">
-                            <div className={`h-full ${s.color} rounded-full`} style={{width:`${pct}%`}}></div>
-                          </div>
-                          <p className="text-[10px] text-slate-400 mt-1.5">{s.desc}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Conversion rates */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-[18px] text-green-500">swap_horiz</span>
-                  Stage Conversion Rates
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { from: 'Cold → Warm', rate: convColdToWarm, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200', bar: 'bg-amber-400' },
-                    { from: 'Warm → Hot',  rate: convWarmToHot,  color: 'text-red-600',   bg: 'bg-red-50 border-red-200',     bar: 'bg-red-500'   },
-                  ].map(c => (
-                    <div key={c.from} className={`rounded-xl border p-5 ${c.bg}`}>
-                      <p className="text-xs font-semibold text-slate-500 mb-2">{c.from}</p>
-                      <p className={`text-4xl font-bold ${c.color} mb-3`}>{c.rate}%</p>
-                      <div className="h-2 bg-white/70 rounded-full overflow-hidden">
-                        <div className={`h-full ${c.bar} rounded-full`} style={{width:`${c.rate}%`}}></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Vibe score distribution */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-[18px] text-violet-500">equalizer</span>
-                  Vibe Score Distribution
-                </h3>
-                <div className="flex items-end gap-1 h-24">
-                  {Array.from({length: 10}, (_, i) => {
-                    const score = i + 1;
-                    const count = contacts.filter(c => Math.round(c.vibeScore) === score).length;
-                    const h = total > 0 ? Math.max((count / total) * 100, count > 0 ? 5 : 0) : 0;
-                    const color = score >= 8 ? 'bg-red-400' : score >= 5 ? 'bg-amber-400' : 'bg-slate-300';
-                    return (
-                      <div key={score} className="flex-1 flex flex-col items-center gap-1">
-                        <div className="w-full flex items-end" style={{height:'80px'}}>
-                          <div className={`w-full rounded-t-sm ${color}`} style={{height:`${h}%`}}></div>
-                        </div>
-                        <span className="text-[9px] text-slate-400">{score}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── BREAKDOWN ── */}
-          {activeTab === 'breakdown' && (
-            <div className="space-y-4">
-              {/* Tags */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-[18px] text-indigo-500">label</span>
-                  Tag Breakdown
-                </h3>
-                {tagList.length === 0 ? (
-                  <p className="text-slate-400 text-sm text-center py-6">No tags added to contacts yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {tagList.map((t, i) => {
-                      const pct = Math.round((t.count / total) * 100);
-                      const vibeColor = parseFloat(t.avgVibe) >= 7 ? 'text-green-600' : parseFloat(t.avgVibe) >= 4 ? 'text-amber-600' : 'text-red-500';
-                      return (
-                        <div key={t.tag} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg">
-                          <span className="w-5 text-xs text-slate-400 font-bold text-right">{i+1}</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-semibold text-slate-700 truncate">{t.tag}</span>
-                              <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                                <span className={`text-[10px] font-bold ${vibeColor}`}>★ {t.avgVibe}</span>
-                                <span className="text-[10px] text-slate-400">{t.count} contacts</span>
-                              </div>
-                            </div>
-                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-indigo-400 rounded-full" style={{width:`${pct}%`}}></div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Company */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-[18px] text-purple-500">business</span>
-                  Top Companies
-                </h3>
-                {companyList.length === 0 ? (
-                  <p className="text-slate-400 text-sm text-center py-6">No company data yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {companyList.map((c, i) => {
-                      const pct = Math.round((c.count / total) * 100);
-                      return (
-                        <div key={c.company} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg">
-                          <span className="w-5 text-xs text-slate-400 font-bold text-right">{i+1}</span>
-                          <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
-                            {c.company[0]?.toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-semibold text-slate-700 truncate">{c.company}</span>
-                              <span className="text-[10px] text-slate-400 ml-2 flex-shrink-0">{c.count} people</span>
-                            </div>
-                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-purple-400 rounded-full" style={{width:`${pct}%`}}></div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Contact frequency distribution */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
-                  <span className="material-symbols-outlined text-[18px] text-green-500">schedule</span>
-                  Overall Contact Frequency
-                </h3>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: 'Weekly or less', days: [0, 7],  color: 'bg-green-100 text-green-700 border-green-200' },
-                    { label: 'Monthly',        days: [8, 30], color: 'bg-amber-100 text-amber-700 border-amber-200' },
-                    { label: 'Infrequent',     days: [31, 999], color: 'bg-red-100 text-red-700 border-red-200' },
-                  ].map(bucket => {
-                    const count = contacts.filter(c => {
-                      const d = daysSince(c.lastContactDate);
-                      return d >= bucket.days[0] && d <= bucket.days[1];
-                    }).length;
-                    return (
-                      <div key={bucket.label} className={`rounded-xl border p-4 text-center ${bucket.color}`}>
-                        <p className="text-2xl font-bold">{count}</p>
-                        <p className="text-[10px] font-semibold mt-0.5 opacity-80">{bucket.label}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── EXPORT ── */}
-          {activeTab === 'export' && (
-            <div className="space-y-4">
-              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                <h3 className={`font-bold mb-1 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                  <span className="material-symbols-outlined text-[18px] text-indigo-500">download</span>
-                  Export Your Data
-                </h3>
-                <p className={`text-xs mb-5 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>Download your CRM data as CSV files — ready for Excel, Google Sheets, or any CRM tool.</p>
-
-                <div className="space-y-3">
-                  {[
-                    {
-                      title: 'All Contacts',
-                      desc: `${total} contacts with all fields — name, email, phone, company, vibe score, tags, last contact date`,
-                      icon: 'group',
-                      color: 'bg-indigo-600 hover:bg-indigo-700',
-                      action: exportCSV,
-                      filename: 'contacts.csv'
-                    },
-                    {
-                      title: 'Activity Log',
-                      desc: `${activities.length} activities — contact name, type, date, notes`,
-                      icon: 'timeline',
-                      color: 'bg-green-600 hover:bg-green-700',
-                      action: exportActivitiesCSV,
-                      filename: 'activities.csv'
-                    },
-                    {
-                      title: 'Contacts Needing Attention',
-                      desc: `${overdueContacts.length} overdue contacts — ready to action`,
-                      icon: 'notification_important',
-                      color: 'bg-amber-600 hover:bg-amber-700',
-                      action: () => {
-                        const headers = ['Name','Email','Company','Days Since Contact','Contact Frequency','Vibe Score'];
-                        const rows = overdueContacts.map(c => [
-                          c.name||'', c.email||'', c.company||'',
-                          daysSince(c.lastContactDate) === 999 ? 'Never' : daysSince(c.lastContactDate),
-                          c.contactFrequency||30, c.vibeScore||''
-                        ]);
-                        const csv = [headers,...rows].map(r => r.map(v=>`"${v}"`).join(',')).join('\n');
-                        const blob = new Blob([csv],{type:'text/csv'});
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a'); a.href=url;
-                        a.download=`crm-overdue-${new Date().toISOString().split('T')[0]}.csv`;
-                        a.click(); URL.revokeObjectURL(url);
-                      },
-                      filename: 'overdue.csv'
-                    },
-                  ].map(item => (
-                    <div key={item.title} className={`flex items-center gap-4 p-4 border rounded-xl transition ${darkMode ? 'border-slate-600 hover:border-slate-500' : 'border-slate-200 hover:border-slate-300'}`}>
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
-                        <span className={`material-symbols-outlined text-[20px] ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{item.icon}</span>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-semibold ${darkMode ? 'text-white' : 'text-slate-800'}`}>{item.title}</p>
-                        <p className={`text-xs truncate ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>{item.desc}</p>
-                      </div>
-                      <button onClick={item.action}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-white text-xs font-bold transition flex-shrink-0 ${item.color}`}>
-                        <span className="material-symbols-outlined text-[14px]">download</span>
-                        Download
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className={`rounded-xl p-4 text-center ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
-                <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>CSV files open in Excel, Google Sheets, Notion, Airtable, and most CRM tools.</p>
-              </div>
-
-              {/* ── Full Analytics Report ── */}
-              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
-                <h3 className={`font-bold mb-1 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
-                  <span className="material-symbols-outlined text-[18px] text-purple-500">summarize</span>
-                  Full Analytics Report
-                </h3>
-                <p className={`text-xs mb-5 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>
-                  Download a complete snapshot of all 5 analytics tabs — Overview, Health, Momentum, Pipeline, and Breakdown — as a single HTML report you can open, print, or share.
-                </p>
-                <button
-                  onClick={() => {
-                    const now2 = new Date();
-                    const fmt = (d) => d ? new Date(d).toLocaleDateString() : 'Never';
-                    const ds = (dateStr) => dateStr ? Math.ceil((now2 - new Date(dateStr)) / 86400000) : 999;
-                    const total2 = contacts.length;
-                    const hot = contacts.filter(c => c.vibeScore >= 8).length;
-                    const warm = contacts.filter(c => c.vibeScore >= 5 && c.vibeScore < 8).length;
-                    const cold = contacts.filter(c => c.vibeScore < 5).length;
-                    const thisMonth = new Date(now2.getFullYear(), now2.getMonth(), 1);
-                    const newThisMonth = contacts.filter(c => c.createdAt && new Date(c.createdAt) >= thisMonth).length;
-                    const emailsThisMonth = activities.filter(a => a.type === 'email' && new Date(a.date||a.timestamp) >= thisMonth).length;
-                    const callsThisMonth  = activities.filter(a => a.type === 'call'  && new Date(a.date||a.timestamp) >= thisMonth).length;
-                    const meetingsThisMonth = activities.filter(a => a.type === 'meeting' && new Date(a.date||a.timestamp) >= thisMonth).length;
-
-                    // Health — overdue contacts
-                    const overdueList = contacts
-                      .map(c => ({ ...c, _days: ds(c.lastContactDate), _freq: c.contactFrequency || 30 }))
-                      .filter(c => c._days > c._freq)
-                      .sort((a,b) => (b._days/b._freq) - (a._days/a._freq))
-                      .slice(0, 20);
-
-                    // Momentum — 8-week activity
-                    const weeks = Array.from({ length: 8 }, (_, i) => {
-                      const d = new Date(now2); d.setDate(d.getDate() - (7*(7-i)));
-                      return { label: `Wk ${i+1}`, start: new Date(d), count: 0 };
-                    });
-                    activities.forEach(a => {
-                      const d = new Date(a.date||a.timestamp);
-                      weeks.forEach(w => { if (d >= w.start && d < new Date(w.start.getTime() + 7*86400000)) w.count++; });
-                    });
-
-                    // Tag breakdown
-                    const tagMap = {};
-                    contacts.forEach(c => (c.tags||[]).forEach(t => {
-                      if (!tagMap[t]) tagMap[t] = { count: 0, vibeSum: 0 };
-                      tagMap[t].count++; tagMap[t].vibeSum += (c.vibeScore||5);
-                    }));
-                    const tagRows = Object.entries(tagMap).sort((a,b) => b[1].count - a[1].count).slice(0,10);
-
-                    const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Micro CRM Analytics Report — ${now2.toLocaleDateString()}</title>
-<style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1e293b; max-width: 900px; margin: 40px auto; padding: 0 24px; }
-  h1 { font-size: 28px; font-weight: 800; margin-bottom: 4px; }
-  .subtitle { color: #64748b; font-size: 14px; margin-bottom: 40px; }
-  h2 { font-size: 18px; font-weight: 700; margin: 32px 0 12px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; }
-  .grid4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px; }
-  .grid2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 16px; margin-bottom: 24px; }
-  .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; }
-  .card .val { font-size: 28px; font-weight: 800; color: #4f46e5; }
-  .card .lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { background: #f1f5f9; text-align: left; padding: 8px 12px; font-size: 11px; text-transform: uppercase; color: #64748b; }
-  td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
-  tr:hover td { background: #f8fafc; }
-  .bar-wrap { background: #e2e8f0; border-radius: 4px; height: 8px; flex: 1; }
-  .bar { background: #4f46e5; border-radius: 4px; height: 8px; }
-  .bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; font-size: 13px; }
-  .bar-label { width: 60px; text-align: right; color: #64748b; font-size: 11px; }
-  .tag { display: inline-block; background: #ede9fe; color: #5b21b6; padding: 2px 8px; border-radius: 20px; font-size: 11px; margin: 2px; }
-  .badge-hot { color: #16a34a; font-weight: 700; } .badge-warm { color: #ca8a04; font-weight: 700; } .badge-cold { color: #dc2626; font-weight: 700; }
-  @media print { body { margin: 20px; } }
-</style></head><body>
-<h1>📊 Micro CRM Analytics Report</h1>
-<p class="subtitle">Generated ${now2.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})} · ${total2} contacts · ${activities.length} activities</p>
-
-<h2>Overview</h2>
-<div class="grid4">
-  <div class="card"><div class="val">${total2}</div><div class="lbl">Total Contacts</div></div>
-  <div class="card"><div class="val" style="color:#16a34a">${hot}</div><div class="lbl">Hot Contacts</div></div>
-  <div class="card"><div class="val" style="color:#ca8a04">${newThisMonth}</div><div class="lbl">New This Month</div></div>
-  <div class="card"><div class="val" style="color:#7c3aed">${emailsThisMonth + callsThisMonth + meetingsThisMonth}</div><div class="lbl">Outreach This Month</div></div>
-</div>
-<div class="grid4">
-  <div class="card"><div class="val">${emailsThisMonth}</div><div class="lbl">Emails Sent</div></div>
-  <div class="card"><div class="val">${callsThisMonth}</div><div class="lbl">Calls Made</div></div>
-  <div class="card"><div class="val">${meetingsThisMonth}</div><div class="lbl">Meetings</div></div>
-  <div class="card"><div class="val">${activities.length}</div><div class="lbl">Total Activities</div></div>
-</div>
-
-<h2>Pipeline</h2>
-<div class="grid4">
-  <div class="card"><div class="val" style="color:#16a34a">${hot}</div><div class="lbl">🔥 Hot</div></div>
-  <div class="card"><div class="val" style="color:#ca8a04">${warm}</div><div class="lbl">🌤 Warm</div></div>
-  <div class="card"><div class="val" style="color:#dc2626">${cold}</div><div class="lbl">❄️ Cold</div></div>
-  <div class="card"><div class="val">${total2 > 0 ? Math.round(hot/total2*100) : 0}%</div><div class="lbl">Hot Rate</div></div>
-</div>
-${['Hot','Warm','Cold'].map(label => {
-  const count = label === 'Hot' ? hot : label === 'Warm' ? warm : cold;
-  const pct = total2 > 0 ? Math.round(count/total2*100) : 0;
-  return `<div class="bar-row"><span style="width:60px;font-size:13px">${label}</span><div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${label==='Hot'?'#16a34a':label==='Warm'?'#ca8a04':'#dc2626'}"></div></div><span style="font-size:12px;color:#64748b;width:50px">${count} (${pct}%)</span></div>`;
-}).join('')}
-
-<h2>Health — Overdue Contacts (top 20)</h2>
-${overdueList.length === 0 ? '<p style="color:#64748b;font-size:14px">✅ All contacts are up to date!</p>' : `
-<table><thead><tr><th>Name</th><th>Company</th><th>Days Since Contact</th><th>Target Frequency</th><th>Overdue By</th><th>Vibe</th></tr></thead><tbody>
-${overdueList.map(c => `<tr>
-  <td><strong>${c.name||'—'}</strong></td>
-  <td>${c.company||'—'}</td>
-  <td style="color:#dc2626;font-weight:700">${c._days === 999 ? 'Never' : c._days + 'd'}</td>
-  <td>Every ${c._freq}d</td>
-  <td>${c._days === 999 ? '∞' : Math.round(c._days/c._freq * 10)/10}×</td>
-  <td class="${c.vibeScore>=8?'badge-hot':c.vibeScore>=5?'badge-warm':'badge-cold'}">${c.vibeScore||'—'}</td>
-</tr>`).join('')}
-</tbody></table>`}
-
-<h2>Momentum — 8-Week Outreach</h2>
-${weeks.map(w => {
-  const pct = Math.max(...weeks.map(x=>x.count)) > 0 ? Math.round(w.count / Math.max(...weeks.map(x=>x.count)) * 100) : 0;
-  return `<div class="bar-row"><span class="bar-label">${w.label}</span><div class="bar-wrap"><div class="bar" style="width:${pct}%"></div></div><span style="font-size:12px;color:#64748b;margin-left:8px">${w.count} activities</span></div>`;
-}).join('')}
-
-<h2>Breakdown — Tags</h2>
-${tagRows.length === 0 ? '<p style="color:#64748b;font-size:14px">No tags used yet.</p>' : `
-<table><thead><tr><th>Tag</th><th>Contacts</th><th>Avg Vibe Score</th></tr></thead><tbody>
-${tagRows.map(([tag, data]) => `<tr><td><span class="tag">${tag}</span></td><td>${data.count}</td><td>${Math.round(data.vibeSum/data.count*10)/10}/10</td></tr>`).join('')}
-</tbody></table>`}
-
-<h2>All Contacts</h2>
-<table><thead><tr><th>Name</th><th>Email</th><th>Company</th><th>Vibe</th><th>Last Contact</th><th>Tags</th></tr></thead><tbody>
-${contacts.map(c => `<tr>
-  <td><strong>${c.name||'—'}</strong></td>
-  <td>${c.email||'—'}</td>
-  <td>${c.company||'—'}</td>
-  <td class="${(c.vibeScore||5)>=8?'badge-hot':(c.vibeScore||5)>=5?'badge-warm':'badge-cold'}">${c.vibeScore||5}</td>
-  <td>${fmt(c.lastContactDate)}</td>
-  <td>${(c.tags||[]).map(t=>`<span class="tag">${t}</span>`).join('')}</td>
-</tr>`).join('')}
-</tbody></table>
-
-<p style="margin-top:40px;color:#94a3b8;font-size:12px;text-align:center">Generated by Micro CRM · ${now2.toISOString()}</p>
-</body></html>`;
-
-                    const blob = new Blob([html], { type: 'text/html' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a'); a.href = url;
-                    a.download = `micro-crm-report-${now2.toISOString().split('T')[0]}.html`;
-                    a.click(); URL.revokeObjectURL(url);
-                  }}
-                  className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-white font-bold text-sm bg-purple-600 hover:bg-purple-700 transition"
-                >
-                  <span className="material-symbols-outlined text-[18px]">summarize</span>
-                  Download Full Analytics Report (.html)
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        {headerBlock}
+        {activeTabContent}
       </div>
     </div>
   );
@@ -1607,102 +1398,6 @@ function AdminChangeRequests() {
   );
 };
 
-// Channel definitions — module level so all components can access
-const ICEBREAKER_CHANNELS = [
-  { id: 'whatsapp',  icon: '💬', label: 'WhatsApp',   color: 'bg-green-500 hover:bg-green-600' },
-  { id: 'email',     icon: '✉️', label: 'Email',      color: 'bg-indigo-500 hover:bg-indigo-600' },
-  { id: 'linkedin',  icon: '💼', label: 'LinkedIn',   color: 'bg-blue-600 hover:bg-blue-700' },
-  { id: 'instagram', icon: '📸', label: 'Instagram',  color: 'bg-pink-500 hover:bg-pink-600' },
-  { id: 'twitter',   icon: '𝕏',  label: 'X/Twitter',  color: 'bg-slate-800 hover:bg-slate-900' },
-  { id: 'facebook',  icon: '👥', label: 'Facebook',   color: 'bg-blue-500 hover:bg-blue-600' },
-];
-
-function IcebreakerMessageCard({ channel, contact, subject, body, onSubjectChange, onBodyChange, darkMode, isCopied, onCopy, onOpen, user }) {
-  const isEmail = channel === 'email';
-  const fullMsg = isEmail && subject ? `${subject} | ${body}` : body;
-  const ch = ICEBREAKER_CHANNELS.find(c => c.id === channel);
-
-  const sendEmail = async () => {
-    try {
-      const r = await fetch('/api/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: contact.email,
-          subject: subject || 'Quick hello',
-          body: body,
-          fromName: user?.emailConfig?.fromName || user?.name,
-          fromEmail: user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || null,
-          replyToEmail: user?.emailConfig?.replyToEmail || user?.email || null,
-          images: [], links: []
-        })
-      });
-      const t = document.createElement('div');
-      t.className = `fixed top-4 left-1/2 -translate-x-1/2 ${r.ok ? 'bg-green-600' : 'bg-red-500'} text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2`;
-      t.innerHTML = r.ok ? '<span class="material-symbols-outlined text-[18px]">check_circle</span> Email sent!' : 'Failed to send email';
-      document.body.appendChild(t);
-      setTimeout(() => t.remove(), 2500);
-    } catch(e) { alert('Failed to send.'); }
-  };
-
-  return (
-    <div className={`rounded-xl border-2 transition ${
-      isCopied
-        ? darkMode ? 'border-green-500 bg-green-900/20' : 'border-green-400 bg-green-50'
-        : darkMode ? 'border-indigo-700 bg-indigo-900/20' : 'border-indigo-100 bg-indigo-50'
-    }`}>
-      <div className="p-5 space-y-3">
-        {isEmail && (
-          <div>
-            <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Subject</p>
-            <input
-              type="text"
-              value={subject}
-              onChange={e => onSubjectChange(e.target.value)}
-              className={`w-full text-sm font-semibold border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-200' : 'bg-white border-indigo-200 text-gray-800'}`}
-            />
-          </div>
-        )}
-        <div>
-          <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${darkMode ? 'text-indigo-400' : 'text-indigo-500'}`}>Message</p>
-          <textarea
-            value={body}
-            rows={5}
-            onChange={e => onBodyChange(e.target.value)}
-            className={`w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 leading-relaxed resize-none ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-300' : 'bg-white border-indigo-200 text-gray-700'}`}
-          />
-        </div>
-      </div>
-      <div className={`border-t px-4 py-3 flex gap-2 flex-wrap ${darkMode ? 'border-indigo-700' : 'border-indigo-100'}`}>
-        <button onClick={() => onCopy(fullMsg, 0)}
-          className={`flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition ${
-            isCopied ? 'bg-green-500 text-white' : darkMode ? 'bg-indigo-900/30 text-indigo-300 hover:bg-indigo-900/50' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-          }`}>
-          {isCopied ? '\u2713 Copied!' : '\ud83d\udccb Copy Message'}
-        </button>
-        {isEmail && contact?.email && (
-          <button onClick={sendEmail}
-            className="flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white transition">
-            \u2709\ufe0f Send Email
-          </button>
-        )}
-        {channel === 'whatsapp' && (
-          <button onClick={() => onOpen('whatsapp', fullMsg)}
-            className="flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-green-500 hover:bg-green-600 text-white transition">
-            \ud83d\udcac Open WhatsApp
-          </button>
-        )}
-        {['linkedin','instagram','twitter','facebook'].includes(channel) && (
-          <button onClick={() => onOpen(channel, fullMsg)}
-            className={`flex-1 text-xs font-semibold flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-white transition ${ch?.color || 'bg-slate-700 hover:bg-slate-800'}`}>
-            {ch?.icon} Open {ch?.label}
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -1736,10 +1431,8 @@ export default function App() {
   const [icebreakerContact, setIcebreakerContact] = useState(null);
   const [icebreakerLines, setIcebreakerLines] = useState([]);
   const [icebreakerLoading, setIcebreakerLoading] = useState(false);
-  const [icebreakerChannel, setIcebreakerChannel] = useState('whatsapp');
-  const [icebreakerCopied, setIcebreakerCopied] = useState(null);
-  const [icebreakerEditSubject, setIcebreakerEditSubject] = useState('');
-  const [icebreakerEditBody, setIcebreakerEditBody] = useState('');
+  const [icebreakerChannel, setIcebreakerChannel] = useState('linkedin'); // 'linkedin' | 'email'
+  const [icebreakerCopied, setIcebreakerCopied] = useState(null); // index of copied line
   const [nudgeEnabled, setNudgeEnabled] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState(null); // 'cold' | 'warm' | 'hot'
   const [draggingId, setDraggingId] = useState(null);
@@ -1749,7 +1442,7 @@ export default function App() {
   const [emailSendMethod, setEmailSendMethod] = useState('mailto'); // 'copy' | 'mailto'
   const [emailSendStatus, setEmailSendStatus] = useState(''); // 'sending' | 'done' | ''
   const [showBulkIcebreaker, setShowBulkIcebreaker] = useState(false);
-  const [bulkIcebreakerData, setBulkIcebreakerData] = useState({ selectedContacts: [], channel: 'email', social: 'whatsapp', customPrompt: '', generatedMessage: '', emailResults: {}, showSocialDropdown: false, sending: false });
+  const [bulkIcebreakerData, setBulkIcebreakerData] = useState({ selectedContacts: [], channel: 'linkedin', results: {} }); // results: { contactId: [line1, line2, line3] }
   const [bulkIcebreakerLoading, setBulkIcebreakerLoading] = useState(false);
   const [newContact, setNewContact] = useState({
     name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '',
@@ -1769,21 +1462,27 @@ export default function App() {
   // --- TODAY'S FOCUS MODAL STATES ---
   const [showFocusModal, setShowFocusModal] = useState(false);
   const [showFocusSettings, setShowFocusSettings] = useState(false);
-  const [focusSettings, setFocusSettings] = useState({
-    enabled: true,
-    dayThreshold: 7,
-    vibeScoreMin: 8
+  const [focusSettings, setFocusSettings] = useState(() => {
+    const saved = localStorage.getItem('focus_settings');
+    return saved ? JSON.parse(saved) : {
+      enabled: true,
+      dayThreshold: 7,
+      vibeScoreMin: 8
+    };
   });
 
   // --- NAVIGATION & VIEW STATES ---
   const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard' | 'contacts' | 'deals' | 'tasks' | 'analytics'
   const [showBusinessProfile, setShowBusinessProfile] = useState(false);
-  const [businessProfile, setBusinessProfile] = useState({
-    businessName: '',
-    industry: '',
-    description: '',
-    targetAudience: '',
-    valueProposition: ''
+  const [businessProfile, setBusinessProfile] = useState(() => {
+    const saved = localStorage.getItem('business_profile');
+    return saved ? JSON.parse(saved) : {
+      businessName: '',
+      industry: '',
+      description: '',
+      targetAudience: '',
+      valueProposition: ''
+    };
   });
 
   // --- IN-APP EMAIL SENDER STATES ---
@@ -1800,10 +1499,16 @@ export default function App() {
 });
 
 // NEW - Feature 1: Collapsible Sidebar
-const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+  const saved = localStorage.getItem('sidebar_collapsed');
+  return saved ? JSON.parse(saved) : false;
+});
 
 // NEW - Feature 4: Dark Mode
-const [darkMode, setDarkMode] = useState(false);
+const [darkMode, setDarkMode] = useState(() => {
+  const saved = localStorage.getItem('dark_mode');
+  return saved ? JSON.parse(saved) : false;
+});
 
 // NEW - Feature 6: Compact Smart Capture
 const [showMagicPaste, setShowMagicPaste] = useState(false);
@@ -1812,6 +1517,7 @@ const [showSortOptions, setShowSortOptions] = useState(false);
 const [showCustomPrompt, setShowCustomPrompt] = useState(false);
 const [showEmailSettings, setShowEmailSettings] = useState(false);
 const [showDomainWizard, setShowDomainWizard] = useState(false);
+const [showMobileMenu, setShowMobileMenu] = useState(false);
 const [domainWizardStep, setDomainWizardStep] = useState(1); // 1: Enter domain, 2: Add DNS, 3: Verify
 const [customDomain, setCustomDomain] = useState('');
 const [domainVerifying, setDomainVerifying] = useState(false);
@@ -1820,7 +1526,6 @@ const [customEmailPrefix, setCustomEmailPrefix] = useState('');
 const [checkingAvailability, setCheckingAvailability] = useState(false);
 const [emailAvailable, setEmailAvailable] = useState(null);
 const [showAdminPanel, setShowAdminPanel] = useState(false);  // Admin change request panel
-const [showMobileMenu, setShowMobileMenu] = useState(false); // Mobile drawer
 
   // ===== EMERGENCY MODAL ESCAPE SYSTEM =====
   // Close all modals with ESC key
@@ -1836,6 +1541,7 @@ const [showMobileMenu, setShowMobileMenu] = useState(false); // Mobile drawer
         setShowPremiumModal(false);
         setShowAnalytics(false);
         setShowCategoryManager(false);
+        setShowMobileMenu(false);
         setShowIcebreaker(false);
         setShowBulkIcebreaker(false);
         setShowFocusModal(false);
@@ -1849,26 +1555,20 @@ const [showMobileMenu, setShowMobileMenu] = useState(false); // Mobile drawer
     return () => window.removeEventListener('keydown', handleEscapeKey);
   }, []);
 
-  // Persist sidebar collapsed state to Firestore
+  // Persist sidebar collapsed state
 useEffect(() => {
-  if (user?.uid && window.firebaseDb) {
-    window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), { sidebarCollapsed }, { merge: true })
-      .catch(() => {});
-  }
-}, [sidebarCollapsed, user]);
+  localStorage.setItem('sidebar_collapsed', JSON.stringify(sidebarCollapsed));
+}, [sidebarCollapsed]);
 
-// Persist dark mode to Firestore + apply to DOM
+// Persist dark mode
 useEffect(() => {
-  if (user?.uid && window.firebaseDb) {
-    window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), { darkMode }, { merge: true })
-      .catch(() => {});
-  }
+  localStorage.setItem('dark_mode', JSON.stringify(darkMode));
   if (darkMode) {
     document.documentElement.classList.add('dark');
   } else {
     document.documentElement.classList.remove('dark');
   }
-}, [darkMode, user]);
+}, [darkMode]);
 
   // Auto-close loading screen after 3 seconds as failsafe
   useEffect(() => {
@@ -1941,82 +1641,11 @@ useEffect(() => {
                     email: firebaseUser.email,
                     name: userData.name || firebaseUser.email.split('@')[0],
                     isPremium: userData.isPremium || false,
-                    isAdmin: userData.isAdmin || false,
+                    isAdmin: userData.isAdmin || false,  // Admin flag
                     emailConfig: emailConfig
                   });
                   setIsPremium(userData.isPremium || false);
-
-                  // Load categories (small, stays on user doc)
-                  if (userData.categories) setCategories(userData.categories);
-
-                  // Load businessProfile + focusSettings from Firestore
-                  if (userData.businessProfile) setBusinessProfile(userData.businessProfile);
-                  if (userData.focusSettings)   setFocusSettings(userData.focusSettings);
-
-                  // Load UI preferences
-                  if (userData.sidebarCollapsed !== undefined) setSidebarCollapsed(userData.sidebarCollapsed);
-                  if (userData.darkMode !== undefined) setDarkMode(userData.darkMode);
-
-                  // Load contacts — try subcollection first, fall back to user doc array
-                  try {
-                    const contactsSnap = await window.getDocs(
-                      window.collection(window.firebaseDb, 'users', firebaseUser.uid, 'contacts')
-                    );
-                    const loadedContacts = [];
-                    contactsSnap.forEach(doc => { const d = doc.data(); if (!d._deleted) loadedContacts.push(d); });
-                    if (loadedContacts.length > 0) {
-                      setContacts(loadedContacts.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0)));
-                    } else if (userData.contacts && Array.isArray(userData.contacts) && userData.contacts.length > 0) {
-                      // Fallback: nothing in subcollection yet, use user doc array
-                      setContacts(userData.contacts.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0)));
-                    }
-                  } catch (e) {
-                    console.warn('Subcollection contacts load failed, using user doc fallback:', e.message);
-                    if (userData.contacts && Array.isArray(userData.contacts))
-                      setContacts(userData.contacts.sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0)));
-                  }
-
-                  // Load activities — try subcollection first, fall back to user doc array
-                  try {
-                    const activitiesSnap = await window.getDocs(
-                      window.collection(window.firebaseDb, 'users', firebaseUser.uid, 'activities')
-                    );
-                    const loadedActivities = [];
-                    activitiesSnap.forEach(doc => loadedActivities.push(doc.data()));
-                    if (loadedActivities.length > 0) {
-                      setActivities(loadedActivities.sort((a,b) => new Date(b.timestamp||b.date||0) - new Date(a.timestamp||a.date||0)));
-                    } else if (userData.activities && Array.isArray(userData.activities) && userData.activities.length > 0) {
-                      setActivities(userData.activities.sort((a,b) => new Date(b.timestamp||b.date||0) - new Date(a.timestamp||a.date||0)));
-                    }
-                  } catch (e) {
-                    console.warn('Subcollection activities load failed, using user doc fallback:', e.message);
-                    if (userData.activities && Array.isArray(userData.activities))
-                      setActivities(userData.activities.sort((a,b) => new Date(b.timestamp||b.date||0) - new Date(a.timestamp||a.date||0)));
-                  }
-
-                  if (userData.categories && Array.isArray(userData.categories))
-                    setCategories(userData.categories);
-
-                  // One-time migration: pull any contacts still in localStorage into Firestore
-                  try {
-                    const lsC = localStorage.getItem('crm_contacts');
-                    const lsA = localStorage.getItem('crm_activities');
-                    const lsCat = localStorage.getItem('crm_categories');
-                    if (lsC || lsA || lsCat) {
-                      const patch = {};
-                      if (lsC && !userData.contacts)   { patch.contacts   = JSON.parse(lsC);   setContacts(patch.contacts); }
-                      if (lsA && !userData.activities) { patch.activities = JSON.parse(lsA);   setActivities(patch.activities); }
-                      if (lsCat && !userData.categories){ patch.categories = JSON.parse(lsCat); setCategories(patch.categories); }
-                      if (Object.keys(patch).length > 0)
-                        await window.setDoc(window.doc(window.firebaseDb, 'users', firebaseUser.uid), patch, { merge: true });
-                      localStorage.removeItem('crm_contacts');
-                      localStorage.removeItem('crm_activities');
-                      localStorage.removeItem('crm_categories');
-                      console.log('✅ Migrated localStorage → Firestore');
-                    }
-                  } catch (migrateErr) { console.error('Migration error (non-fatal):', migrateErr); }
-
-                                } else {
+                } else {
                   // User exists in auth but not in Firestore - create doc
                   console.log('📝 Creating new user document');
                   
@@ -2304,20 +1933,14 @@ useEffect(() => {
   const FREE_CONTACT_LIMIT = 10;
   const atFreeLimit = !isPremium && contacts.length >= FREE_CONTACT_LIMIT;
 
-  // --- Persist focus settings to Firestore ---
+  // --- Persist focus settings to localStorage ---
   useEffect(() => {
-    if (user?.uid && window.firebaseDb) {
-      window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), { focusSettings }, { merge: true })
-        .catch(e => console.error('Error saving focusSettings:', e));
-    }
+    localStorage.setItem('focus_settings', JSON.stringify(focusSettings));
   }, [focusSettings]);
 
-  // --- Persist business profile to Firestore ---
+  // --- Persist business profile to localStorage ---
   useEffect(() => {
-    if (user?.uid && window.firebaseDb) {
-      window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), { businessProfile }, { merge: true })
-        .catch(e => console.error('Error saving businessProfile:', e));
-    }
+    localStorage.setItem('business_profile', JSON.stringify(businessProfile));
   }, [businessProfile]);
 
   // --- TODAY'S FOCUS: Hot contacts not reached in X days (user configurable) ---
@@ -2351,137 +1974,35 @@ useEffect(() => {
 
   useEffect(() => {
     const initApp = async () => {
-      // UI prefs only from localStorage (device-specific, fine)
+      const savedUser = await window.storage.get('auth_user');
+      if (savedUser?.value) {
+        const userData = JSON.parse(savedUser.value);
+        setUser(userData);
+        setIsPremium(userData.isPremium || false);
+      }
+      const savedContacts = await window.storage.get('crm_contacts');
+      if (savedContacts?.value) setContacts(JSON.parse(savedContacts.value));
+      const savedActivities = await window.storage.get('crm_activities');
+      if (savedActivities?.value) setActivities(JSON.parse(savedActivities.value));
+      const premiumStatus = await window.storage.get('premium_status');
+      if (premiumStatus?.value) setIsPremium(JSON.parse(premiumStatus.value));
+      const savedCategories = await window.storage.get('crm_categories');
+      if (savedCategories?.value) setCategories(JSON.parse(savedCategories.value));
       setIsLoading(false);
     };
     initApp();
   }, []);
 
-  // Use a ref so save functions always get the latest uid even in stale closures
-  const userUidRef = React.useRef(null);
-  React.useEffect(() => { userUidRef.current = user?.uid || null; }, [user]);
-
-  const _getUid = () => userUidRef.current || user?.uid;
-
   const saveContacts = async (contactsList) => {
-    const uid = _getUid();
-    if (!uid || !window.firebaseDb) return;
-    try {
-      // Try subcollection first, fall back to user doc array
-      for (const contact of contactsList) {
-        if (!contact.id) continue;
-        try {
-          await window.setDoc(
-            window.doc(window.firebaseDb, 'users', uid, 'contacts', contact.id),
-            contact
-          );
-        } catch (subErr) {
-          // Subcollection failed — fall back to storing on user doc
-          console.warn('Subcollection write failed, using user doc fallback:', subErr.message);
-          await window.setDoc(window.doc(window.firebaseDb, 'users', uid), { contacts: contactsList }, { merge: true });
-          return;
-        }
-      }
-    } catch (e) { console.error('Error saving contacts:', e); }
-  };
-
-  const saveContact = async (contact) => {
-    const uid = _getUid();
-    if (!uid || !window.firebaseDb || !contact?.id) return;
-    try {
-      try {
-        await window.setDoc(
-          window.doc(window.firebaseDb, 'users', uid, 'contacts', contact.id),
-          contact
-        );
-      } catch (subErr) {
-        // Fall back to reading current contacts array and updating it on user doc
-        console.warn('Subcollection write failed, falling back:', subErr.message);
-        const userDoc = await window.getDoc(window.doc(window.firebaseDb, 'users', uid));
-        const existing = userDoc.exists() ? (userDoc.data().contacts || []) : [];
-        const updated = existing.some(c => c.id === contact.id)
-          ? existing.map(c => c.id === contact.id ? contact : c)
-          : [...existing, contact];
-        await window.setDoc(window.doc(window.firebaseDb, 'users', uid), { contacts: updated }, { merge: true });
-      }
-    } catch (e) { console.error('Error saving contact:', e); }
-  };
-
-  const deleteContactDoc = async (id) => {
-    const uid = _getUid();
-    if (!uid || !window.firebaseDb) return;
-    try {
-      // Try real deleteDoc first (subcollection)
-      if (window.deleteDoc) {
-        try {
-          await window.deleteDoc(
-            window.doc(window.firebaseDb, 'users', uid, 'contacts', id)
-          );
-          return;
-        } catch (subErr) {
-          console.warn('Subcollection delete failed, falling back:', subErr.message);
-        }
-      }
-      // Fall back: remove from user doc contacts array
-      const userDoc = await window.getDoc(window.doc(window.firebaseDb, 'users', uid));
-      const existing = userDoc.exists() ? (userDoc.data().contacts || []) : [];
-      await window.setDoc(
-        window.doc(window.firebaseDb, 'users', uid),
-        { contacts: existing.filter(c => c.id !== id) },
-        { merge: true }
-      );
-    } catch (e) { console.error('Error deleting contact:', e); }
+    await window.storage.set('crm_contacts', JSON.stringify(contactsList));
   };
 
   const saveActivities = async (activitiesList) => {
-    const uid = _getUid();
-    if (!uid || !window.firebaseDb) return;
-    try {
-      for (const activity of activitiesList) {
-        if (!activity.id) continue;
-        try {
-          await window.setDoc(
-            window.doc(window.firebaseDb, 'users', uid, 'activities', activity.id),
-            activity
-          );
-        } catch (subErr) {
-          await window.setDoc(window.doc(window.firebaseDb, 'users', uid), { activities: activitiesList }, { merge: true });
-          return;
-        }
-      }
-    } catch (e) { console.error('Error saving activities:', e); }
-  };
-
-  const saveActivity = async (activity) => {
-    const uid = _getUid();
-    if (!uid || !window.firebaseDb || !activity?.id) return;
-    try {
-      try {
-        await window.setDoc(
-          window.doc(window.firebaseDb, 'users', uid, 'activities', activity.id),
-          activity
-        );
-      } catch (subErr) {
-        const userDoc = await window.getDoc(window.doc(window.firebaseDb, 'users', uid));
-        const existing = userDoc.exists() ? (userDoc.data().activities || []) : [];
-        const updated = existing.some(a => a.id === activity.id)
-          ? existing.map(a => a.id === activity.id ? activity : a)
-          : [activity, ...existing];
-        await window.setDoc(window.doc(window.firebaseDb, 'users', uid), { activities: updated }, { merge: true });
-      }
-    } catch (e) { console.error('Error saving activity:', e); }
+    await window.storage.set('crm_activities', JSON.stringify(activitiesList));
   };
 
   const saveCategories = async (cats) => {
-    const uid = _getUid();
-    if (!uid || !window.firebaseDb) return;
-    try {
-      await window.setDoc(
-        window.doc(window.firebaseDb, 'users', uid),
-        { categories: cats },
-        { merge: true }
-      );
-    } catch (e) { console.error('Error saving categories:', e); }
+    await window.storage.set('crm_categories', JSON.stringify(cats));
   };
 
   const addCategory = async () => {
@@ -2500,29 +2021,26 @@ useEffect(() => {
     const updated = categories.filter(c => c.id !== id);
     setCategories(updated);
     await saveCategories(updated);
-    // Remove category from affected contacts only
-    const affected = contacts.filter(c => c.category === id);
+    // Remove category from any contacts that had it
     const updatedContacts = contacts.map(c =>
       c.category === id ? { ...c, category: '' } : c
     );
     setContacts(updatedContacts);
-    for (const c of affected) await saveContact({ ...c, category: '' });
+    await saveContacts(updatedContacts);
   };
 
   const updateContactCategory = async (contactId, categoryId) => {
-    const contact = contacts.find(c => c.id === contactId);
-    if (!contact) return;
-    const updatedContact = { ...contact, category: categoryId };
-    setContacts(contacts.map(c => c.id === contactId ? updatedContact : c));
-    await saveContact(updatedContact);
+    const updated = contacts.map(c =>
+      c.id === contactId ? { ...c, category: categoryId } : c
+    );
+    setContacts(updated);
+    await saveContacts(updated);
   };
 
   // --- FEATURE 1: ICEBREAKER AI ---
   const generateIcebreaker = async (contact, channel = icebreakerChannel) => {
     setIcebreakerContact(contact);
     setIcebreakerLines([]);
-    setIcebreakerEditSubject('');
-    setIcebreakerEditBody('');
     setIcebreakerLoading(true);
     setIcebreakerCopied(null);
     setShowIcebreaker(true);
@@ -2545,18 +2063,9 @@ useEffect(() => {
       }
 
       const data = await response.json();
-      const lines = data.lines || [];
-      setIcebreakerLines(lines);
-      // Populate editable fields from first line — use local `channel` param not state
-      const first = lines[0] || '';
-      const hasSub = channel === 'email' && first.includes(' | ');
-      setIcebreakerEditSubject(hasSub ? first.split(' | ')[0] : '');
-      setIcebreakerEditBody(hasSub ? first.split(' | ').slice(1).join(' | ') : first);
+      setIcebreakerLines(data.lines || []);
     } catch (err) {
-      const errMsg = 'Could not generate — check your connection and try again.';
-      setIcebreakerLines([errMsg]);
-      setIcebreakerEditBody(errMsg);
-      setIcebreakerEditSubject('');
+      setIcebreakerLines(['Could not generate — check your connection and try again.']);
     }
     setIcebreakerLoading(false);
   };
@@ -2567,153 +2076,79 @@ useEffect(() => {
     setTimeout(() => setIcebreakerCopied(null), 2000);
   };
 
-  // Returns the deep-link URL for a channel + message
-  const getChannelUrl = (channel, message) => {
-    const enc = encodeURIComponent(message);
-    switch (channel) {
-      case 'whatsapp':  return `https://wa.me/?text=${enc}`;
-      case 'linkedin':  return `https://www.linkedin.com/messaging/compose/?body=${enc}`;
-      case 'twitter':   return `https://twitter.com/messages/compose?text=${enc}`;
-      case 'facebook':  return `https://www.facebook.com/messages/new`;
-      case 'instagram': return `https://ig.me/m/`;
-      default:          return null;
-    }
-  };
-
-  // Open channel app with message pre-filled (copies first, then redirects)
-  const openChannelWithMessage = (channel, message) => {
-    navigator.clipboard.writeText(message);
-    const url = getChannelUrl(channel, message);
-    if (url) setTimeout(() => window.open(url, '_blank'), 200);
+  const copyAllIcebreakers = () => {
+    navigator.clipboard.writeText(icebreakerLines.join('\n\n'));
+    setIcebreakerCopied('all');
+    setTimeout(() => setIcebreakerCopied(null), 2000);
   };
 
   // --- BULK ICEBREAKER ---
   const generateBulkIcebreakers = async () => {
     const selectedContactsList = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id));
-    const isEmail = bulkIcebreakerData.channel === 'email';
-    const ch = isEmail ? 'email' : bulkIcebreakerData.social;
-
     setBulkIcebreakerLoading(true);
-    setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: '', emailResults: {} }));
+    
+    try {
+      // Call our serverless function with all contacts at once + business profile
+      const response = await fetch('/api/generate-bulk-icebreakers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          contacts: selectedContactsList,
+          channel: bulkIcebreakerData.channel,
+          businessProfile // Include business context
+        })
+      });
 
-    if (isEmail) {
-      // ── EMAIL MODE: one personalised message per contact ──────────────────
-      // Requires at least one contact selected
-      if (!selectedContactsList.length) {
-        setBulkIcebreakerLoading(false);
-        return;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate bulk icebreakers');
       }
-      const results = {};
-      for (const contact of selectedContactsList) {
-        try {
-          const response = await fetch('/api/generate-icebreaker', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contact,
-              channel: 'email',
-              businessProfile,
-              customPrompt: bulkIcebreakerData.customPrompt || '',
-            })
-          });
-          if (!response.ok) throw new Error('Failed');
-          const data = await response.json();
-          const msg = Array.isArray(data.lines) ? data.lines[0] : (data.message || '');
-          results[contact.id] = msg;
-        } catch(e) {
-          results[contact.id] = 'Error generating — try again.';
-        }
-      }
-      setBulkIcebreakerData(prev => ({ ...prev, emailResults: results }));
-    } else {
-      // ── SOCIAL MODE: one generic broadcast message, no names ──────────────
-      try {
-        const response = await fetch('/api/generate-bulk-icebreakers', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contacts: [],           // no contact data — message must be name-free
-            channel: ch,
-            businessProfile,
-            customPrompt: bulkIcebreakerData.customPrompt || '',
-            singleMessage: true,
-            broadcastMode: true,    // signal: generic, no names
-          })
-        });
-        if (!response.ok) throw new Error((await response.json()).error || 'Failed');
-        const data = await response.json();
-        let msg = '';
-        if (typeof data.message === 'string') msg = data.message;
-        else if (data.results) msg = Object.values(data.results)[0] || '';
-        else if (Array.isArray(data.lines)) msg = data.lines[0] || '';
-        setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: msg }));
-      } catch(err) {
-        setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: 'Error generating — please try again.' }));
-      }
+
+      const data = await response.json();
+      setBulkIcebreakerData(prev => ({ ...prev, results: data.results || {} }));
+    } catch (err) {
+      console.error('Bulk icebreaker error:', err);
+      // Set error messages for all contacts
+      const errorResults = {};
+      selectedContactsList.forEach(c => {
+        errorResults[c.id] = ['Error generating — try again later.'];
+      });
+      setBulkIcebreakerData(prev => ({ ...prev, results: errorResults }));
     }
+    
     setBulkIcebreakerLoading(false);
   };
 
   const copyAllBulkIcebreakers = () => {
-    const msg = bulkIcebreakerData.generatedMessage;
-    if (!msg) return;
-    navigator.clipboard.writeText(msg);
-    const t = document.createElement('div');
-    t.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2';
-    t.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span> Message copied!';
-    document.body.appendChild(t); setTimeout(() => t.remove(), 2000);
+    const selectedContactsList = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id));
+    const formatted = selectedContactsList.map(contact => {
+      const lines = bulkIcebreakerData.results[contact.id] || [];
+      return `${contact.name} (${contact.email || 'no email'}):\n${lines.map((l, i) => `${i + 1}. ${l}`).join('\n')}`;
+    }).join('\n\n---\n\n');
+    navigator.clipboard.writeText(formatted);
+    alert('All icebreakers copied to clipboard!');
   };
 
   const sendAllBulkIcebreakers = async () => {
-    const ch = bulkIcebreakerData.channel;
-    const isEmail = ch === 'email';
-
-    if (isEmail) {
-      const list = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id) && c.email);
-      if (!list.length) { alert('No contacts with email addresses selected.'); return; }
-      setBulkIcebreakerData(prev => ({ ...prev, sending: true }));
-      let sent = 0, failed = 0;
-      for (let i = 0; i < list.length; i++) {
-        const contact = list[i];
-        const msg = bulkIcebreakerData.emailResults[contact.id] || '';
-        const parts = msg.includes(' | ') ? msg.split(' | ') : [null, msg];
-        try {
-          const r = await fetch('/api/send-email', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              to: contact.email,
-              subject: parts[0] || 'Quick hello',
-              body: parts[1] || msg,
-              fromName: user?.emailConfig?.fromName || user?.name,
-              fromEmail: user?.emailConfig?.customEmail || user?.emailConfig?.defaultEmail || null,
-              replyToEmail: user?.emailConfig?.replyToEmail || user?.email || null,
-              images: [], links: []
-            })
-          });
-          r.ok ? sent++ : failed++;
-        } catch(e) { failed++; }
-        if (i < list.length - 1) await new Promise(r => setTimeout(r, 400));
-      }
-      setBulkIcebreakerData(prev => ({ ...prev, sending: false }));
-      const t = document.createElement('div');
-      t.className = `fixed top-4 left-1/2 -translate-x-1/2 ${failed ? 'bg-yellow-600' : 'bg-green-600'} text-white px-6 py-3 rounded-xl font-semibold shadow-lg z-[60] flex items-center gap-2`;
-      t.innerHTML = `<span class="material-symbols-outlined text-[18px]">check_circle</span> ${sent} sent${failed ? `, ${failed} failed` : ''}`;
-      document.body.appendChild(t); setTimeout(() => t.remove(), 4000);
+    if (bulkIcebreakerData.channel !== 'email') {
+      alert('Direct send only works for Email channel. Use Copy for LinkedIn.');
       return;
     }
-
-    // Social broadcast: copy then open platform
-    const msg = bulkIcebreakerData.generatedMessage;
-    if (!msg) return;
-    navigator.clipboard.writeText(msg);
-    const url = getChannelUrl(bulkIcebreakerData.social, msg);
-    if (url) setTimeout(() => window.open(url, '_blank'), 200);
-    const chLabel = ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.label || '';
-    const t = document.createElement('div');
-    t.className = 'fixed top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-5 py-3 rounded-xl font-semibold shadow-lg z-[60] text-sm text-center max-w-xs';
-    t.innerHTML = `Message copied! Opening ${chLabel} — select your BC list or recipients there.`;
-    document.body.appendChild(t); setTimeout(() => t.remove(), 5000);
+    const selectedContactsList = contacts.filter(c => bulkIcebreakerData.selectedContacts.includes(c.id) && c.email);
+    for (let i = 0; i < selectedContactsList.length; i++) {
+      const contact = selectedContactsList[i];
+      const lines = bulkIcebreakerData.results[contact.id] || [];
+      const firstLine = lines[0] || '';
+      const parts = firstLine.includes(' | ') ? firstLine.split(' | ') : ['Quick hello', firstLine];
+      const subject = parts[0];
+      const body = parts[1] || firstLine;
+      const mailtoLink = `mailto:${contact.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.open(mailtoLink, '_blank');
+      if (i < selectedContactsList.length - 1) await new Promise(r => setTimeout(r, 500));
+    }
+    alert(`Opened ${selectedContactsList.length} emails in your mail client!`);
   };
+
   // --- FEATURE 4: BROWSER NUDGE NOTIFICATIONS ---
   const requestNudgePermission = async () => {
     if (!('Notification' in window)) return;
@@ -2741,11 +2176,13 @@ useEffect(() => {
   // --- FEATURE 2: BOARD VIEW — move contact vibe by drag column drop ---
   const moveContactVibe = async (contactId, newVibeLabel) => {
     const scoreMap = { hot: 9, warm: 5, cold: 2 };
-    const contact = contacts.find(c => c.id === contactId);
-    if (!contact) return;
-    const updatedContact = { ...contact, vibeLabel: newVibeLabel, vibeScore: scoreMap[newVibeLabel] };
-    setContacts(contacts.map(c => c.id === contactId ? updatedContact : c));
-    await saveContact(updatedContact);
+    const updated = contacts.map(c =>
+      c.id === contactId
+        ? { ...c, vibeLabel: newVibeLabel, vibeScore: scoreMap[newVibeLabel] }
+        : c
+    );
+    setContacts(updated);
+    await saveContacts(updated);
   };
 
   const handleLogout = async () => {
@@ -2777,71 +2214,41 @@ useEffect(() => {
       setShowPremiumModal(true);
       return;
     }
-    // Duplicate check
-    const email = newContact.email?.trim().toLowerCase();
-    const phone = newContact.phone?.trim().replace(/\s+/g, '');
-    const dupEmail = email && contacts.some(c => c.email?.trim().toLowerCase() === email);
-    const dupPhone = phone && contacts.some(c => c.phone?.trim().replace(/\s+/g, '') === phone);
-    if (dupEmail) { alert(`A contact with email "${newContact.email}" already exists.`); return; }
-    if (dupPhone) { alert(`A contact with phone "${newContact.phone}" already exists.`); return; }
-
-    const newContactObj = {
+    const updated = [{
       ...newContact,
       id: Date.now().toString(),
       createdAt: new Date().toISOString(),
       isFavorite: false
-    };
-    const updated = [newContactObj, ...contacts];
+    }, ...contacts];
     setContacts(updated);
-    await saveContact(newContactObj);
+    await saveContacts(updated);
     setShowAddModal(false);
     resetScan();
     setNewContact({ name: '', email: '', phone: '', company: '', jobTitle: '', website: '', address: '', lastContactDate: '', vibeScore: 5, vibeLabel: 'warm', notes: '', tags: [], category: '', meetingLink: '', referredBy: '', reminderDays: 30, contactFrequency: 30 });
   };
 
-  // Returns only contacts whose email/phone don't already exist in the current list.
-  // Also de-dupes within the incoming batch itself.
-  const dedupeContacts = (incoming, existing = contacts) => {
-    const emailSet = new Set(existing.map(c => c.email?.trim().toLowerCase()).filter(Boolean));
-    const phoneSet = new Set(existing.map(c => c.phone?.trim().replace(/\s+/g, '')).filter(Boolean));
-    const fresh = [];
-    for (const c of incoming) {
-      const email = c.email?.trim().toLowerCase();
-      const phone = c.phone?.trim().replace(/\s+/g, '');
-      const dupEmail = email && emailSet.has(email);
-      const dupPhone = phone && phoneSet.has(phone);
-      if (dupEmail || dupPhone) continue;
-      fresh.push(c);
-      if (email) emailSet.add(email);
-      if (phone) phoneSet.add(phone);
-    }
-    return fresh;
-  };
-
   const deleteContact = async (id) => {
     const updated = contacts.filter(c => c.id !== id);
     setContacts(updated);
-    await deleteContactDoc(id);
+    await saveContacts(updated);
   };
 
   const updateContact = async (updatedContact) => {
     const updated = contacts.map(c => c.id === updatedContact.id ? updatedContact : c);
     setContacts(updated);
-    await saveContact(updatedContact); // single doc write, not full array
+    await saveContacts(updated);
   };
 
   const toggleFavorite = async (id) => {
-    const contact = contacts.find(c => c.id === id);
-    if (!contact) return;
     const updated = contacts.map(c => c.id === id ? {...c, isFavorite: !c.isFavorite} : c);
     setContacts(updated);
-    await saveContact({...contact, isFavorite: !contact.isFavorite});
+    await saveContacts(updated);
   };
 
   const addActivity = async (activity) => {
     const updated = [activity, ...activities];
     setActivities(updated);
-    await saveActivity(activity); // single doc write
+    await saveActivities(updated);
     const contact = contacts.find(c => c.id === activity.contactId);
     if (contact) {
       updateContact({...contact, lastContactDate: activity.date});
@@ -2974,22 +2381,16 @@ useEffect(() => {
         let newContacts = parseVCard(text);
         if (newContacts.length === 0) { setImportStatus('No contacts found in vCard file.'); return; }
         
-        const skipped = newContacts.length;
-        newContacts = dedupeContacts(newContacts);
-        const dupCount = skipped - newContacts.length;
-
         // FREE TIER LIMIT: Cap at 10 contacts per import
         if (!isPremium && newContacts.length > 10) {
           setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
           newContacts = newContacts.slice(0, 10);
         }
         
-        if (newContacts.length === 0) { setImportStatus(`⚠️ All ${dupCount} contact${dupCount !== 1 ? 's' : ''} already exist (duplicate email/phone).`); return; }
         const updated = [...contacts, ...newContacts];
         setContacts(updated);
-        for (const c of newContacts) await saveContact(c);
-        const dupMsg = dupCount > 0 ? ` (${dupCount} duplicate${dupCount !== 1 ? 's' : ''} skipped)` : '';
-        setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from phone/WhatsApp!${dupMsg}`);
+        await saveContacts(updated);
+        setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from phone/WhatsApp!`);
         setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
         return;
       }
@@ -3007,22 +2408,16 @@ useEffect(() => {
           .map((row, i) => mapRowToContact(row, i, true, bulkImportCategory))
           .filter(Boolean);
         
-        const skipped = newContacts.length;
-        newContacts = dedupeContacts(newContacts);
-        const dupCount = skipped - newContacts.length;
-
         // FREE TIER LIMIT: Cap at 10 contacts per import
         if (!isPremium && newContacts.length > 10) {
           setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
           newContacts = newContacts.slice(0, 10);
         }
         
-        if (newContacts.length === 0) { setImportStatus(`⚠️ All ${dupCount} contact${dupCount !== 1 ? 's' : ''} already exist (duplicate email/phone).`); return; }
         const updated = [...contacts, ...newContacts];
         setContacts(updated);
-        for (const c of newContacts) await saveContact(c);
-        const dupMsg = dupCount > 0 ? ` (${dupCount} duplicate${dupCount !== 1 ? 's' : ''} skipped)` : '';
-        setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from Excel!${dupMsg}`);
+        await saveContacts(updated);
+        setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''} from Excel!`);
         setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
         return;
       }
@@ -3052,22 +2447,16 @@ useEffect(() => {
         return;
       }
 
-      const skippedCount = newContacts.length;
-      newContacts = dedupeContacts(newContacts);
-      const dupCount = skippedCount - newContacts.length;
-
       // FREE TIER LIMIT: Cap at 10 contacts per import
       if (!isPremium && newContacts.length > 10) {
         setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
         newContacts = newContacts.slice(0, 10);
       }
 
-      if (newContacts.length === 0) { setImportStatus(`⚠️ All ${dupCount} contact${dupCount !== 1 ? 's' : ''} already exist (duplicate email/phone).`); return; }
       const updated = [...contacts, ...newContacts];
       setContacts(updated);
-      for (const c of newContacts) await saveContact(c);
-      const dupMsg = dupCount > 0 ? ` (${dupCount} duplicate${dupCount !== 1 ? 's' : ''} skipped)` : '';
-      setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!${warnMsg}${dupMsg}`);
+      await saveContacts(updated);
+      setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!${warnMsg}`);
       setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
 
     } catch (error) {
@@ -3116,22 +2505,16 @@ useEffect(() => {
         return;
       }
 
-      const skippedBulk = newContacts.length;
-      newContacts = dedupeContacts(newContacts);
-      const dupCountBulk = skippedBulk - newContacts.length;
-
       // FREE TIER LIMIT: Cap at 10 contacts per import for free users
       if (!isPremium && newContacts.length > 10) {
         setImportStatus(`⚠️ Free plan: Importing first 10 of ${newContacts.length} contacts. Upgrade for unlimited imports.`);
         newContacts = newContacts.slice(0, 10);
       }
 
-      if (newContacts.length === 0) { setImportStatus(`⚠️ All ${dupCountBulk} contact${dupCountBulk !== 1 ? 's' : ''} already exist (duplicate email/phone).`); return; }
       const updated = [...contacts, ...newContacts];
       setContacts(updated);
-      for (const c of newContacts) await saveContact(c);
-      const dupMsgBulk = dupCountBulk > 0 ? ` (${dupCountBulk} duplicate${dupCountBulk !== 1 ? 's' : ''} skipped)` : '';
-      setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!${dupMsgBulk}`);
+      await saveContacts(updated);
+      setImportStatus(`✅ Imported ${newContacts.length} contact${newContacts.length !== 1 ? 's' : ''}!`);
       setBulkContactsText('');
       setTimeout(() => { setShowBulkImport(false); setImportStatus(''); }, 2500);
     } catch (error) {
@@ -3147,9 +2530,8 @@ useEffect(() => {
       return { ...c, lastContactDate: bulkUpdate.date };
     });
     setContacts(updated);
-    // Save only the updated contacts
-    for (const c of updated.filter(c => bulkUpdate.selectedIds.includes(c.id))) await saveContact(c);
-    // Optionally log an activity per contact
+    await saveContacts(updated);
+    // optionally log an activity for each selected contact
     if (bulkUpdate.addActivity) {
       const newActivities = bulkUpdate.selectedIds.map(id => ({
         id: `${Date.now()}_${id}`,
@@ -3159,8 +2541,9 @@ useEffect(() => {
         date: bulkUpdate.date,
         timestamp: new Date().toISOString(),
       }));
-      setActivities([...newActivities, ...activities]);
-      for (const a of newActivities) await saveActivity(a);
+      const allActivities = [...newActivities, ...activities];
+      setActivities(allActivities);
+      await saveActivities(allActivities);
     }
     setShowBulkUpdate(false);
     setBulkUpdate({ selectedIds: [], date: new Date().toISOString().split('T')[0], note: '', addActivity: true });
@@ -3315,9 +2698,7 @@ useEffect(() => {
   };
 
   const activatePremium = async () => {
-    if (user?.uid && window.firebaseDb) {
-      await window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), { isPremium: true }, { merge: true });
-    }
+    await window.storage.set('premium_status', JSON.stringify(true));
     setIsPremium(true);
     setShowPremiumModal(false);
     alert('Premium activated! 🎉');
@@ -3345,8 +2726,18 @@ useEffect(() => {
       lastContactDate: new Date().toISOString().split('T')[0]
     };
     
-    setContacts(contacts.map(c => c.id === contact.id ? updatedContact : c));
-    await saveContact(updatedContact);
+    // Save individual contact
+    await window.storage.set(`contact:${contact.id}`, JSON.stringify(updatedContact));
+    
+    // Update contacts array
+    const updatedContacts = contacts.map(c => 
+      c.id === contact.id ? updatedContact : c
+    );
+    setContacts(updatedContacts);
+    
+    // Save entire contacts list
+    await saveContacts(updatedContacts);
+    
     alert(`✅ ${contact.name} marked as contacted today!`);
   };
 
@@ -3359,6 +2750,7 @@ useEffect(() => {
         ...contact,
         lastContactDate: today
       };
+      await window.storage.set(`contact:${contact.id}`, JSON.stringify(updatedContact));
       return updatedContact;
     });
     
@@ -3371,7 +2763,10 @@ useEffect(() => {
     });
     
     setContacts(updatedContacts);
-    for (const c of updatedFocusContacts) await saveContact(c);
+    
+    // Save entire contacts list
+    await saveContacts(updatedContacts);
+    
     setShowFocusModal(false);
     alert(`✅ ${focusContacts.length} contacts marked as contacted!`);
   };
@@ -3467,7 +2862,7 @@ const Sidebar = () => (
       {['dashboard', 'contacts', 'deals', 'tasks', 'analytics'].map((view) => (
         <button
           key={view}
-          onClick={() => view === 'analytics' ? setShowAnalytics(true) : setCurrentView(view)}
+          onClick={() => setCurrentView(view)}
           className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-2xl font-bold transition-all ${
             currentView === view
               ? darkMode 
@@ -3730,7 +3125,7 @@ const Sidebar = () => (
       {/* SIDEBAR - Desktop Only */}
       <Sidebar />
 
-     {/* MOBILE TOP NAV */}
+      {/* MOBILE TOP NAV */}
       <nav className={`lg:hidden fixed top-0 left-0 right-0 z-40 border-b px-4 py-3 flex items-center justify-between ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowMobileMenu(true)} className={`p-2 rounded-xl ${darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}>
@@ -3749,32 +3144,6 @@ const Sidebar = () => (
             <span className="material-symbols-outlined text-base">add</span>
           </button>
         </div>
-      </nav>
-
-      {/* MOBILE BOTTOM TAB BAR */}
-      <nav className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t flex items-center justify-around px-1 py-2 safe-area-pb ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
-        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${currentView==='dashboard' ? 'text-indigo-600' : darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setCurrentView('dashboard')}>
-          <span className="material-symbols-outlined text-xl">dashboard</span>
-          <span className="text-[9px] font-semibold">Home</span>
-        </button>
-        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${currentView==='tasks' ? 'text-indigo-600' : darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setCurrentView('tasks')}>
-          <span className="material-symbols-outlined text-xl">checklist</span>
-          <span className="text-[9px] font-semibold">Tasks</span>
-        </button>
-        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setShowAnalytics(true)}>
-          <span className="material-symbols-outlined text-xl">analytics</span>
-          <span className="text-[9px] font-semibold">Analytics</span>
-        </button>
-        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => isPremium ? setShowBulkImport(true) : setShowPremiumModal(true)}>
-          <span className="material-symbols-outlined text-xl">upload</span>
-          <span className="text-[9px] font-semibold">Import</span>
-        </button>
-        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setShowMobileMenu(true)}>
-          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${darkMode ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
-            {user?.name?.[0]?.toUpperCase() || 'U'}
-          </div>
-          <span className="text-[9px] font-semibold">Menu</span>
-        </button>
       </nav>
 
       {/* MOBILE DRAWER */}
@@ -3819,8 +3188,8 @@ const Sidebar = () => (
                   <span>{item.label}</span>
                 </button>
               ))}
-              <button onClick={() => { setShowAnalytics(true); setShowMobileMenu(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${darkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-50'}`}>
+              <button onClick={() => { setCurrentView('analytics'); setShowMobileMenu(false); }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${currentView==='analytics' ? darkMode ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-700' : darkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-50'}`}>
                 <span className="material-symbols-outlined">analytics</span>
                 <span>Analytics</span>
               </button>
@@ -3854,15 +3223,62 @@ const Sidebar = () => (
         </div>
       )}
 
+      {/* MOBILE BOTTOM TAB BAR */}
+      <nav className={`lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t flex items-center justify-around px-1 py-2 safe-area-pb ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${currentView==='dashboard' ? 'text-indigo-600' : darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setCurrentView('dashboard')}>
+          <span className="material-symbols-outlined text-xl">dashboard</span>
+          <span className="text-[9px] font-semibold">Home</span>
+        </button>
+        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${currentView==='tasks' ? 'text-indigo-600' : darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setCurrentView('tasks')}>
+          <span className="material-symbols-outlined text-xl">checklist</span>
+          <span className="text-[9px] font-semibold">Tasks</span>
+        </button>
+        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${currentView==='analytics' ? 'text-indigo-600' : darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setCurrentView('analytics')}>
+          <span className="material-symbols-outlined text-xl">analytics</span>
+          <span className="text-[9px] font-semibold">Analytics</span>
+        </button>
+        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => isPremium ? setShowBulkImport(true) : setShowPremiumModal(true)}>
+          <span className="material-symbols-outlined text-xl">upload</span>
+          <span className="text-[9px] font-semibold">Import</span>
+        </button>
+        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setShowMobileMenu(true)}>
+          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${darkMode ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
+            {user?.name?.[0]?.toUpperCase() || 'U'}
+          </div>
+          <span className="text-[9px] font-semibold">Menu</span>
+        </button>
+      </nav>
+
       {/* MAIN CONTENT */}
       <main className={`p-4 pt-20 pb-24 lg:pb-10 lg:pt-10 lg:p-10 space-y-8 transition-all duration-300 ${
   sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
 }`}>
 
-        {/* ── TASKS VIEW ── */}
-        {currentView === 'tasks' ? (
+        {/* ── TASKS PAGE ── */}
+        {currentView === 'tasks' && (
           <TasksPage user={user} contacts={contacts} darkMode={darkMode} />
-        ) : (<>
+        )}
+
+        {/* ── ANALYTICS PAGE ── */}
+        {currentView === 'analytics' && (
+          <div className="space-y-4">
+            <button onClick={() => setCurrentView('dashboard')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm transition ${darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-white border border-slate-200'}`}>
+              <span className="material-symbols-outlined text-[18px]">arrow_back</span> Back to Dashboard
+            </button>
+            <AnalyticsDashboard
+              contacts={contacts}
+              activities={activities}
+              categories={categories}
+              darkMode={darkMode}
+              inline={true}
+              onClose={() => setCurrentView('dashboard')}
+            />
+          </div>
+        )}
+
+        {/* ── DASHBOARD / CONTACTS VIEW ── */}
+        {currentView !== 'tasks' && currentView !== 'analytics' && (<>
 
         {/* Header Row: Welcome + Premium */}
         <HeaderSection />
@@ -4321,12 +3737,12 @@ const Sidebar = () => (
         )}
 
         {filteredContacts.length === 0 && (
-          <div className={`rounded-xl p-12 text-center border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100'}`}>
-            <span className={`material-symbols-outlined text-[64px] ${darkMode ? 'text-slate-600' : 'text-gray-300'}`}>group</span>
-            <h3 className={`text-xl font-bold mb-2 ${darkMode ? 'text-white' : 'text-gray-800'}`}>
+          <div className="bg-white rounded-xl p-12 text-center border border-gray-100">
+            <span className="material-symbols-outlined text-[64px] text-gray-300">group</span>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">
               {contacts.length === 0 ? 'No contacts yet' : 'No contacts found'}
             </h3>
-            <p className={`mb-4 ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>
+            <p className="text-gray-500 mb-4">
               {contacts.length === 0 ? 'Add your first contact to get started' : 'Try a different search or filter'}
             </p>
             {contacts.length === 0 && (
@@ -4353,7 +3769,7 @@ const Sidebar = () => (
           />
         )}
 
-        {/* Analytics Dashboard */}
+        {/* Analytics Dashboard Popup */}
         {showAnalytics && (
           <AnalyticsDashboard
             contacts={contacts}
@@ -5764,7 +5180,7 @@ const Sidebar = () => (
         {/* Bulk Icebreaker Modal */}
         {showBulkIcebreaker && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+            <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
 
               {/* Header */}
               <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 text-white flex-shrink-0">
@@ -5773,259 +5189,150 @@ const Sidebar = () => (
                     <h2 className="text-xl font-bold flex items-center gap-2">
                       <span className="material-symbols-outlined text-[20px]">auto_awesome</span> Bulk Icebreaker
                     </h2>
-                    <p className="text-indigo-200 text-sm mt-0.5">One message generated for all tagged contacts</p>
+                    <p className="text-indigo-200 text-sm mt-0.5">
+                      Generate personalized opening lines for multiple contacts at once
+                    </p>
                   </div>
-                  <button onClick={() => { setShowBulkIcebreaker(false); setBulkIcebreakerData({ selectedContacts: [], channel: 'email', social: 'whatsapp', customPrompt: '', generatedMessage: '', emailResults: {}, showSocialDropdown: false, sending: false }); }}
+                  <button onClick={() => { setShowBulkIcebreaker(false); setBulkIcebreakerData({ selectedContacts: [], channel: 'linkedin', results: {} }); }}
                     className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition">
                     <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
                 </div>
 
-                {/* Channel row: Email | Socials dropdown */}
-                <div className="flex gap-2 mt-4 items-center">
-                  <span className="text-xs text-indigo-200 mr-1">Send via:</span>
-
-                  {/* Email button */}
-                  <button
-                    onClick={() => setBulkIcebreakerData(prev => ({ ...prev, channel: 'email', generatedMessage: '' }))}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
-                      bulkIcebreakerData.channel === 'email' ? 'bg-white text-indigo-700' : 'bg-white/20 text-white hover:bg-white/30'
-                    }`}>
-                    ✉️ Email
-                  </button>
-
-                  {/* Socials dropdown */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setBulkIcebreakerData(prev => ({ ...prev, showSocialDropdown: !prev.showSocialDropdown }))}
+                {/* Channel toggle */}
+                <div className="flex gap-2 mt-4">
+                  <span className="text-xs text-indigo-200 self-center mr-1">Channel:</span>
+                  {[
+                    { id: 'linkedin', icon: '💼', label: 'LinkedIn DM' },
+                    { id: 'email',    icon: '✉️', label: 'Email' },
+                  ].map(ch => (
+                    <button key={ch.id}
+                      onClick={() => setBulkIcebreakerData(prev => ({ ...prev, channel: ch.id, results: {} }))}
                       className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
-                        bulkIcebreakerData.channel === 'social' ? 'bg-white text-indigo-700' : 'bg-white/20 text-white hover:bg-white/30'
+                        bulkIcebreakerData.channel === ch.id
+                          ? 'bg-white text-indigo-700'
+                          : 'bg-white/20 text-white hover:bg-white/30'
                       }`}>
-                      {ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.icon || '💬'}
-                      {ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.label || 'Social'}
-                      <span className="material-symbols-outlined text-[14px]">expand_more</span>
+                      {ch.icon} {ch.label}
                     </button>
-                    {bulkIcebreakerData.showSocialDropdown && (
-                      <div className="absolute top-full left-0 mt-1 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden min-w-[150px]">
-                        {ICEBREAKER_CHANNELS.filter(c => c.id !== 'email').map(ch => (
-                          <button key={ch.id}
-                            onClick={() => setBulkIcebreakerData(prev => ({ ...prev, channel: 'social', social: ch.id, showSocialDropdown: false, generatedMessage: '' }))}
-                            className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 hover:bg-indigo-50 transition ${
-                              bulkIcebreakerData.social === ch.id && bulkIcebreakerData.channel === 'social' ? 'bg-indigo-50 font-semibold text-indigo-700' : 'text-gray-700'
-                            }`}>
-                            {ch.icon} {ch.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  ))}
                 </div>
               </div>
 
               {/* Body */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              <div className="flex-1 overflow-y-auto p-6">
 
-                {/* Custom prompt — shown first so message can be generated before tagging */}
-                <div>
-                  <label className="text-sm font-semibold text-gray-700 flex items-center gap-1.5 mb-2">
-                    <span className="material-symbols-outlined text-[16px] text-indigo-500">edit_note</span>
-                    Custom prompt <span className="text-gray-400 font-normal text-xs">(optional)</span>
-                  </label>
-                  <textarea
-                    value={bulkIcebreakerData.customPrompt}
-                    onChange={e => setBulkIcebreakerData(prev => ({ ...prev, customPrompt: e.target.value, generatedMessage: '' }))}
-                    placeholder="e.g. Mention our upcoming product launch, keep it under 3 sentences, casual tone..."
-                    rows={2}
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                  />
-                </div>
-
-                {/* Contact selection — only never-contacted, full names */}
-                {(() => {
-                  const neverContacted = contacts.filter(c => !c.lastContactDate);
-                  const isEmail = bulkIcebreakerData.channel === 'email';
-                  return (
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-semibold text-gray-700">
-                          Recipients
-                          <span className="ml-1.5 text-xs font-normal text-gray-400">
-                            ({isEmail ? 'email · ' : ''}never contacted · {neverContacted.length})
-                          </span>
-                          {!isEmail && <span className="ml-1.5 text-xs font-normal text-gray-400">— optional for social</span>}
+                {/* Contact selection */}
+                {Object.keys(bulkIcebreakerData.results).length === 0 && (
+                  <div className="mb-6">
+                    <label className="block text-sm font-semibold text-gray-700 mb-3">Select Contacts</label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto border border-gray-200 rounded-xl p-4">
+                      {contacts.map(contact => (
+                        <label key={contact.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg cursor-pointer text-sm">
+                          <input type="checkbox"
+                            checked={bulkIcebreakerData.selectedContacts.includes(contact.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setBulkIcebreakerData(prev => ({ ...prev, selectedContacts: [...prev.selectedContacts, contact.id] }));
+                              } else {
+                                setBulkIcebreakerData(prev => ({ ...prev, selectedContacts: prev.selectedContacts.filter(id => id !== contact.id) }));
+                              }
+                            }}
+                            className="w-4 h-4 text-indigo-600" />
+                          <span className="truncate">{contact.name}</span>
                         </label>
-                        <div className="flex gap-2">
-                          <button onClick={() => setBulkIcebreakerData(prev => ({ ...prev, selectedContacts: neverContacted.map(c => c.id) }))}
-                            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Select all</button>
-                          <span className="text-gray-300">|</span>
-                          <button onClick={() => setBulkIcebreakerData(prev => ({ ...prev, selectedContacts: [] }))}
-                            className="text-xs text-gray-500 hover:text-gray-700 font-medium">Clear</button>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2 p-3 border border-gray-200 rounded-xl min-h-[52px] bg-gray-50">
-                        {neverContacted.map(contact => {
-                          const selected = bulkIcebreakerData.selectedContacts.includes(contact.id);
-                          return (
-                            <button key={contact.id}
-                              onClick={() => setBulkIcebreakerData(prev => ({
-                                ...prev,
-                                selectedContacts: selected
-                                  ? prev.selectedContacts.filter(id => id !== contact.id)
-                                  : [...prev.selectedContacts, contact.id],
-                                // Clear results when contacts change
-                                generatedMessage: '', emailResults: {}
-                              }))}
-                              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition border ${
-                                selected
-                                  ? 'bg-indigo-600 text-white border-indigo-600'
-                                  : 'bg-white text-gray-600 border-gray-300 hover:border-indigo-400'
-                              }`}>
-                              {contact.name}
-                            </button>
-                          );
-                        })}
-                        {neverContacted.length === 0 && (
-                          <p className="text-xs text-gray-400 self-center">All contacts have been previously contacted</p>
-                        )}
-                      </div>
-                      {bulkIcebreakerData.selectedContacts.length > 0 && (
-                        <p className="text-xs text-gray-400 mt-1">{bulkIcebreakerData.selectedContacts.length} recipient{bulkIcebreakerData.selectedContacts.length !== 1 ? 's' : ''} selected</p>
-                      )}
+                      ))}
                     </div>
-                  );
-                })()}
-
-                {/* Generate button */}
-                {(() => {
-                  const isEmail = bulkIcebreakerData.channel === 'email';
-                  const emailResults = bulkIcebreakerData.emailResults || {};
-                  const hasResults = isEmail
-                    ? Object.keys(emailResults).length > 0
-                    : !!bulkIcebreakerData.generatedMessage;
-                  const disabled = bulkIcebreakerLoading || (isEmail && bulkIcebreakerData.selectedContacts.length === 0);
-                  return (
-                    <button onClick={generateBulkIcebreakers} disabled={disabled}
-                      className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 hover:bg-indigo-700 transition flex items-center justify-center gap-2">
-                      {bulkIcebreakerLoading ? (
-                        <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          {isEmail ? `Generating ${bulkIcebreakerData.selectedContacts.length} emails…` : 'Generating…'}</>
-                      ) : (
-                        <><span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-                          {hasResults
-                            ? (isEmail ? 'Regenerate All Emails' : 'Regenerate Message')
-                            : (isEmail ? `Generate ${bulkIcebreakerData.selectedContacts.length || ''} Email${bulkIcebreakerData.selectedContacts.length !== 1 ? 's' : ''}` : 'Generate Message')
-                          }</>
-                      )}
-                    </button>
-                  );
-                })()}
-
-                {/* EMAIL RESULTS — one editable card per contact */}
-                {bulkIcebreakerData.channel === 'email' && Object.keys(bulkIcebreakerData.emailResults || {}).length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-gray-700">Generated Emails ({Object.keys(bulkIcebreakerData.emailResults || {}).length}) <span className="font-normal text-gray-400 text-xs">— edit before sending</span></p>
-                      <button onClick={sendAllBulkIcebreakers} disabled={bulkIcebreakerData.sending}
-                        className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition">
-                        {bulkIcebreakerData.sending
-                          ? <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div> Sending…</>
-                          : <><span className="material-symbols-outlined text-[14px]">send</span> Send All</>
-                        }
-                      </button>
-                    </div>
-                    {bulkIcebreakerData.selectedContacts.map(contactId => {
-                      const contact = contacts.find(c => c.id === contactId);
-                      const msg = bulkIcebreakerData.emailResults[contactId] || '';
-                      const hasSubject = msg.includes(' | ');
-                      const subject = hasSubject ? msg.split(' | ')[0] : '';
-                      const body = hasSubject ? msg.split(' | ').slice(1).join(' | ') : msg;
-                      if (!contact) return null;
-                      return (
-                        <div key={contactId} className="rounded-xl border border-indigo-200 bg-indigo-50 overflow-hidden">
-                          <div className="flex items-center justify-between px-4 py-2 bg-indigo-100">
-                            <div>
-                              <span className="text-xs font-bold text-indigo-800">{contact.name}</span>
-                              {contact.email && <span className="text-xs text-indigo-500 ml-2">{contact.email}</span>}
-                            </div>
-                            <button onClick={() => navigator.clipboard.writeText(msg)}
-                              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
-                              <span className="material-symbols-outlined text-[12px]">content_copy</span> Copy
-                            </button>
-                          </div>
-                          <div className="p-3 space-y-2">
-                            {hasSubject && (
-                              <div>
-                                <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-500 mb-1">Subject</p>
-                                <input
-                                  type="text"
-                                  value={subject}
-                                  onChange={e => {
-                                    const newMsg = `${e.target.value} | ${body}`;
-                                    setBulkIcebreakerData(prev => ({
-                                      ...prev,
-                                      emailResults: { ...prev.emailResults, [contactId]: newMsg }
-                                    }));
-                                  }}
-                                  className="w-full text-xs border border-indigo-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 font-semibold text-gray-800"
-                                />
-                              </div>
-                            )}
-                            <div>
-                              <p className="text-[10px] font-bold uppercase tracking-wide text-indigo-500 mb-1">Message</p>
-                              <textarea
-                                value={body}
-                                rows={4}
-                                onChange={e => {
-                                  const newMsg = hasSubject ? `${subject} | ${e.target.value}` : e.target.value;
-                                  setBulkIcebreakerData(prev => ({
-                                    ...prev,
-                                    emailResults: { ...prev.emailResults, [contactId]: newMsg }
-                                  }));
-                                }}
-                                className="w-full text-xs border border-indigo-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-700 leading-relaxed resize-none"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
                   </div>
                 )}
 
-                {/* SOCIAL RESULT — editable broadcast message */}
-                {bulkIcebreakerData.channel === 'social' && bulkIcebreakerData.generatedMessage && (
-                  <div className="rounded-xl border-2 border-indigo-200 bg-indigo-50 overflow-hidden">
-                    <div className="px-4 py-2 bg-indigo-100 flex items-center justify-between">
-                      <p className="text-xs font-bold text-indigo-800">
-                        Broadcast · {ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.label}
-                      </p>
-                      <span className="text-[10px] text-indigo-400">edit before sending</span>
+                {/* Generate button */}
+                {Object.keys(bulkIcebreakerData.results).length === 0 && (
+                  <button onClick={generateBulkIcebreakers}
+                    disabled={bulkIcebreakerData.selectedContacts.length === 0 || bulkIcebreakerLoading}
+                    className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 hover:bg-indigo-700 transition flex items-center justify-center gap-2">
+                    {bulkIcebreakerLoading ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        Generating {bulkIcebreakerData.selectedContacts.length} sets of icebreakers...
+                      </>
+                    ) : (
+                      <><span className="material-symbols-outlined text-[20px]">auto_awesome</span> Generate {bulkIcebreakerData.selectedContacts.length} Icebreakers</>
+                    )}
+                  </button>
+                )}
+
+                {/* Results grid */}
+                {Object.keys(bulkIcebreakerData.results).length > 0 && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      {bulkIcebreakerData.selectedContacts.map(contactId => {
+                        const contact = contacts.find(c => c.id === contactId);
+                        const lines = bulkIcebreakerData.results[contactId] || [];
+                        if (!contact) return null;
+                        return (
+                          <div key={contactId} className="border border-indigo-100 rounded-xl p-4 bg-indigo-50">
+                            <div className="flex items-start justify-between mb-3">
+                              <div>
+                                <h3 className="font-bold text-gray-800">{contact.name}</h3>
+                                {contact.email && <p className="text-xs text-gray-400">{contact.email}</p>}
+                                {contact.company && <p className="text-xs text-gray-500">{contact.company}</p>}
+                              </div>
+                              <button onClick={() => navigator.clipboard.writeText(lines.join('\n\n'))}
+                                className="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">description</span> Copy
+                              </button>
+                            </div>
+                            <div className="space-y-2">
+                              {lines.map((line, i) => {
+                                const parts = bulkIcebreakerData.channel === 'email' && line.includes(' | ')
+                                  ? line.split(' | ')
+                                  : null;
+                                return (
+                                  <div key={i} className="bg-white rounded-lg p-2.5 text-xs">
+                                    <span className="inline-block w-4 h-4 bg-indigo-200 text-indigo-700 rounded-full text-center text-[9px] font-bold leading-4 mr-2">
+                                      {i + 1}
+                                    </span>
+                                    {parts ? (
+                                      <div className="inline">
+                                        <span className="font-semibold text-indigo-600">{parts[0]}</span>
+                                        <br />
+                                        <span className="text-gray-600">{parts[1]}</span>
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-700">{line}</span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <div className="p-3">
-                      <textarea
-                        value={bulkIcebreakerData.generatedMessage}
-                        rows={5}
-                        onChange={e => setBulkIcebreakerData(prev => ({ ...prev, generatedMessage: e.target.value }))}
-                        className="w-full text-sm border border-indigo-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 text-gray-700 leading-relaxed resize-none"
-                      />
-                    </div>
-                    <div className="border-t border-indigo-200 px-4 py-3 flex gap-2 bg-white">
+
+                    {/* Bulk actions */}
+                    <div className="flex gap-3">
                       <button onClick={copyAllBulkIcebreakers}
-                        className="flex-1 text-xs font-semibold px-3 py-2 rounded-lg border-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition flex items-center justify-center gap-1.5">
-                        📋 Copy
+                        className="flex-1 bg-white border-2 border-indigo-600 text-indigo-700 py-3 rounded-xl font-bold hover:bg-indigo-50 transition flex items-center justify-center gap-2">
+                        <span className="material-symbols-outlined text-[20px]">description</span> Copy All
                       </button>
-                      <button onClick={sendAllBulkIcebreakers}
-                        className={`flex-1 text-xs font-semibold px-3 py-2 rounded-lg text-white transition flex items-center justify-center gap-1.5 ${
-                          ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.color || 'bg-slate-700 hover:bg-slate-800'
-                        }`}>
-                        <span className="material-symbols-outlined text-[14px]">open_in_new</span>
-                        Open {ICEBREAKER_CHANNELS.find(c => c.id === bulkIcebreakerData.social)?.label}
+                      {bulkIcebreakerData.channel === 'email' && (
+                        <button onClick={sendAllBulkIcebreakers}
+                          className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition flex items-center justify-center gap-2">
+                          <span className="material-symbols-outlined text-[20px]">send</span> Send All via Email
+                        </button>
+                      )}
+                      <button onClick={() => setBulkIcebreakerData({ selectedContacts: [], channel: bulkIcebreakerData.channel, results: {} })}
+                        className="px-6 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition">
+                        Start Over
                       </button>
                     </div>
-                  </div>
+                  </>
                 )}
 
               </div>
+
             </div>
           </div>
         )}
@@ -6185,19 +5492,24 @@ const Sidebar = () => (
                       {icebreakerContact.company && `${icebreakerContact.company} · `}AI-generated opening lines
                     </p>
                   </div>
-                  <button onClick={() => { setShowIcebreaker(false); setIcebreakerEditSubject(''); setIcebreakerEditBody(''); setIcebreakerLines([]); }} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition">
+                  <button onClick={() => setShowIcebreaker(false)} className="p-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition">
                     <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
                 </div>
 
                 {/* Channel toggle */}
-                <div className="flex gap-1.5 mt-4 flex-wrap">
+                <div className="flex gap-2 mt-4">
                   <span className="text-xs text-indigo-200 self-center mr-1">Channel:</span>
-                  {ICEBREAKER_CHANNELS.map(ch => (
+                  {[
+                    { id: 'linkedin', icon: '💼', label: 'LinkedIn DM' },
+                    { id: 'email',    icon: '✉️', label: 'Email' },
+                  ].map(ch => (
                     <button key={ch.id}
                       onClick={() => { setIcebreakerChannel(ch.id); generateIcebreaker(icebreakerContact, ch.id); }}
-                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition ${
-                        icebreakerChannel === ch.id ? 'bg-white text-indigo-700' : 'bg-white/20 text-white hover:bg-white/30'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                        icebreakerChannel === ch.id
+                          ? 'bg-white text-indigo-700'
+                          : 'bg-white/20 text-white hover:bg-white/30'
                       }`}>
                       {ch.icon} {ch.label}
                     </button>
@@ -6205,42 +5517,107 @@ const Sidebar = () => (
                 </div>
               </div>
 
-              {/* SCROLLABLE CONTENT */}
+              {/* SCROLLABLE CONTENT AREA - Only this section scrolls */}
               <div className="flex-1 overflow-y-auto p-6">
                 {icebreakerLoading ? (
                   <div className="py-10 flex flex-col items-center gap-3 text-gray-400">
                     <div className="w-8 h-8 border-[3px] border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-sm">Crafting your {ICEBREAKER_CHANNELS.find(c=>c.id===icebreakerChannel)?.label} message…</p>
+                    <p className="text-sm">Crafting {icebreakerChannel === 'email' ? 'email openers' : 'LinkedIn messages'}…</p>
                   </div>
-                ) : icebreakerEditBody ? (
-                  <IcebreakerMessageCard
-                    channel={icebreakerChannel}
-                    contact={icebreakerContact}
-                    subject={icebreakerEditSubject}
-                    body={icebreakerEditBody}
-                    onSubjectChange={setIcebreakerEditSubject}
-                    onBodyChange={setIcebreakerEditBody}
-                    darkMode={darkMode}
-                    isCopied={icebreakerCopied === 0}
-                    onCopy={copyIcebreakerLine}
-                    onOpen={openChannelWithMessage}
-                    user={user}
-                  />
-                ) : null}
+                ) : (
+                  <div className="space-y-3">
+                    {icebreakerLines.map((line, i) => {
+                      const isCopied = icebreakerCopied === i;
+                      // For email, split "Subject | Body" format
+                      const parts = icebreakerChannel === 'email' && line.includes(' | ')
+                        ? line.split(' | ')
+                        : null;
+                      return (
+                        <div key={i} className={`rounded-xl border-2 transition ${
+                          isCopied 
+                            ? darkMode ? 'border-green-500 bg-green-900/20' : 'border-green-400 bg-green-50'
+                            : darkMode ? 'border-indigo-700 bg-indigo-900/20' : 'border-indigo-100 bg-indigo-50'
+                        }`}>
+                          <div className="p-4">
+                            <div className="flex items-start gap-3">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5 ${
+                                isCopied 
+                                  ? 'bg-green-500 text-white'
+                                  : darkMode ? 'bg-indigo-700 text-indigo-200' : 'bg-indigo-200 text-indigo-700'
+                              }`}>
+                                {isCopied ? '✓' : i + 1}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                {parts ? (
+                                  <>
+                                    <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${
+                                      darkMode ? 'text-indigo-400' : 'text-indigo-500'
+                                    }`}>Subject</p>
+                                    <p className={`text-xs font-semibold mb-2 ${
+                                      darkMode ? 'text-slate-200' : 'text-gray-700'
+                                    }`}>{parts[0]}</p>
+                                    <p className={`text-[10px] font-bold uppercase tracking-wide mb-1 ${
+                                      darkMode ? 'text-indigo-400' : 'text-indigo-500'
+                                    }`}>Opening</p>
+                                    <p className={`text-sm leading-relaxed ${
+                                      darkMode ? 'text-slate-300' : 'text-gray-700'
+                                    }`}>{parts[1]}</p>
+                                  </>
+                                ) : (
+                                  <p className={`text-sm leading-relaxed ${
+                                    darkMode ? 'text-slate-300' : 'text-gray-700'
+                                  }`}>{line}</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className={`border-t px-4 py-2 flex justify-end ${
+                            darkMode ? 'border-indigo-700' : 'border-indigo-100'
+                          }`}>
+                            <button
+                              onClick={() => copyIcebreakerLine(line, i)}
+                              className={`text-xs font-semibold flex items-center gap-1.5 px-3 py-1 rounded-lg transition ${
+                                isCopied
+                                  ? darkMode ? 'text-green-400 bg-green-900/30' : 'text-green-600 bg-green-100'
+                                  : darkMode ? 'text-indigo-400 hover:bg-indigo-900/30' : 'text-indigo-600 hover:bg-indigo-100'
+                              }`}>
+                              {isCopied ? '✓ Copied!' : '📋 Copy'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {/* FIXED FOOTER */}
+              {/* FIXED FOOTER - Won't scroll */}
               {!icebreakerLoading && icebreakerLines.length > 0 && (
                 <div className={`px-6 py-4 border-t flex gap-2 flex-shrink-0 rounded-b-2xl ${
                   darkMode ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
                 }`}>
-                  <button onClick={() => generateIcebreaker(icebreakerContact, icebreakerChannel)}
+                  <button
+                    onClick={copyAllIcebreakers}
+                    className={`flex-1 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition border-2 ${
+                      icebreakerCopied === 'all'
+                        ? 'border-green-500 bg-green-500 text-white'
+                        : darkMode 
+                          ? 'border-indigo-700 text-indigo-400 hover:bg-indigo-900/20'
+                          : 'border-indigo-200 text-indigo-700 hover:bg-indigo-50'
+                    }`}>
+                    {icebreakerCopied === 'all' ? '✓ All Copied!' : '📋 Copy All 3'}
+                  </button>
+                  <button
+                    onClick={() => generateIcebreaker(icebreakerContact, icebreakerChannel)}
                     className="flex-1 bg-indigo-600 text-white py-2.5 rounded-xl font-semibold text-sm hover:bg-indigo-700 transition flex items-center justify-center gap-2">
                     <span className="material-symbols-outlined text-[16px]">auto_awesome</span> Regenerate
                   </button>
-                  <button onClick={() => setShowIcebreaker(false)}
-                    className={`px-5 rounded-xl text-sm font-medium transition ${
-                      darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  <button
+                    onClick={() => setShowIcebreaker(false)}
+                    className={`px-4 rounded-xl text-sm font-medium transition ${
+                      darkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}>
                     Done
                   </button>
@@ -6387,8 +5764,6 @@ const Sidebar = () => (
             </div>
           </div>
         )}
-
-      </>)}
 
       </main>
 
@@ -7774,11 +7149,11 @@ const Sidebar = () => (
   </div>
 )}
 
-        {/* Mobile FAB */}
+      </>)}
+
+      {/* Mobile FAB */}
       <MobileFAB />
 
     </div>
-
-
-    );
+  );
 }
