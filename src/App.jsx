@@ -1560,15 +1560,18 @@ useEffect(() => {
   localStorage.setItem('sidebar_collapsed', JSON.stringify(sidebarCollapsed));
 }, [sidebarCollapsed]);
 
-// Persist dark mode
+// Persist dark mode to Firestore + apply to DOM
 useEffect(() => {
-  localStorage.setItem('dark_mode', JSON.stringify(darkMode));
+  if (user?.uid && window.firebaseDb) {
+    window.setDoc(window.doc(window.firebaseDb, 'users', user.uid), { darkMode }, { merge: true })
+      .catch(() => {});
+  }
   if (darkMode) {
     document.documentElement.classList.add('dark');
   } else {
     document.documentElement.classList.remove('dark');
   }
-}, [darkMode]);
+}, [darkMode, user]);
 
   // Auto-close loading screen after 3 seconds as failsafe
   useEffect(() => {
@@ -5765,6 +5768,8 @@ const Sidebar = () => (
           </div>
         )}
 
+      </>)}
+
       </main>
 
       {/* TODAY'S FOCUS MODAL */}
@@ -7149,7 +7154,6 @@ const Sidebar = () => (
   </div>
 )}
 
-      </>)}
 
       {/* Mobile FAB */}
       <MobileFAB />
