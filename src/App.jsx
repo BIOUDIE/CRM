@@ -697,10 +697,8 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
     </>
   );
 
-  if (inline) {
   const contentBlock = (
-{/* Content */}
-        <div className="flex-1 overflow-y-auto p-5 bg-slate-50">
+    <div className="flex-1 overflow-y-auto p-5 bg-slate-50">
 
           {/* ── OVERVIEW ── */}
           {activeTab === 'overview' && (
@@ -1377,7 +1375,6 @@ ${contacts.map(c => `<tr>
             </div>
           )}
         </div>
-      </div>
   );
 
   if (inline) {
@@ -1397,7 +1394,7 @@ ${contacts.map(c => `<tr>
       </div>
     </div>
   );
-}}
+}
 
 
 // --- MAIN CRM APP ---
