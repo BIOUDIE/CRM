@@ -523,8 +523,9 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
     .slice(0, 8);
 
   // ── Contact frequency health ──────────────────────────────────────────────
-  const avgContactFreq = contacts.length > 0
-    ? Math.round(contacts.reduce((s, c) => s + (daysSince(c.lastContactDate) === 999 ? 0 : daysSince(c.lastContactDate)), 0) / contacts.filter(c => c.lastContactDate).length)
+  const contactedCount = contacts.filter(c => c.lastContactDate).length;
+  const avgContactFreq = contactedCount > 0
+    ? Math.round(contacts.reduce((s, c) => s + (daysSince(c.lastContactDate) === 999 ? 0 : daysSince(c.lastContactDate)), 0) / contactedCount)
     : 0;
 
   // ── Relationship health list ──────────────────────────────────────────────
@@ -681,13 +682,13 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
           </button>
         )}
       </div>
-      <div className="flex gap-0.5 px-4 pt-3 pb-0 border-b border-slate-100 flex-shrink-0 overflow-x-auto">
+      <div className={`flex gap-0.5 px-4 pt-3 pb-0 border-b flex-shrink-0 overflow-x-auto ${darkMode ? 'border-slate-700 bg-slate-800' : 'border-slate-100 bg-white'}`}>
         {tabs.map(tab => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg transition whitespace-nowrap ${
               activeTab === tab.id
                 ? 'bg-indigo-600 text-white'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                : darkMode ? 'text-slate-400 hover:text-white hover:bg-slate-700' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
             }`}>
             <span className="material-symbols-outlined text-[14px]">{tab.icon}</span>
             {tab.label}
@@ -698,7 +699,7 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
   );
 
   const contentBlock = (
-    <div className="flex-1 overflow-y-auto p-5 bg-slate-50">
+    <div className={`flex-1 overflow-y-auto p-5 ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
 
           {/* ── OVERVIEW ── */}
           {activeTab === 'overview' && (
@@ -720,8 +721,8 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
               </div>
 
               {/* Wins this month */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-4 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-amber-500">emoji_events</span>
                   Wins This Month
                 </h3>
@@ -744,8 +745,8 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
               </div>
 
               {/* Pipeline summary */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-4 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-indigo-500">funnel</span>
                   Pipeline Snapshot
                 </h3>
@@ -758,9 +759,9 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
                     <div key={s.label}>
                       <div className="flex justify-between items-center mb-1">
                         <span className={`text-xs font-semibold ${s.text}`}>{s.label}</span>
-                        <span className="text-xs text-slate-500">{s.count} contacts · {s.pct}%</span>
+                        <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{s.count} contacts · {s.pct}%</span>
                       </div>
-                      <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-2.5 rounded-full overflow-hidden ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
                         <div className={`h-full ${s.color} rounded-full transition-all`} style={{width: `${s.pct}%`}}></div>
                       </div>
                     </div>
@@ -769,29 +770,29 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
               </div>
 
               {/* Most contacted */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-4 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-green-500">star</span>
                   Most Contacted
                 </h3>
                 {mostContacted.length === 0 ? (
-                  <p className="text-slate-400 text-sm text-center py-4">No activity data yet</p>
+                  <p className={`text-sm text-center py-4 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>No activity data yet</p>
                 ) : (
                   <div className="space-y-2">
                     {mostContacted.map((r, i) => {
                       const pct = Math.round((r.count / mostContacted[0].count) * 100);
                       return (
                         <div key={r.contact.id} className="flex items-center gap-3">
-                          <span className="w-5 text-xs font-bold text-slate-400 text-right flex-shrink-0">{i+1}</span>
-                          <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                          <span className={`w-5 text-xs font-bold text-right flex-shrink-0 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>{i+1}</span>
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${darkMode ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
                             {r.contact.name?.[0]?.toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-center mb-0.5">
-                              <span className="text-xs font-semibold text-slate-700 truncate">{r.contact.name}</span>
+                              <span className={`text-xs font-semibold truncate ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>{r.contact.name}</span>
                               <span className="text-xs text-slate-500 ml-2 flex-shrink-0">{r.count}x</span>
                             </div>
-                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={`h-1.5 rounded-full overflow-hidden ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
                               <div className="h-full bg-indigo-400 rounded-full" style={{width:`${pct}%`}}></div>
                             </div>
                           </div>
@@ -808,30 +809,30 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
           {activeTab === 'health' && (
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+                <div className={`rounded-xl border p-4 text-center ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                   <p className="text-3xl font-bold text-red-500">{overdueContacts.length}</p>
-                  <p className="text-xs text-slate-500 mt-1">Overdue contacts</p>
+                  <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Overdue contacts</p>
                 </div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+                <div className={`rounded-xl border p-4 text-center ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                   <p className="text-3xl font-bold text-slate-500">{neverContacted}</p>
-                  <p className="text-xs text-slate-500 mt-1">Never contacted</p>
+                  <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Never contacted</p>
                 </div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4 text-center">
+                <div className={`rounded-xl border p-4 text-center ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                   <p className="text-3xl font-bold text-indigo-600">{avgContactFreq}<span className="text-lg">d</span></p>
-                  <p className="text-xs text-slate-500 mt-1">Avg days between contact</p>
+                  <p className={`text-xs mt-1 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>Avg days between contact</p>
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-1 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-1 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-red-500">notification_important</span>
                   Contacts Needing Attention
                 </h3>
-                <p className="text-xs text-slate-400 mb-4">Sorted by how overdue they are relative to their contact frequency</p>
+                <p className={`text-xs mb-4 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>Sorted by how overdue they are relative to their contact frequency</p>
                 {healthList.length === 0 ? (
                   <div className="text-center py-8">
                     <span className="material-symbols-outlined text-green-400 text-[48px]">check_circle</span>
-                    <p className="text-slate-500 mt-2 text-sm">All contacts are up to date!</p>
+                    <p className={`text-sm mt-2 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>All contacts are up to date!</p>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -839,19 +840,19 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
                       const cfg = urgencyConfig[c.urgency];
                       const barW = Math.min(c.overduePct, 100);
                       return (
-                        <div key={c.id} className={`rounded-xl p-3 border ${c.urgency === 'critical' ? 'border-red-200 bg-red-50' : c.urgency === 'never' ? 'border-slate-200 bg-slate-50' : 'border-amber-200 bg-amber-50'}`}>
+                        <div key={c.id} className={`rounded-xl p-3 border ${c.urgency === 'critical' ? 'border-red-200 bg-red-50' : c.urgency === 'never' ? `border-slate-200 ${darkMode ? 'bg-slate-800' : 'bg-slate-50'}` : 'border-amber-200 bg-amber-50'}`}>
                           <div className="flex items-center gap-3">
                             <div className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`}></div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-semibold text-slate-800 truncate">{c.name}</span>
+                                <span className={`text-xs font-semibold truncate ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{c.name}</span>
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ml-2 flex-shrink-0 ${cfg.color}`}>{cfg.label}</span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <div className="flex-1 h-1.5 bg-white/70 rounded-full overflow-hidden">
+                                <div className="flex-1 h-1.5 bg-white/20 rounded-full overflow-hidden">
                                   <div className={`h-full ${cfg.bar} rounded-full`} style={{width:`${barW}%`}}></div>
                                 </div>
-                                <span className="text-[10px] text-slate-500 flex-shrink-0">
+                                <span className={`text-[10px] flex-shrink-0 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                                   {c.urgency === 'never' ? 'No contact on record' : `${c.days}d ago · every ${c.freq}d`}
                                 </span>
                               </div>
@@ -870,9 +871,9 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
           {activeTab === 'momentum' && (
             <div className="space-y-4">
               {/* Activity trend */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-slate-800 flex items-center gap-2 text-sm">
+                  <h3 className={`font-bold flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                     <span className="material-symbols-outlined text-[18px] text-indigo-500">bar_chart</span>
                     Outreach Activity — Last 8 Weeks
                   </h3>
@@ -900,8 +901,8 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
               </div>
 
               {/* Type breakdown */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-4 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-purple-500">category</span>
                   Activity Breakdown
                 </h3>
@@ -932,8 +933,8 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
                 const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
                 const maxDay = Math.max(...dayCounts, 1);
                 return (
-                  <div className="bg-white rounded-xl border border-slate-200 p-5">
-                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+                  <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                    <h3 className={`font-bold mb-4 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                       <span className="material-symbols-outlined text-[18px] text-green-500">calendar_today</span>
                       Best Days to Reach Out
                     </h3>
@@ -963,15 +964,15 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
           {activeTab === 'pipeline' && (
             <div className="space-y-4">
               {/* Funnel */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-5 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-5 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-indigo-500">funnel</span>
                   Pipeline Funnel
                 </h3>
                 <div className="space-y-3">
                   {[
-                    { label: 'Cold',  count: cold, color: 'bg-slate-400', light: 'bg-slate-50 border-slate-200', text: 'text-slate-600', desc: 'Never engaged or very low vibe' },
-                    { label: 'Warm',  count: warm, color: 'bg-amber-400', light: 'bg-amber-50 border-amber-200', text: 'text-amber-700', desc: 'In conversation, building rapport' },
+                    { label: 'Cold',  count: cold, color: 'bg-slate-400', light: darkMode ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-200', text: darkMode ? 'text-slate-400' : 'text-slate-600', desc: 'Never engaged or very low vibe' },
+                    { label: 'Warm',  count: warm, color: 'bg-amber-400', light: darkMode ? 'bg-amber-900/20 border-amber-800' : 'bg-amber-50 border-amber-200', text: 'text-amber-600', desc: 'In conversation, building rapport' },
                     { label: 'Hot',   count: hot,  color: 'bg-red-500',   light: 'bg-red-50 border-red-200',     text: 'text-red-700',   desc: 'High engagement, strong relationship' },
                   ].map((s, i) => {
                     const w = total > 0 ? Math.max(100 - i * 20, 60) : 60;
@@ -982,14 +983,14 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
                           <div className="flex items-center justify-between mb-2">
                             <span className={`text-sm font-bold ${s.text}`}>{s.label}</span>
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-500">{s.count} contacts</span>
+                              <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{s.count} contacts</span>
                               <span className={`text-xs font-bold ${s.text}`}>{pct}%</span>
                             </div>
                           </div>
-                          <div className="h-2 bg-white/70 rounded-full overflow-hidden">
+                          <div className="h-2 bg-white/20 rounded-full overflow-hidden">
                             <div className={`h-full ${s.color} rounded-full`} style={{width:`${pct}%`}}></div>
                           </div>
-                          <p className="text-[10px] text-slate-400 mt-1.5">{s.desc}</p>
+                          <p className={`text-[10px] mt-1.5 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>{s.desc}</p>
                         </div>
                       </div>
                     );
@@ -998,20 +999,20 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
               </div>
 
               {/* Conversion rates */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-4 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-green-500">swap_horiz</span>
                   Stage Conversion Rates
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
                   {[
-                    { from: 'Cold → Warm', rate: convColdToWarm, color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200', bar: 'bg-amber-400' },
-                    { from: 'Warm → Hot',  rate: convWarmToHot,  color: 'text-red-600',   bg: 'bg-red-50 border-red-200',     bar: 'bg-red-500'   },
+                    { from: 'Cold → Warm', rate: convColdToWarm, color: 'text-amber-600', bg: darkMode ? 'bg-amber-900/20 border-amber-800' : 'bg-amber-50 border-amber-200', bar: 'bg-amber-400' },
+                    { from: 'Warm → Hot',  rate: convWarmToHot,  color: 'text-red-600',   bg: darkMode ? 'bg-red-900/20 border-red-800' : 'bg-red-50 border-red-200',     bar: 'bg-red-500'   },
                   ].map(c => (
                     <div key={c.from} className={`rounded-xl border p-5 ${c.bg}`}>
                       <p className="text-xs font-semibold text-slate-500 mb-2">{c.from}</p>
                       <p className={`text-4xl font-bold ${c.color} mb-3`}>{c.rate}%</p>
-                      <div className="h-2 bg-white/70 rounded-full overflow-hidden">
+                      <div className="h-2 bg-white/20 rounded-full overflow-hidden">
                         <div className={`h-full ${c.bar} rounded-full`} style={{width:`${c.rate}%`}}></div>
                       </div>
                     </div>
@@ -1020,8 +1021,8 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
               </div>
 
               {/* Vibe score distribution */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-4 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-violet-500">equalizer</span>
                   Vibe Score Distribution
                 </h3>
@@ -1049,30 +1050,30 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
           {activeTab === 'breakdown' && (
             <div className="space-y-4">
               {/* Tags */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-4 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-indigo-500">label</span>
                   Tag Breakdown
                 </h3>
                 {tagList.length === 0 ? (
-                  <p className="text-slate-400 text-sm text-center py-6">No tags added to contacts yet</p>
+                  <p className={`text-sm text-center py-6 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>No tags added to contacts yet</p>
                 ) : (
                   <div className="space-y-2">
                     {tagList.map((t, i) => {
                       const pct = Math.round((t.count / total) * 100);
                       const vibeColor = parseFloat(t.avgVibe) >= 7 ? 'text-green-600' : parseFloat(t.avgVibe) >= 4 ? 'text-amber-600' : 'text-red-500';
                       return (
-                        <div key={t.tag} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg">
+                        <div key={t.tag} className={`flex items-center gap-3 p-2 rounded-lg ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
                           <span className="w-5 text-xs text-slate-400 font-bold text-right">{i+1}</span>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-semibold text-slate-700 truncate">{t.tag}</span>
+                              <span className={`text-xs font-semibold truncate ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>{t.tag}</span>
                               <div className="flex items-center gap-2 ml-2 flex-shrink-0">
                                 <span className={`text-[10px] font-bold ${vibeColor}`}>★ {t.avgVibe}</span>
-                                <span className="text-[10px] text-slate-400">{t.count} contacts</span>
+                                <span className={`text-[10px] ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>{t.count} contacts</span>
                               </div>
                             </div>
-                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={`h-1.5 rounded-full overflow-hidden ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
                               <div className="h-full bg-indigo-400 rounded-full" style={{width:`${pct}%`}}></div>
                             </div>
                           </div>
@@ -1084,29 +1085,29 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
               </div>
 
               {/* Company */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-4 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-purple-500">business</span>
                   Top Companies
                 </h3>
                 {companyList.length === 0 ? (
-                  <p className="text-slate-400 text-sm text-center py-6">No company data yet</p>
+                  <p className={`text-sm text-center py-6 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>No company data yet</p>
                 ) : (
                   <div className="space-y-2">
                     {companyList.map((c, i) => {
                       const pct = Math.round((c.count / total) * 100);
                       return (
-                        <div key={c.company} className="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg">
+                        <div key={c.company} className={`flex items-center gap-3 p-2 rounded-lg ${darkMode ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
                           <span className="w-5 text-xs text-slate-400 font-bold text-right">{i+1}</span>
-                          <div className="w-7 h-7 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold flex-shrink-0 ${darkMode ? 'bg-purple-900 text-purple-300' : 'bg-purple-100 text-purple-700'}`}>
                             {c.company[0]?.toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs font-semibold text-slate-700 truncate">{c.company}</span>
-                              <span className="text-[10px] text-slate-400 ml-2 flex-shrink-0">{c.count} people</span>
+                              <span className={`text-xs font-semibold truncate ${darkMode ? 'text-slate-200' : 'text-slate-700'}`}>{c.company}</span>
+                              <span className={`text-[10px] ml-2 flex-shrink-0 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>{c.count} people</span>
                             </div>
-                            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div className={`h-1.5 rounded-full overflow-hidden ${darkMode ? 'bg-slate-700' : 'bg-slate-100'}`}>
                               <div className="h-full bg-purple-400 rounded-full" style={{width:`${pct}%`}}></div>
                             </div>
                           </div>
@@ -1118,8 +1119,8 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
               </div>
 
               {/* Contact frequency distribution */}
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2 text-sm">
+              <div className={`rounded-xl border p-5 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`}>
+                <h3 className={`font-bold mb-4 flex items-center gap-2 text-sm ${darkMode ? 'text-white' : 'text-slate-800'}`}>
                   <span className="material-symbols-outlined text-[18px] text-green-500">schedule</span>
                   Overall Contact Frequency
                 </h3>
@@ -1379,7 +1380,7 @@ ${contacts.map(c => `<tr>
 
   if (inline) {
     return (
-      <div className="bg-white rounded-2xl w-full flex flex-col overflow-hidden shadow-sm border border-slate-200" style={{minHeight:'600px'}}>
+      <div className={`rounded-2xl w-full flex flex-col overflow-hidden shadow-sm border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'}`} style={{minHeight:'600px'}}>
         {headerBlock}
         {contentBlock}
       </div>
