@@ -1,6 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import TasksPage from './TasksPage.jsx';
 
+// ─── FEATURE FLAGS ──────────────────────────────────────────────────────────
+// MVP is live. Flip false → true to release each version.
+// Never delete code — just unlock it.
+// ────────────────────────────────────────────────────────────────────────────
+const FEATURES = {
+  // ── MVP (live now) ───────────────────────────────────────────────────────
+  contactCRUD:          true,
+  vibeScore:            true,
+  tagsAndNotes:         true,
+  search:               true,
+  gridView:             true,
+  activityTimeline:     true,
+  magicPaste:           true,
+  singleIcebreaker:     true,
+  analyticsOverview:    true,   // overview + health tabs only
+  darkMode:             true,
+  firebaseSync:         true,
+  businessProfile:      true,
+  premiumPaywall:       true,
+
+  // ── v2.0 — power user upgrade ────────────────────────────────────────────
+  scanCard:             false,
+  kanbanView:           false,
+  categoryManager:      false,
+  focusModal:           false,
+  contactFrequency:     false,
+  bulkUpdateContact:    false,
+  tasksPage:            false,
+  analyticsMomentum:    false,  // adds momentum + pipeline tabs
+
+  // ── v3.0 — outreach engine ───────────────────────────────────────────────
+  bulkEmail:            false,
+  emailSettings:        false,
+  bulkIcebreaker:       false,
+  referralTracking:     false,
+  meetingLink:          false,
+  analyticsExport:      false,  // adds breakdown + export tabs
+
+  // ── v4.0 — scale & automation ────────────────────────────────────────────
+  bulkImport:           false,
+  customDomain:         false,
+  nudgeNotifications:   false,
+  collapsibleSidebar:   false,
+  adminPanel:           false,
+};
+// ────────────────────────────────────────────────────────────────────────────
+
+
 // Firebase will be loaded from CDN in index.html
 // We'll access it via window object
 
@@ -301,8 +349,8 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
             </div>
           )}
 
-          {/* FEATURE 3: MEETING LINK / BOOK CALL */}
-          <div className="mb-6">
+          {/* MEETING LINK / BOOK CALL */}
+          {FEATURES.meetingLink && <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
               <span className="material-symbols-outlined text-[16px] text-green-500">calendar_today</span> Meeting Link
             </h3>
@@ -324,10 +372,10 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
             ) : (
               <p className="text-sm text-gray-400 italic">No booking link — click Edit to add your Calendly or SavvyCal link.</p>
             )}
-          </div>
+          </div>}
 
-          {/* FEATURE 5: REFERRED BY — with clickable referrer link */}
-          <div className="mb-6">
+          {/* REFERRED BY */}
+          {FEATURES.referralTracking && <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
               <span className="material-symbols-outlined text-[16px] text-purple-500">group</span> Referred By
             </h3>
@@ -361,10 +409,10 @@ function ContactDetailView({ contact, onClose, onUpdate, onAddActivity, activiti
             })() : (
               <p className="text-sm text-gray-400 italic">No referrer — click Edit to link one.</p>
             )}
-          </div>
+          </div>}
 
           {/* Referrals Sent by this contact */}
-          {(() => {
+          {FEATURES.referralTracking && (() => {
             const referralsSent = allContacts.filter(c => c.referredBy === contact.id);
             if (referralsSent.length === 0) return null;
             return (
@@ -658,10 +706,14 @@ function AnalyticsDashboard({ contacts, activities, onClose, categories = [], da
   const tabs = [
     { id: 'overview',  label: 'Overview',   icon: 'dashboard'    },
     { id: 'health',    label: 'Health',     icon: 'favorite'     },
-    { id: 'momentum',  label: 'Momentum',   icon: 'trending_up'  },
-    { id: 'pipeline',  label: 'Pipeline',   icon: 'funnel'       },
-    { id: 'breakdown', label: 'Breakdown',  icon: 'donut_small'  },
-    { id: 'export',    label: 'Export',     icon: 'download'     },
+    ...(FEATURES.analyticsMomentum ? [
+      { id: 'momentum',  label: 'Momentum',   icon: 'trending_up'  },
+      { id: 'pipeline',  label: 'Pipeline',   icon: 'funnel'       },
+    ] : []),
+    ...(FEATURES.analyticsExport ? [
+      { id: 'breakdown', label: 'Breakdown',  icon: 'donut_small'  },
+      { id: 'export',    label: 'Export',     icon: 'download'     },
+    ] : []),
   ];
 
   const headerBlock = (
@@ -3467,7 +3519,7 @@ const Sidebar = () => (
         )}
       </div>
       {/* Collapse Toggle */}
-      <button
+      {FEATURES.collapsibleSidebar && <button
         onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
         className="absolute -right-3 top-10 w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-indigo-700 transition-all"
         title={sidebarCollapsed ? 'Expand' : 'Collapse'}
@@ -3475,12 +3527,12 @@ const Sidebar = () => (
         <span className="material-symbols-outlined text-[14px]">
           {sidebarCollapsed ? 'chevron_right' : 'chevron_left'}
         </span>
-      </button>
+      </button>}
     </div>
     
     {/* Navigation */}
     <nav className="flex-1 px-4 space-y-1.5 mt-2">
-      {['dashboard', 'contacts', 'deals', 'tasks', 'analytics'].map((view) => (
+      {['dashboard', 'contacts', 'deals', ...(FEATURES.tasksPage ? ['tasks'] : []), 'analytics'].map((view) => (
         <button
           key={view}
           onClick={() => setCurrentView(view)}
@@ -3506,7 +3558,7 @@ const Sidebar = () => (
       ))}
       
       {/* Admin Panel Button - Only visible to admin */}
-      {user?.isAdmin && (
+      {FEATURES.adminPanel && user?.isAdmin && (
         <button
           onClick={() => setShowAdminPanel(true)}
           className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-4 py-3 rounded-2xl font-bold transition-all mt-2 ${
@@ -3526,7 +3578,7 @@ const Sidebar = () => (
     {/* Email Settings Button */}
     {!sidebarCollapsed && (
       <div className="px-6 pb-4">
-        <button
+        {FEATURES.emailSettings && <button
           onClick={() => setShowEmailSettings(true)}
           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition ${
             darkMode
@@ -3541,7 +3593,7 @@ const Sidebar = () => (
               Setup
             </span>
           )}
-        </button>
+        </button>}
       </div>
     )}
     
@@ -3773,18 +3825,18 @@ const Sidebar = () => (
           <span className="material-symbols-outlined text-xl">dashboard</span>
           <span className="text-[9px] font-semibold">Home</span>
         </button>
-        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${currentView==='tasks' ? 'text-indigo-600' : darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setCurrentView('tasks')}>
+        {FEATURES.tasksPage && <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${currentView==='tasks' ? 'text-indigo-600' : darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setCurrentView('tasks')}>
           <span className="material-symbols-outlined text-xl">checklist</span>
           <span className="text-[9px] font-semibold">Tasks</span>
-        </button>
+        </button>}
         <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${currentView==='analytics' ? 'text-indigo-600' : darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setCurrentView('analytics')}>
           <span className="material-symbols-outlined text-xl">analytics</span>
           <span className="text-[9px] font-semibold">Analytics</span>
         </button>
-        <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => isPremium ? setShowBulkImport(true) : setShowPremiumModal(true)}>
+        {FEATURES.bulkImport && <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => isPremium ? setShowBulkImport(true) : setShowPremiumModal(true)}>
           <span className="material-symbols-outlined text-xl">upload</span>
           <span className="text-[9px] font-semibold">Import</span>
-        </button>
+        </button>}
         <button className={`flex flex-col items-center gap-0.5 px-2 py-1 ${darkMode ? 'text-slate-400' : 'text-slate-400'}`} onClick={() => setShowMobileMenu(true)}>
           <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${darkMode ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-700'}`}>
             {user?.name?.[0]?.toUpperCase() || 'U'}
@@ -3827,7 +3879,7 @@ const Sidebar = () => (
                 { view: 'dashboard', icon: 'dashboard',       label: 'Dashboard' },
                 { view: 'contacts',  icon: 'group',           label: 'Contacts'  },
                 { view: 'deals',     icon: 'monetization_on', label: 'Deals'     },
-                { view: 'tasks',     icon: 'checklist',       label: 'Tasks'     },
+                ...(FEATURES.tasksPage ? [{ view: 'tasks', icon: 'checklist', label: 'Tasks' }] : []),
               ].map(item => (
                 <button key={item.view} onClick={() => { setCurrentView(item.view); setShowMobileMenu(false); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${currentView===item.view ? darkMode ? 'bg-indigo-900/30 text-indigo-400' : 'bg-indigo-50 text-indigo-700' : darkMode ? 'text-slate-400 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-50'}`}>
@@ -3849,12 +3901,12 @@ const Sidebar = () => (
               )}
             </nav>
             <div className={`px-4 pb-6 space-y-2 border-t pt-4 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
-              <button onClick={() => { setShowEmailSettings(true); setShowMobileMenu(false); }}
+              {FEATURES.emailSettings && <button onClick={() => { setShowEmailSettings(true); setShowMobileMenu(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold border transition ${darkMode ? 'text-slate-400 border-slate-700 hover:bg-slate-800' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
                 <span className="material-symbols-outlined text-[20px]">mail</span>
                 <span className="text-sm">Email Settings</span>
                 {!user?.emailConfig?.defaultEmail && <span className="ml-auto px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded">Setup</span>}
-              </button>
+              </button>}
               <button onClick={() => setDarkMode(!darkMode)}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold border transition ${darkMode ? 'text-yellow-400 border-slate-700 hover:bg-slate-800' : 'text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
                 <span className="material-symbols-outlined text-[20px]">{darkMode ? 'light_mode' : 'dark_mode'}</span>
@@ -3876,7 +3928,7 @@ const Sidebar = () => (
 }`}>
 
         {/* ── TASKS VIEW ── */}
-        {currentView === 'tasks' ? (
+        {FEATURES.tasksPage && currentView === 'tasks' ? (
           <TasksPage user={user} contacts={contacts} darkMode={darkMode} />
         ) : currentView === 'analytics' ? (
           <div className="space-y-4">
@@ -3926,7 +3978,7 @@ const Sidebar = () => (
               </button>
               
               {/* TODAY'S FOCUS BUTTON - Only shows when contacts exist */}
-              {focusContacts.length > 0 && (
+              {FEATURES.focusModal && focusContacts.length > 0 && (
                 <button
                   onClick={() => setShowFocusModal(true)}
                   className="flex-1 md:flex-none bg-orange-500 hover:bg-orange-600 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 transition"
@@ -3944,22 +3996,22 @@ const Sidebar = () => (
                 <span className="material-symbols-outlined text-[20px]">add</span> Add
                 {!isPremium && <span className="text-[10px] bg-blue-800 px-1.5 py-0.5 rounded-full">{contacts.length}/10</span>}
               </button>
-              <button onClick={() => isPremium ? setShowBulkImport(true) : (() => { setUpgradeReason('Bulk Import is a Premium feature.'); setShowPremiumModal(true); })()}
+                            {FEATURES.bulkImport && <button onClick={() => isPremium ? setShowBulkImport(true) : (() => { setUpgradeReason('Bulk Import is a Premium feature.'); setShowPremiumModal(true); })()}
                 className={`flex-1 md:flex-none ${isPremium ? 'bg-green-600 hover:bg-green-700' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
                 {isPremium ? <span className="material-symbols-outlined text-[20px]">upload</span> : <span className="material-symbols-outlined text-[20px]">lock</span>} Import
-              </button>
-              <button onClick={() => isPremium ? setShowBulkUpdate(true) : (() => { setUpgradeReason('Bulk Update is a Premium feature.'); setShowPremiumModal(true); })()}
+              </button>}
+                            {FEATURES.bulkUpdateContact && <button onClick={() => isPremium ? setShowBulkUpdate(true) : (() => { setUpgradeReason('Bulk Update is a Premium feature.'); setShowPremiumModal(true); })()}
                 className={`flex-1 md:flex-none ${isPremium ? 'bg-orange-500 hover:bg-orange-600' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
                 {isPremium ? <span className="material-symbols-outlined text-[20px]">calendar_today</span> : <span className="material-symbols-outlined text-[20px]">lock</span>} Update
-              </button>
-              <button onClick={() => isPremium ? handleBulkEmail() : (() => { setUpgradeReason('Bulk Email is a Premium feature.'); setShowPremiumModal(true); })()}
+              </button>}
+                            {FEATURES.bulkEmail && <button onClick={() => isPremium ? handleBulkEmail() : (() => { setUpgradeReason('Bulk Email is a Premium feature.'); setShowPremiumModal(true); })()}
                 className={`flex-1 md:flex-none ${isPremium ? 'bg-purple-600 hover:bg-purple-700' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
                 {isPremium ? <span className="material-symbols-outlined text-[20px]">mail</span> : <span className="material-symbols-outlined text-[20px]">lock</span>} Email
-              </button>
-              <button onClick={() => isPremium ? setShowBulkIcebreaker(true) : (() => { setUpgradeReason('Bulk Icebreaker is a Premium feature.'); setShowPremiumModal(true); })()}
+              </button>}
+                            {FEATURES.bulkIcebreaker && <button onClick={() => isPremium ? setShowBulkIcebreaker(true) : (() => { setUpgradeReason('Bulk Icebreaker is a Premium feature.'); setShowPremiumModal(true); })()}
                 className={`flex-1 md:flex-none ${isPremium ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-400 hover:bg-slate-500'} text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 relative transition`}>
                 {isPremium ? <span className="material-symbols-outlined text-[20px]">auto_awesome</span> : <span className="material-symbols-outlined text-[20px]">lock</span>} Icebreaker
-              </button>
+              </button>}
             </div>
           </div>
 
@@ -4023,28 +4075,28 @@ const Sidebar = () => (
                 <span className="bg-white text-blue-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{activeFilterCount}</span>
               )}
             </button>
-            <button onClick={() => setShowCategoryManager(true)}
+            {FEATURES.categoryManager && <button onClick={() => setShowCategoryManager(true)}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 transition">
               <span className="material-symbols-outlined text-[14px]">label</span> Categories
               {categories.length > 0 && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full">{categories.length}</span>}
-            </button>
+            </button>}
             {/* View mode toggle */}
             <div className="flex border border-gray-200 rounded-lg overflow-hidden">
               <button onClick={() => setViewMode('grid')}
                 className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1 transition ${viewMode === 'grid' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
                 <span className="material-symbols-outlined text-[14px]">group</span> Grid
               </button>
-              <button onClick={() => setViewMode('board')}
+              {FEATURES.kanbanView && <button onClick={() => setViewMode('board')}
                 className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1 transition border-l border-gray-200 ${viewMode === 'board' ? 'bg-slate-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
                 <span className="material-symbols-outlined text-[14px]">analytics</span> Board
-              </button>
+              </button>}
             </div>
             {/* Nudge notification toggle */}
-            <button onClick={requestNudgePermission}
+            {FEATURES.nudgeNotifications && <button onClick={requestNudgePermission}
               title="Get browser notifications when hot contacts go stale"
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition ${nudgeEnabled ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200'}`}>
               <span className="material-symbols-outlined text-[14px]">notifications</span> Nudge {nudgeEnabled ? 'On' : 'Off'}
-            </button>
+            </button>}
           </div>
 
           {/* Row 3: Filter panel — shown when toggled */}
@@ -4257,8 +4309,8 @@ const Sidebar = () => (
               );
             })}
           </div>
-        ) : (
-          /* FEATURE 2: BOARD / KANBAN VIEW — with drag state visuals */
+        ) : FEATURES.kanbanView ? (
+          /* BOARD / KANBAN VIEW */
           <div className="grid grid-cols-3 gap-4">
             {[
               { key: 'cold', label: '❄️ Cold', bg: 'bg-blue-50',   border: 'border-blue-200',   over: 'border-blue-400 bg-blue-100',   header: 'bg-blue-100 text-blue-700' },
@@ -4349,7 +4401,7 @@ const Sidebar = () => (
               );
             })}
           </div>
-        )}
+        ) : null}
 
         {filteredContacts.length === 0 && (
           <div className={`rounded-xl p-12 text-center border ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-100'}`}>
@@ -4431,7 +4483,7 @@ const Sidebar = () => (
                   </span>
                 </button>
                 
-                <button
+                {FEATURES.scanCard && <button
                   type="button"
                   onClick={() => {
                     setShowScanCapture(!showScanCapture);
@@ -4450,7 +4502,7 @@ const Sidebar = () => (
                   <span className="material-symbols-outlined text-sm">
                     {showScanCapture ? 'expand_less' : 'expand_more'}
                   </span>
-                </button>
+                </button>}
               </div>
 
               {/* EXPANDABLE MAGIC PASTE SECTION */}
@@ -4503,7 +4555,7 @@ const Sidebar = () => (
               )}
 
               {/* EXPANDABLE SCAN TO FILL SECTION */}
-              {showScanCapture && (
+              {FEATURES.scanCard && showScanCapture && (
                 <div className={`mb-4 p-4 rounded-xl border ${
                   darkMode 
                     ? 'bg-indigo-900/20 border-indigo-800'
@@ -4693,7 +4745,7 @@ const Sidebar = () => (
                   onChange={(e) => setNewContact({...newContact, tags: e.target.value.split(',').map(t => t.trim()).filter(t => t)})} />
               </div>
 
-              {categories.length > 0 && (
+              {FEATURES.categoryManager && categories.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                     <span className="material-symbols-outlined text-[16px]">label</span> Category
@@ -4721,7 +4773,7 @@ const Sidebar = () => (
                   </div>
                 </div>
               )}
-              {categories.length === 0 && (
+              {FEATURES.categoryManager && categories.length === 0 && (
                 <button type="button" onClick={() => setShowCategoryManager(true)}
                   className="w-full py-2.5 border border-dashed border-gray-300 rounded-xl text-xs text-gray-400 hover:text-gray-600 hover:border-gray-400 transition flex items-center justify-center gap-2">
                   <span className="material-symbols-outlined text-[14px]">label</span> Create categories to organise contacts
@@ -4765,8 +4817,7 @@ const Sidebar = () => (
           </div>
         )}
 
-        {/* Bulk Import Modal */}
-        {showBulkImport && (
+        {FEATURES.bulkImport && showBulkImport && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl p-8 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
               <h2 className="text-2xl font-bold text-gray-800 mb-2">Bulk Import Contacts</h2>
@@ -4852,8 +4903,7 @@ const Sidebar = () => (
           </div>
         )}
 
-        {/* Bulk Email Modal — OPTION 2 DESIGN: Two-panel layout with purple theme */}
-        {showBulkEmail && (
+        {FEATURES.bulkEmail && showBulkEmail && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col">
               
@@ -5792,8 +5842,7 @@ const Sidebar = () => (
           </div>
         )}
 
-        {/* Bulk Icebreaker Modal */}
-        {showBulkIcebreaker && (
+        {FEATURES.bulkIcebreaker && showBulkIcebreaker && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
 
@@ -6062,7 +6111,7 @@ const Sidebar = () => (
         )}
 
         {/* Bulk Update Modal */}
-        {showBulkUpdate && (
+        {FEATURES.bulkUpdateContact && showBulkUpdate && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl p-8 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-start mb-2">
@@ -6283,7 +6332,7 @@ const Sidebar = () => (
         )}
 
         {/* Category Manager Modal */}
-        {showCategoryManager && (
+        {FEATURES.categoryManager && showCategoryManager && (
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl p-8 w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6">
@@ -6424,7 +6473,7 @@ const Sidebar = () => (
       </main>
 
       {/* TODAY'S FOCUS MODAL */}
-      {showFocusModal && (
+      {FEATURES.focusModal && showFocusModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
             
@@ -6816,7 +6865,7 @@ const Sidebar = () => (
         </div>
       )}
 {/* ===== FIRST-TIME EMAIL SETUP MODAL (OPTIONAL) ===== */}
-{showEmailSetup && (
+{FEATURES.emailSettings && showEmailSetup && (
   <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
     <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl">
       {/* Header */}
@@ -7070,7 +7119,7 @@ const Sidebar = () => (
   </div>
 )}
 {/* ===== EMAIL SETTINGS MODAL (UPDATED) ===== */}
-{showEmailSettings && (
+{FEATURES.emailSettings && showEmailSettings && (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
       {/* Header */}
@@ -7438,7 +7487,7 @@ const Sidebar = () => (
   </div>
 )}
 {/* ===== ADMIN PANEL - EMAIL CHANGE REQUESTS ===== */}
-{showAdminPanel && user?.isAdmin && (
+{FEATURES.adminPanel && showAdminPanel && user?.isAdmin && (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl">
       {/* Header */}
@@ -7470,7 +7519,7 @@ const Sidebar = () => (
 
 {/* Admin Change Requests Component */}
 {/* ===== DOMAIN CONNECTION WIZARD ===== */}
-{showDomainWizard && (
+{FEATURES.customDomain && showDomainWizard && (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
     <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
       {/* Header */}
