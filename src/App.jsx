@@ -40,7 +40,7 @@ const FEATURES = {
   analyticsExport:      false,  // adds breakdown + export tabs
 
   // ── v4.0 — scale & automation ────────────────────────────────────────────
-  bulkImport:           false,
+  bulkImport:           true,
   customDomain:         false,
   nudgeNotifications:   false,
   collapsibleSidebar:   false,
